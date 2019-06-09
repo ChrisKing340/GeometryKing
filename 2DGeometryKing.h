@@ -49,7 +49,7 @@ namespace King {
     class Line2DF; // SIMD
     class Triangle2DF; // SIMD
     class Rectangle2DF; // SIMD
-    class Rectangle2D; // not accelerated, integers
+    class Rectangle2D; // not accelerated, replaces Windows RECT class thourgh conversions
 
     // alias
     typedef Line2DF         lineF; // float data types
@@ -61,10 +61,10 @@ namespace King {
     *   Line2DF
     *   pt1 ------- pt2
     ******************************************************************************/
-    alignas(16) class Line2DF
+    class alignas(16) Line2DF
     {
         /* variables */
-    private:
+    public:
         FloatPoint2 pt[2];
 
         /* methods */
@@ -91,10 +91,10 @@ namespace King {
         bool                                Intersects(const Line2DF &lineIn, FloatPoint2 *intersectPointOut);
         void                                LineTraverse(std::function<void(IntPoint2 ptOut)> callBack); // rasterize the line and callback for each point along the line
         // Accessors
-
+        const auto &                        GetVertex(const uint32_t vertexIndexIn) const { return pt[vertexIndexIn]; }
         // Assignments
         inline void __vectorcall            Set(const Line2DF &in) { pt[0] = in.pt[0]; pt[1] = in.pt[1]; }
-        inline void __vectorcall            SetPoint(const uint32_t vertexIn01, const FloatPoint2 &in) { pt[vertexIn01] = in; }
+        inline void __vectorcall            SetVertex(const uint32_t vertexIndexIn, const FloatPoint2 &in) { pt[vertexIndexIn] = in; }
     };
     /******************************************************************************
     *   Triangle2DF
@@ -106,10 +106,10 @@ namespace King {
     *            pt1
     *   CCW rotation for RHS face normals
     ******************************************************************************/
-    alignas(16) class Triangle2DF
+    class alignas(16) Triangle2DF
     {
         /* variables */
-    private:
+    public:
         FloatPoint2 pt[3];
 
         /* methods */
@@ -152,7 +152,7 @@ namespace King {
     *      |     |
     *      ------- rb
     ******************************************************************************/
-    alignas(16) class Rectangle2DF
+    class alignas(16) Rectangle2DF
     {
         /* variables */
     public:
@@ -230,7 +230,7 @@ namespace King {
         inline const auto                   GetRT() const { return FloatPoint2(rb.GetX(), lt.GetY()); }
         inline RECT                         Get_RECT() const { RECT r; r.left = (long)GetLeft(); r.top = (long)GetTop(); r.right = (long)GetRight(); r.bottom = (long)GetBottom(); return r; }
         inline auto                         Get_Triangle2DF_LB_CCW() const { Triangle2DF(GetLT(), GetLB(), GetRB()); } // CCW winding
-        inline auto                         Get_Triangle2DF_RT_CCW() const { Triangle2DF(GetRB(), GetRT(), GetLT()); } // CCW winding+
+        inline auto                         Get_Triangle2DF_RT_CCW() const { Triangle2DF(GetRB(), GetRT(), GetLT()); } // CCW winding
         inline auto                         Get_Triangle2DF_LT_CW() const { Triangle2DF(GetLB(), GetLT(), GetRT()); } // CW winding
         inline auto                         Get_Triangle2DF_RB_CW() const { Triangle2DF(GetRT(), GetRB(), GetLB()); } // CW winding
         // Assignments
@@ -241,7 +241,7 @@ namespace King {
         inline void __vectorcall            SetLT(const FloatPoint2 &ltIn) { lt = ltIn; }
         inline void __vectorcall            SetRB(const FloatPoint2 &rbIn) { rb = rbIn; }
         inline void __vectorcall            SetSize(const FloatPoint2 &sz) { rb = lt + sz; }
-        inline void __vectorcall            SetWH(const FloatPoint2 &whIn) { FloatPoint3 offset = Abs(whIn) * 0.5f; FloatPoint3 c = GetCenter(); lt = c - offset; rb = c + offset; }
+        inline void __vectorcall            SetWH(const FloatPoint2 &whIn) { FloatPoint2 offset = Abs(whIn) * 0.5f; FloatPoint2 c = GetCenter(); lt = c - offset; rb = c + offset; }
         inline void                         SetWidth(const float &w) { rb.SetX(lt.GetX() + w); }
         inline void                         SetHeight(const float &h) { rb.SetY(lt.GetY() + h); }
         inline void                         SetLeft(const float &x) { lt.SetX(x); }
@@ -256,7 +256,7 @@ namespace King {
     *      |     |
     *      ------- rb
     ******************************************************************************/
-    alignas(16) class Rectangle2D
+    class alignas(16) Rectangle2D
     {
         /* variables */
     public:
@@ -307,7 +307,7 @@ namespace King {
         inline Rectangle2D & operator/= (const IntPoint2 in) { Grow(FloatPoint2(1.0f) / FloatPoint2(in)); return *this; }
         // Conversions
         inline operator RECT() const { return Get_RECT(); }
-        inline operator const RECT() const { return Get_RECT(); }
+        inline operator Rectangle2DF() const { return Get_Rectangle2DF(); }
         // Functionality
         inline void                         MoveBy(const IntPoint2 deltaIn) { lt += deltaIn; rb += deltaIn; }
         inline void                         MoveBy(const long &dxIn, const long &dyIn) { lt.Set(lt.GetX() + dxIn, lt.GetY() + dyIn); rb.Set(rb.GetX() + dxIn, rb.GetY() + dyIn); }
@@ -336,6 +336,7 @@ namespace King {
         inline const IntPoint2              GetLB() const { return IntPoint2(lt.GetX(), rb.GetY()); }
         inline const IntPoint2              GetRT() const { return IntPoint2(rb.GetX(), lt.GetY()); }
         inline RECT                         Get_RECT() const { RECT r; r.left = GetLeft(); r.top = GetTop(); r.right = GetRight(); r.bottom = GetBottom(); return r; }
+        inline Rectangle2DF                 Get_Rectangle2DF() const { return Rectangle2DF(Get_RECT()); }
         // Assignments
         inline void                         Set(const Rectangle2D &rIn) { lt = rIn.lt; rb = rIn.rb; }
         inline void                         Set(const RECT &rIn) { lt = IntPoint2(rIn.left, rIn.top); rb = IntPoint2(rIn.right, rIn.bottom); }
@@ -343,7 +344,7 @@ namespace King {
         inline void                         SetLT(const IntPoint2 &ltIn) { lt = ltIn; }
         inline void                         SetRB(const IntPoint2 &rbIn) { rb = rbIn; }
         inline void                         SetSize(const UIntPoint2 &sz) { rb = lt + sz; }
-        inline void                         SetWH(const UIntPoint2 &whIn) { UIntPoint2 offset = Abs(whIn) / 2ul; FloatPoint3 c = GetCenter(); lt = c - offset; rb = c + offset; }
+        inline void                         SetWH(const UIntPoint2 &whIn) { UIntPoint2 offset = Abs(whIn) / 2ul; UIntPoint2 c = GetCenter(); lt = c - offset; rb = c + offset; }
         inline void                         SetWidth(const long &w) { rb.SetX(lt.GetX() + w); }
         inline void                         SetHeight(const long &h) { rb.SetY(lt.GetY() + h); }
         inline void                         SetLeft(const long &x) { lt.SetX(x); }
@@ -351,4 +352,17 @@ namespace King {
         inline void                         SetRight(const long &x) { rb.SetX(x); }
         inline void                         SetBottom(const long &y) { rb.SetY(y); }
     };
+
+    /******************************************************************************
+    *   json
+    ******************************************************************************/
+    void to_json(json & j, const Line2DF & from);
+    void to_json(json & j, const Triangle2DF & from);
+    void to_json(json & j, const Rectangle2DF & from);
+    void to_json(json & j, const Rectangle2D & from);
+    
+    void from_json(const json & j, Line2DF & to);
+    void from_json(const json & j, Triangle2DF & to);
+    void from_json(const json & j, Rectangle2DF & to);
+    void from_json(const json & j, Rectangle2D & to);
 }

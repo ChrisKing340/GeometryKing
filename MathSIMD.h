@@ -104,7 +104,7 @@ namespace King {
     /******************************************************************************
     *   UIntPoint2
     ******************************************************************************/
-    __declspec(align(16)) class UIntPoint2
+    class alignas(16) UIntPoint2
     {
         /* variables */
     public:
@@ -205,7 +205,7 @@ namespace King {
     /******************************************************************************
     *   IntPoint2
     ******************************************************************************/
-    __declspec(align(16)) class IntPoint2
+    class alignas(16) IntPoint2
     {
         /* variables */
     public:
@@ -315,7 +315,7 @@ namespace King {
     /******************************************************************************
     *   IntPoint3
     ******************************************************************************/
-    __declspec(align(16)) class IntPoint3
+    class alignas(16) IntPoint3
     {
         /* variables */
     public:
@@ -422,7 +422,7 @@ namespace King {
     /******************************************************************************
     *   FloatPoint2
     ******************************************************************************/
-    __declspec(align(16)) class FloatPoint2 : public XMVECTORF32
+    class alignas(16) FloatPoint2 : public XMVECTORF32
     {
         /* variables */
     public:
@@ -533,7 +533,7 @@ namespace King {
     /******************************************************************************
     *   FloatPoint3
     ******************************************************************************/
-    __declspec(align(16)) class FloatPoint3 : public FloatPoint2
+    class alignas(16) FloatPoint3 : public FloatPoint2
     {
         /* variables */
     public:
@@ -636,7 +636,7 @@ namespace King {
     /******************************************************************************
     *   FloatPoint4
     ******************************************************************************/
-    __declspec(align(16)) class FloatPoint4 : public FloatPoint3
+    class alignas(16) FloatPoint4 : public FloatPoint3
     {
         /* variables */
     public:
@@ -756,7 +756,7 @@ namespace King {
     *   where i, j, and k are the directions of the unit vector defining the axis
     *   https://en.wikipedia.org/wiki/Quaternion
     ******************************************************************************/
-    __declspec(align(16)) class Quaternion : public FloatPoint4
+    class alignas(16) Quaternion : public FloatPoint4
     {
     public:
         // Construction/Destruction
