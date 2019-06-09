@@ -1,7 +1,7 @@
 /*%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 Title:			MathSIMD
 
-Description:	Data parallelism accelerated code through implementing SIMD 
+Description:	Data parallelism accelerated code through implementing SIMD
 				(single instruction, multiple data) math libraries.
 				Made easy with operator overloads to behave as a single data
 				type.  Uses the DirectXMath library for intrinsics and fall
@@ -10,30 +10,17 @@ Description:	Data parallelism accelerated code through implementing SIMD
 				This code base was originally written without SIMD. Therefore,
 				not all of the multiple data classes (such as int types) have
 				been converted.  Float types have been resulting in a dramatic
-				decrease in 3D math calculations time in my projects. Releasing
-				so other may benefit from it as well without having to learn
-				the DirectXMath library.
-
+				decrease in 3D math calculations time in my projects.
+                
 Usage:			Use the typedef keywords in your applications as a generic
-				use of the library.  Most code is inline and won't be included
-				in your code if not referenced.  This code is intended to
-				be complied for 64 bit operating systems.  It may work on 32 bit
-				but assurances must be made that data storage is 16 bit aligned.  
-				I have provided for that but must be maintained in inheritence
-				if you derive your own classes from this libraries.
+				use of the library.  I personally do not like the term vector
+                for the multi-data variables, nor do I like it in std::vector,
+                as vectors are magnitude and direction.  Shade model has it
+                right with float3, etc. and I type define my internals to that
+                throughout my code.
 
-				For a less comprehensive but both 32 & 64 bit tested code, use
-				the SimpleMath library from the Microsoft DirectX ToolKit
-				referenced in the link below.  It uses separate storage variables
-				that do not have to be 16 bit aligned, however there is extra 
-				processing for load/store each use of the data and fewer operators
-				are delevoped than my implementation.  We do provide conversions
-				to the storage vaiables from each of our data types making integration
-				seemless if you are migrating to our library for increased efficiency
-				and functionality.  I will/have release my 2D and 3D geometry
-				library and engineering and 3D game code engines which foundation
-				is on MathSIMD.  A great start to your own library of code. 
-
+                This code is intended to be complied for 64 bit operating systems.
+                
 Contact:		ChrisKing340@gmail.com
 
 (c) Copyrighted 2019 Christopher H. King all rights reserved.
@@ -77,6 +64,9 @@ SOFTWARE.
 #error MathSIMD requires Visual C++ 2015 or later.
 #endif
 
+#include "D:\Programming\Libraries\json-3.6.1\json.hpp"
+using json = nlohmann::json;
+
 #include <windows.h>
 #include <memory>
 #include <vector>
@@ -109,7 +99,7 @@ namespace King {
 	typedef FloatPoint3		float3;
 	typedef FloatPoint4		float4;
 	typedef Quaternion		quat;
-	
+
 	/******************************************************************************
 	*	UIntPoint2
 	******************************************************************************/
@@ -117,11 +107,11 @@ namespace King {
 	{
 		/* variables */
 	public:
-
+		unsigned int		u[2];
 	protected:
 
 	private:
-		unsigned int		u[2];
+
 		/* methods */
 	public:
 		// Creation/Life cycle
@@ -218,11 +208,11 @@ namespace King {
 	{
 		/* variables */
 	public:
-
+		int			i[2];
 	protected:
 
-	private:
-		int			i[2];
+    private:
+
 		/* methods */
 	public:
 		// Creation/Life cycle
@@ -247,7 +237,7 @@ namespace King {
 		// Operators 
 		inline IntPoint2 & operator= (const IntPoint2 &in) = default; // copy assignment
 		inline IntPoint2 & operator= (const DirectX::XMINT2 &in) { Set(in); return *this; } // copy assignment
-		inline IntPoint2 & operator= (const DirectX::XMVECTOR &vecIn) { unsigned int d[2]; auto v = DirectX::XMConvertVectorFloatToInt(vecIn, 0); DirectX::XMStoreInt2(d, vecIn); i[0]=(long)d[0]; i[1] = (long)d[1]; return *this; } // untested
+		inline IntPoint2 & operator= (const DirectX::XMVECTOR &vecIn) { unsigned int d[2]; auto v = DirectX::XMConvertVectorFloatToInt(vecIn, 0); DirectX::XMStoreInt2(d, vecIn); i[0] = (long)d[0]; i[1] = (long)d[1]; return *this; } // untested
 		inline IntPoint2 & operator= (IntPoint2 &&in) = default; // move assignment
 		// Conversions
 		inline int& operator[](int idx) { return GetPtr()[idx]; }
@@ -328,11 +318,11 @@ namespace King {
 	{
 		/* variables */
 	public:
-
+		int			i[3];
 	protected:
 
 	private:
-		int			i[3];
+
 		/* methods */
 	public:
 		// Creation/Life cycle
@@ -411,8 +401,8 @@ namespace King {
 		inline void								Set(const float x, const float y, const float z) { i[0] = static_cast<int>(x); i[1] = static_cast<int>(y); i[2] = static_cast<int>(z); }
 		inline void								Set(const unsigned long x, const unsigned long y, const unsigned long z) { i[0] = static_cast<int>(x); i[1] = static_cast<int>(y); i[2] = static_cast<int>(z); }
 		inline void								Set(const IntPoint3 &in) { *this = in; }
-//		inline void								Set(const UIntPoint3 &in) { i[0] = static_cast<int>(in.u[0]); i[1] = static_cast<int>(in.u[1]); i[2] = static_cast<int>(in.u[2]); }
-		inline void								Set(const DirectX::XMINT3 &point) { i[0] = point.x; i[1] = point.y; i[2] = point.z;  }
+		//		inline void								Set(const UIntPoint3 &in) { i[0] = static_cast<int>(in.u[0]); i[1] = static_cast<int>(in.u[1]); i[2] = static_cast<int>(in.u[2]); }
+		inline void								Set(const DirectX::XMINT3 &point) { i[0] = point.x; i[1] = point.y; i[2] = point.z; }
 		// Accessors
 		int*									GetPtr() { return reinterpret_cast<int*>(this); }
 		inline const DirectX::XMINT3			Get_XMINT3() const { DirectX::XMINT3 rtn; rtn = { static_cast<int>(i[0]), static_cast<int>(i[1]), static_cast<int>(i[2]) }; return rtn; }
@@ -538,7 +528,7 @@ namespace King {
 		static float __vectorcall				SumComponents(const FloatPoint2 &vec1In) { return DirectX::XMVectorGetX(DirectX::XMVectorSum(vec1In)); }
 		static FloatPoint2 __vectorcall			MultiplyAdd(const FloatPoint2 &vec1MulIn, const FloatPoint2 &vec2MulIn, const FloatPoint2 &vec3AddIn) { return DirectX::XMVectorMultiplyAdd(vec1MulIn, vec2MulIn, vec3AddIn); }
 		static FloatPoint2						Average(const std::vector<FloatPoint2> &arrayIn) { assert(arrayIn.size()); FloatPoint2 ave; for (const auto & each : arrayIn) ave += each; ave /= (float)arrayIn.size(); return ave; }
-};
+	};
 	/******************************************************************************
 	*	FloatPoint3
 	******************************************************************************/
@@ -556,14 +546,14 @@ namespace King {
 		// Creation/Life cycle
 		static std::shared_ptr<FloatPoint3>	Create() { return std::make_shared<FloatPoint3>(); }
 		static std::unique_ptr<FloatPoint3>	CreateUnique() { return std::make_unique<FloatPoint3>(); }
-		inline FloatPoint3() { SetZero(); }
+		inline FloatPoint3() = default; // { SetZero(); }
 		inline FloatPoint3(float xyz) { Set(xyz); }
 		inline FloatPoint3(float x, float y, float z) { Set(x, y, z); }
 		inline FloatPoint3(const FloatPoint3 &in) { v = in.v; } // copy
 		inline FloatPoint3(const IntPoint3 &in) { Set(in.Get_XMFLOAT3()); }
 		inline FloatPoint3(const DirectX::XMFLOAT3 &in) { Set(in); }
 		inline FloatPoint3(FloatPoint3 &&in) { v = std::move(in.v); } // move
-		inline FloatPoint3(const DirectX::XMVECTOR &vecIn) { v = DirectX::XMVectorSetW(vecIn, 0.f);}
+		inline FloatPoint3(const DirectX::XMVECTOR &vecIn) { v = DirectX::XMVectorSetW(vecIn, 0.f); }
 		inline FloatPoint3(FloatPoint4 vecIn);
 		inline FloatPoint3(uint8_t *bytesIn) { auto fp = reinterpret_cast<float*>(bytesIn); v = DirectX::XMLoadFloat3(&DirectX::XMFLOAT3(fp)); }
 		inline FloatPoint3(float *floatIn) { v = DirectX::XMLoadFloat3(&DirectX::XMFLOAT3(floatIn)); }
@@ -641,7 +631,7 @@ namespace King {
 		static float __vectorcall				SumComponents(const FloatPoint3 &vec1In) { return DirectX::XMVectorGetX(DirectX::XMVectorSum(vec1In)); }
 		static FloatPoint3 __vectorcall			MultiplyAdd(const FloatPoint3 &vec1MulIn, const FloatPoint3 &vec2MulIn, const FloatPoint3 &vec3AddIn) { return DirectX::XMVectorMultiplyAdd(vec1MulIn, vec2MulIn, vec3AddIn); }
 		static FloatPoint3						Average(const std::vector<FloatPoint3> &arrayIn) { assert(arrayIn.size()); FloatPoint2(); FloatPoint3 ave; for (const auto & each : arrayIn) ave += each; ave /= (float)arrayIn.size(); return ave; }
-};
+	};
 	/******************************************************************************
 	*	FloatPoint4
 	******************************************************************************/
@@ -659,9 +649,9 @@ namespace King {
 		// Creation/Life cycle
 		static std::shared_ptr<FloatPoint4>	Create() { return std::make_shared<FloatPoint4>(); }
 		static std::unique_ptr<FloatPoint4>	CreateUnique() { return std::make_unique<FloatPoint4>(); }
-		inline FloatPoint4() { SetZero(); }
+		inline FloatPoint4() = default;// { SetZero(); }
 		inline FloatPoint4(float xyzw) { Set(xyzw); }
-		inline FloatPoint4(FloatPoint3 in, float w) { Set(in,w); }
+		inline FloatPoint4(FloatPoint3 in, float w) { Set(in, w); }
 		inline FloatPoint4(float x, float y, float z, float w) { Set(x, y, z, w); }
 		inline FloatPoint4(const FloatPoint4 &in) { v = in.v; } // copy
 		inline FloatPoint4(const DirectX::XMFLOAT4 &in) { Set(in); }
@@ -746,6 +736,79 @@ namespace King {
 		static FloatPoint4						Average(const std::vector<FloatPoint4> &arrayIn) { assert(arrayIn.size()); FloatPoint4 ave; for (const auto & each : arrayIn) ave += each; ave /= (float)arrayIn.size(); return ave; }
 
 	};
+	/******************************************************************************
+	*	Quaternion
+	*
+	*	w + x*i + y*j + z*k
+	*	based on the priciple that: i^2 = j^2 = k^2 = ijk = -1
+	*	then:
+	*		w^2-x^2-y^2-z^2=-1,
+	*		2wx=0
+	*		2wy=0
+	*		2wz=0
+	*	geometrically, they are then out of phase by 90 degrees (pi/2 radians)
+	*	w = cos(angle/2)
+	*	x = i * sin(angle/2)
+	*	y = j * sin(angle/2)
+	*	z = k * sin(angle/2)
+	*	where angle is in radians
+	*	where i, j, and k are the directions of the unit vector defining the axis
+	*	https://en.wikipedia.org/wiki/Quaternion
+	******************************************************************************/
+	__declspec(align(16)) class Quaternion : public FloatPoint4
+	{
+	public:
+		// Construction/Destruction
+		inline explicit Quaternion() { v = DirectX::XMQuaternionIdentity(); }
+		inline explicit Quaternion(const FloatPoint3 axis) { SetAxisAngle(axis, 0.f); }
+		inline explicit Quaternion(const FloatPoint3 axis, const float angle) { SetAxisAngle(axis, angle); }
+		inline explicit Quaternion(float pitch, float yaw, float roll) { v = DirectX::XMQuaternionRotationRollPitchYaw(pitch, yaw, roll); }
+		inline explicit Quaternion(const DirectX::XMMATRIX& matrix) { v = DirectX::XMQuaternionRotationMatrix(matrix); }
+		inline explicit Quaternion(const float3 v1From, const float3 v2To) { Set(v1From, v2To); }
+		inline explicit Quaternion(const DirectX::XMVECTOR &vec) { v = vec; }
+		inline explicit Quaternion(const FloatPoint4 q) { v = q; }
+		inline Quaternion(const Quaternion &in) { Set(in); }
+		inline Quaternion(Quaternion &&in) = default; // move
+		virtual ~Quaternion() = default;
+		// Operators 
+		inline Quaternion & operator= (const Quaternion &in) = default; // copy assignment
+		inline Quaternion & operator= (Quaternion &&in) = default; // move assignment
+		inline Quaternion & operator= (const DirectX::FXMVECTOR &in) { v = in; return *this; }
+		inline Quaternion operator~ (void) const { return Quaternion(DirectX::XMQuaternionConjugate(v)); }
+		inline Quaternion operator- (void) const { return Quaternion(DirectX::XMVectorNegate(v)); }
+		inline Quaternion operator- (const Quaternion rhs) const { return *this * rhs.Inverse(); }
+		inline Quaternion operator+ (const Quaternion rhs) const { return Quaternion(DirectX::XMQuaternionMultiply(v, rhs)); }
+		inline Quaternion operator* (const Quaternion rhs) const { return Quaternion(DirectX::XMQuaternionMultiply(v, rhs)); }
+		inline Quaternion operator* (const float &scalerAngle) const { return Quaternion(GetAxis(), scalerAngle*GetAngle()); }
+		inline Quaternion operator/ (const Quaternion rhs) const { return *this * rhs.Inverse(); }
+		inline FloatPoint3 operator* (const FloatPoint3 rhs) const { return FloatPoint3(DirectX::XMVector3Rotate(rhs, v)); }
+		inline FloatPoint3 operator* (const DirectX::XMVECTOR rhs) const { return FloatPoint3(DirectX::XMVector3Rotate(rhs, v)); }
+		inline Quaternion & operator*= (const Quaternion rhs) { *this = *this * rhs; return *this; } // same as adding two rotations (multiply the transforms)
+		inline Quaternion & operator/= (const Quaternion rhs) { *this = *this * rhs.Inverse(); return *this; } // same as subtracting two rotations
+		inline Quaternion & operator+= (const Quaternion rhs) { *this = *this * rhs; return *this; }
+		inline Quaternion & operator-= (const Quaternion rhs) { *this = *this * rhs.Inverse(); return *this; }
+		// Conversions
+		inline operator bool() { return abs(GetW()) < 0.999998f ? true : false; } // if W is 1.0, there is no rotation to apply
+		operator char() = delete;
+		operator int() = delete;
+		operator float() = delete;
+		inline operator DirectX::XMMATRIX() const { return DirectX::XMMatrixRotationQuaternion(v); }
+		// Functionality
+		inline Quaternion	Inverse() const { return Quaternion(DirectX::XMQuaternionInverse(v)); }
+		DirectX::XMFLOAT3	GetEulerAngles() const;
+		DirectX::XMFLOAT3	CalculateAngularVelocity(const Quaternion previousRotation, float deltaTime) const;
+		void				Validate() { if (DirectX::XMQuaternionIsNaN(v)) v = DirectX::XMQuaternionIdentity(); }
+		// Accessors
+		inline float3		GetAxis() const { float3 xyz = v; xyz.MakeNormalize(); return xyz; }
+		inline float		GetAngle() const { auto a = 2.0f * DirectX::XMScalarACos(GetW()); return a; } // radians; if w = 0, angle = pi, w = 1, angle = 0
+		// Assignments
+		void 				SetAxisAngle(const float3 &vector, const float &angleRadians);
+		inline void			SetAxis(const float3 vector) { SetAxisAngle(vector, GetAngle()); }
+		inline void			SetAngle(const float angleRadians) { SetAxisAngle(GetAxis(), angleRadians); }
+		inline void			SetEulerAngles(const float3 eulerAngles) { DirectX::XMQuaternionRotationRollPitchYawFromVector(eulerAngles); }
+		inline void			Set(const Quaternion &qIn) { v = qIn; }
+		void				Set(const float3 vFrom, const float3 vTo);
+	};
 
 	/******************************************************************************
 	*	Conversions
@@ -753,22 +816,6 @@ namespace King {
 	inline UIntPoint2::UIntPoint2(const IntPoint2 & in) { auto temp = in.Get_XMUINT2(); u[0] = temp.x; u[1] = temp.y; }
 	inline UIntPoint2::UIntPoint2(const FloatPoint2 & in) { auto temp = in.Get_XMUINT2(); u[0] = temp.x; u[1] = temp.y; }
 	inline IntPoint2::IntPoint2(const FloatPoint2 & in) { auto temp = in.Get_XMINT2(); i[0] = temp.x; i[1] = temp.y; }
-
-	/******************************************************************************
-	*	Streams
-	******************************************************************************/
-	std::ostream& operator<< (std::ostream &os, const UIntPoint2 &in);
-	std::ostream& operator<< (std::ostream &os, const IntPoint2 &in);
-	std::ostream& operator<< (std::ostream &os, const IntPoint3 &in);
-	std::ostream& operator<< (std::ostream& os, const FloatPoint2 &in);
-	std::ostream& operator<< (std::ostream &os, const FloatPoint3 &in);
-	std::ostream& operator<< (std::ostream &os, const FloatPoint4 &in);
-
-	std::istream& operator>> (std::istream &is, King::UIntPoint2 &in);
-	std::istream& operator>> (std::istream &is, King::IntPoint2 &in);
-	std::istream& operator>> (std::istream &is, King::FloatPoint2 &in);
-	std::istream& operator>> (std::istream &is, King::FloatPoint3 &in);
-	std::istream& operator>> (std::istream &is, King::FloatPoint4 &in);
 
 	/******************************************************************************
 	*	Math functions
@@ -802,37 +849,51 @@ namespace King {
 	inline FloatPoint4 __vectorcall Cross(const FloatPoint4 &vec1In, const FloatPoint4 &vec2In, const FloatPoint4 &vec3In) { return FloatPoint4(DirectX::XMVector4Cross(vec1In, vec2In, vec3In)); }
 
 	/******************************************************************************
-	*	Quaternion
-	*
-	*	a + b*i + c*j + d*k
-	*	i^2 = j^2 = k^2 = ijk = -1
-	*	where a, b, c, and d are real numbers, and i, j, and k are the fundamental quaternion units. 
-	*	https://en.wikipedia.org/wiki/Quaternion
+	*	Streams
 	******************************************************************************/
-	__declspec(align(16)) class Quaternion : public FloatPoint4
-	{
-	public:
-		// Construction/Destruction
-		inline explicit Quaternion() { v = DirectX::XMQuaternionIdentity(); }
-		inline explicit Quaternion(const FloatPoint3 axis, const float angle) { v = DirectX::XMQuaternionRotationAxis(axis, angle); }
-		inline explicit Quaternion(float pitch, float yaw, float roll) { v = DirectX::XMQuaternionRotationRollPitchYaw(pitch, yaw, roll); }
-		inline explicit Quaternion(const DirectX::XMMATRIX& matrix) { v = DirectX::XMQuaternionRotationMatrix(matrix); }
-		inline explicit Quaternion(const DirectX::XMVECTOR &vec) { v = vec; }
-		inline explicit Quaternion(const FloatPoint4 q) { v = q; }
-		inline Quaternion(const Quaternion &in) = default; // copy 
-		inline Quaternion(Quaternion &&in) = default; // move
-		virtual ~Quaternion() = default;
-		// Operators 
-		inline Quaternion & operator= (const Quaternion &in) = default; // copy assignment
-		inline Quaternion & operator= (Quaternion &&in) = default; // move assignment
-		inline Quaternion & operator= (const FXMVECTOR &in) { v = in; };
+	std::ostream& operator<< (std::ostream &os, const UIntPoint2 &in);
+	std::ostream& operator<< (std::ostream &os, const IntPoint2 &in);
+	std::ostream& operator<< (std::ostream &os, const IntPoint3 &in);
+	std::ostream& operator<< (std::ostream &os, const FloatPoint2 &in);
+	std::ostream& operator<< (std::ostream &os, const FloatPoint3 &in);
+	std::ostream& operator<< (std::ostream &os, const FloatPoint4 &in);
 
-		inline Quaternion operator~ (void) const { return Quaternion(DirectX::XMQuaternionConjugate(v)); }
-		inline Quaternion operator- (void) const { return Quaternion(DirectX::XMVectorNegate(v)); }
-		inline Quaternion operator* (Quaternion rhs) const { return Quaternion(DirectX::XMQuaternionMultiply(rhs, v)); }
-		inline FloatPoint3 operator* (FloatPoint3 rhs) const { return FloatPoint3(DirectX::XMVector3Rotate(rhs, v)); }
-		inline Quaternion & operator*= (Quaternion rhs) { *this = *this * rhs; return *this; }
+	std::wostream& operator<< (std::wostream &os, const UIntPoint2 &in);
+	std::wostream& operator<< (std::wostream &os, const IntPoint2 &in);
+	std::wostream& operator<< (std::wostream &os, const IntPoint3 &in);
+	std::wostream& operator<< (std::wostream &os, const FloatPoint2 &in);
+	std::wostream& operator<< (std::wostream &os, const FloatPoint3 &in);
+	std::wostream& operator<< (std::wostream &os, const FloatPoint4 &in);
 
-		virtual DirectX::XMFLOAT3		GetRotationInEulerAngles();
-	};
+	std::istream& operator>> (std::istream &is, King::UIntPoint2 &in);
+	std::istream& operator>> (std::istream &is, King::IntPoint2 &in);
+	std::istream& operator>> (std::istream &is, King::FloatPoint2 &in);
+	std::istream& operator>> (std::istream &is, King::FloatPoint3 &in);
+	std::istream& operator>> (std::istream &is, King::FloatPoint4 &in);
+
+	std::wistream& operator>> (std::wistream &is, King::UIntPoint2 &in);
+	std::wistream& operator>> (std::wistream &is, King::IntPoint2 &in);
+	std::wistream& operator>> (std::wistream &is, King::FloatPoint2 &in);
+	std::wistream& operator>> (std::wistream &is, King::FloatPoint3 &in);
+	std::wistream& operator>> (std::wistream &is, King::FloatPoint4 &in);
+
+	/******************************************************************************
+	*	json
+	******************************************************************************/
+	void to_json(json& j, const UIntPoint2& from);
+	void to_json(json& j, const IntPoint2& from);
+	void to_json(json& j, const IntPoint3& from);
+	void to_json(json& j, const FloatPoint2& from);
+	void to_json(json& j, const FloatPoint3& from);
+	void to_json(json& j, const FloatPoint4& from);
+	void to_json(json& j, const Quaternion & from);
+
+	void from_json(const json& j, UIntPoint2& to);
+	void from_json(const json& j, IntPoint2& to);
+	void from_json(const json& j, IntPoint3& to);
+	void from_json(const json& j, FloatPoint2& to);
+	void from_json(const json& j, FloatPoint3& to);
+	void from_json(const json& j, FloatPoint4& to);
+	void from_json(const json& j, Quaternion & to);
 }
+
