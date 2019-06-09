@@ -61,7 +61,11 @@ SOFTWARE.
 #error MathSIMD requires Visual C++ 2015 or later.
 #endif
 
-#include "D:\Programming\Libraries\json-3.6.1\json.hpp"
+#define KING_MATH_VERSION_MAJOR 2
+#define KING_MATH__VERSION_MINOR 1
+#define KING_MATH__VERSION_PATCH 0
+
+#include "inc\json.hpp"
 using json = nlohmann::json;
 
 #include <windows.h>
