@@ -4,11 +4,14 @@ Title:          2DGeometryKing
 Description:    CPU side 2D geometry utilizing our SIMD math library.
 
 Usage:          Use the typedef keywords in your applications as a generic
-                use of the library.  All code is inline and won't be included
-                in your code if not referenced.  This code is intended to
-                be complied for 64 bit operating systems. 
-                
-Contact:        ChrisKing340@gmail.com
+                use of the library.  Most of the code is inline and won't be 
+                included in your code if not referenced.  This code is intended 
+                to be complied for 64 bit operating systems with native 
+                16 byte alignment.  16 byte alignment is specified so this code
+                should work with 32 bit operating systems but not part of my
+                testing resources.
+                                
+Contact:        https://chrisking340.github.io/GeometryKing/
 
 Copyright (c) 2019 Christopher H. King
 
@@ -58,7 +61,7 @@ namespace King {
     *   Line2DF
     *   pt1 ------- pt2
     ******************************************************************************/
-    __declspec(align(16)) class Line2DF
+    alignas(16) class Line2DF
     {
         /* variables */
     private:
@@ -103,7 +106,7 @@ namespace King {
     *            pt1
     *   CCW rotation for RHS face normals
     ******************************************************************************/
-    __declspec(align(16)) class Triangle2DF
+    alignas(16) class Triangle2DF
     {
         /* variables */
     private:
@@ -118,7 +121,7 @@ namespace King {
         Triangle2DF() = default;
         Triangle2DF(const Triangle2DF &in) { *this = in; } // copy, involk operator=(&int)
         Triangle2DF(Triangle2DF &&in) { *this = std::move(in); } // move, involk operator=(&&in)
-        Triangle2DF(const FloatPoint2 &pt1In, const FloatPoint2 &pt2In, const FloatPoint2 &pt3In) { pt[0] = pt1In; pt[1] = pt2In; pt[2] = pt3In; }
+        Triangle2DF(const FloatPoint2 &pt1In, const FloatPoint2 &pt2In, const FloatPoint2 &pt3In) { Set(pt1In,pt2In,pt3In); }
         // Construction Initializer
         Triangle2DF(std::initializer_list<FloatPoint3> il) { assert(il.size() < 4); size_t count = 0; for (auto & each : il) { pt[count] = each; ++count; } }
 
@@ -126,7 +129,7 @@ namespace King {
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<Triangle2DF*>(p)); }
-        inline Triangle2DF & operator= (const Triangle2DF &in) = default; // copy assignment
+        inline Triangle2DF & operator= (const Triangle2DF &in) { Set(in); } // copy assignment
         inline Triangle2DF & operator= (Triangle2DF &&in) = default; // move assignment
         // Functionality
         bool                                Intersects(Triangle2DF &triIn);
@@ -138,116 +141,18 @@ namespace King {
         inline FloatPoint2                  GetEdge3() const { return pt[0] - pt[2]; }
         inline const FloatPoint2 &          GetVertex(const uint32_t vertexIn012) const { return pt[vertexIn012]; }
         // Assignments
-        inline void __vectorcall            SetVertex(const uint32_t vertexIn012, const FloatPoint2 &vertexIn) { pt[vertexIn012] = vertexIn; }
-    };
-    /******************************************************************************
-    *   Rectangle2D
-    *   lt -------
-    *      |     |
-    *      |     |
-    *      ------- rb
-    ******************************************************************************/
-    __declspec(align(16)) class Rectangle2D
-    {
-        /* variables */
-    public:
-        IntPoint2       lt;
-        IntPoint2       rb;
-    protected:
-
-    private:
-
-        /* methods */
-    public:
-        // Creation/Life cycle
-        static std::shared_ptr<Rectangle2D> Create() { return std::make_shared<Rectangle2D>(); }
-        static std::unique_ptr<Rectangle2D> CreateUnique() { return std::make_unique<Rectangle2D>(); }
-
-        Rectangle2D() = default;
-        Rectangle2D(const Rectangle2D &in) { *this = in; } // copy, involk operator=(&int)
-        Rectangle2D(Rectangle2D &&in) { *this = std::move(in); } // move, involk operator=(&&in)
-        Rectangle2D(const RECT &rIn) { Set(rIn); } // copy
-        Rectangle2D(const IntPoint2 &ptIn) : lt(0l,0l), rb(ptIn) { ; }
-        Rectangle2D(const IntPoint2 &ltIn, const IntPoint2 &rbIn) : lt(ltIn), rb(rbIn) { ; }
-        Rectangle2D(const IntPoint2 &ltIn, const UIntPoint2 &whIn) : lt(ltIn), rb(ltIn+whIn) { ; }
-        Rectangle2D(const long &x, const long &y) : lt(0l, 0l), rb(x, y) { ; }
-        Rectangle2D(const int &x, const int &y) : lt(0l, 0l), rb(static_cast<long>(x), static_cast<long>(y)) { ; }
-        Rectangle2D(const unsigned int &x, const unsigned int &y) : lt(0l, 0l), rb(static_cast<long>(x), static_cast<long>(y)) { ; }
-        Rectangle2D(const unsigned long &x, const unsigned long &y) : lt(0l, 0l), rb(static_cast<long>(x), static_cast<long>(y)) { ; }
-        Rectangle2D(const long &x1, const long &y1, const long &x2, const long &y2 ) : lt(x1, y1), rb(x2, y2) { ; }
-        
-        virtual ~Rectangle2D() = default;
-        // Operators 
-        void * operator new (size_t size) { return _aligned_malloc(size, 16); }
-        void   operator delete (void *p) { _aligned_free(static_cast<Rectangle2D*>(p)); }
-        inline Rectangle2D & operator= (const Rectangle2D &in) { Set(in); return *this; } // copy assignment
-        inline Rectangle2D & operator= (const RECT &rIn) { Set(rIn); return *this; }
-        inline Rectangle2D & operator= (const IntPoint2 &in) { lt = in; rb = in; return *this; }
-        inline Rectangle2D & operator= (Rectangle2D &&in) = default; // move assignment
-        inline Rectangle2D operator- () const { Rectangle2D rtn(*this); rtn.SetLT(-rtn.GetLT()); rtn.SetRB(-rtn.GetRB()); return rtn; }
-        inline Rectangle2D operator+ (const IntPoint2 in) const { Rectangle2D rtn(*this); rtn.MoveBy(in); return rtn; }
-        inline Rectangle2D operator- (const IntPoint2 in) const { Rectangle2D rtn(*this); rtn.MoveBy(-in); return rtn; }
-        inline Rectangle2D operator* (const IntPoint2 in) const { Rectangle2D rtn(*this); rtn.Grow(FloatPoint2(in)); return rtn; }
-        inline Rectangle2D operator/ (const IntPoint2 in) const { Rectangle2D rtn(*this); rtn.Grow(FloatPoint2(1.0f) / FloatPoint2(in)); return rtn; }
-        inline Rectangle2D & operator*= (const float scaleIn) { rb *= scaleIn; return *this; }
-        inline Rectangle2D & operator/= (const float scaleIn) { rb /= scaleIn; return *this; }
-
-        inline Rectangle2D & operator-= (const IntPoint2 deltaIn) { MoveBy(-deltaIn); return *this; }
-        inline Rectangle2D & operator+= (const IntPoint2 deltaIn) { MoveBy(deltaIn); return *this; }
-        inline Rectangle2D & operator*= (const IntPoint2 in) { Grow(FloatPoint2(in)); return *this; }
-        inline Rectangle2D & operator/= (const IntPoint2 in) { Grow(FloatPoint2(1.0f) / FloatPoint2(in)); return *this; }
-        // Conversions
-        inline operator RECT() const { return Get_RECT(); }
-        inline operator const RECT () const { return Get_RECT(); }
-        // Functionality
-        inline void                         MoveBy(const IntPoint2 deltaIn) { lt += deltaIn; rb += deltaIn; }
-        inline void                         MoveBy(const long &dxIn, const long &dyIn) { lt.Set( lt.GetX() + dxIn, lt.GetY() + dyIn); rb.Set(rb.GetX() + dxIn, rb.GetY() + dyIn); }
-        inline void                         MoveDX(const long &dxIn) { lt.SetX(lt.GetX() + dxIn); rb.SetX(rb.GetX() + dxIn); }
-        inline void                         MoveDY(const long &dyIn) { lt.SetY(lt.GetY() + dyIn); rb.SetY(rb.GetY() + dyIn); }
-        inline void                         MoveTo(const IntPoint2 &pt2In) { auto wh = GetSize(); lt = pt2In; rb = lt + wh; }
-        inline bool                         MoveTo(const long &xIn, const long &yIn) { MoveTo(IntPoint2(xIn, yIn)); }
-        
-        inline void __vectorcall            Grow(const FloatPoint2 &scale3In) { auto s = scale3In * GetSize(); SetWH(s); }
-        
-        inline bool                         Intersects(const Rectangle2D &rectIn) const { return (rectIn.lt.GetX() < rb.GetX()) && (lt.GetX() < rectIn.rb.GetX()) && (rectIn.lt.GetY() < rb.GetY()) && (lt.GetY() < rectIn.rb.GetY()); }
-        inline bool                         Intersects(const RECT &rectIn) const { return (rectIn.left < rb.GetX()) && (lt.GetX() < rectIn.right) && (rectIn.top < rb.GetY()) && (lt.GetY() < rectIn.bottom); }
-        inline bool                         Contains(const IntPoint2 pt2In) const { return (lt.GetX() <= pt2In.GetX()) && (pt2In.GetX() < rb.GetX()) && (lt.GetY() <= pt2In.GetY()) && (pt2In.GetY() < rb.GetY()); }
-        inline bool                         Contains(const long &xIn, const long &yIn) const { return (lt.GetX() <= xIn) && (xIn < rb.GetX()) && (lt.GetY() <= yIn) && (yIn < rb.GetY()); }
-        // Accessors
-        inline IntPoint2                    GetSize() const { IntPoint2 a(rb - lt); a.MakeAbsolute(); return a; } // width & height
-        inline IntPoint2                    GetCenter() const { return IntPoint2(lt + (rb - lt) / 2l); }
-        inline long                         GetWidth() const { return std::abs( rb.GetX() - lt.GetX() ); }
-        inline long                         GetHeight() const { return std::abs( rb.GetY() - lt.GetY() ); }
-        inline long                         GetLeft() const { return lt.GetX(); }
-        inline long                         GetRight() const { return rb.GetX(); }
-        inline long                         GetTop() const { return lt.GetY(); }
-        inline long                         GetBottom() const { return rb.GetY(); }
-        inline const IntPoint2 &            GetLT() const { return lt; }
-        inline const IntPoint2 &            GetRB() const { return rb; }
-        inline RECT                         Get_RECT() const { RECT r; r.left = GetLeft(); r.top = GetTop(); r.right = GetRight(); r.bottom = GetBottom(); return r; }
-        // Assignments
-        inline void                         Set(const Rectangle2D &rIn) { lt = rIn.lt; rb = rIn.rb; }
-        inline void                         Set(const RECT &rIn) { lt = IntPoint2(rIn.left, rIn.top); rb = IntPoint2(rIn.right, rIn.bottom); }
-        inline void                         Set(const IntPoint2 &ltIn, const IntPoint2 &rbIn) { lt = ltIn; rb = rbIn; }
-        inline void                         SetLT(const IntPoint2 &ltIn) { lt = ltIn; }
-        inline void                         SetRB(const IntPoint2 &rbIn) { rb = rbIn; }
-        inline void                         SetSize(const UIntPoint2 &sz) { rb = lt + sz; }
-        inline void                         SetWH(const UIntPoint2 &whIn) { UIntPoint2 offset = Abs(whIn) / 2ul; FloatPoint3 c = GetCenter(); lt = c - offset; rb = c + offset; }
-        inline void                         SetWidth(const long &w) { rb.SetX(lt.GetX() + w); }
-        inline void                         SetHeight(const long &h) { rb.SetY(lt.GetY() + h); }
-        inline void                         SetLeft(const long &x) { lt.SetX(x); }
-        inline void                         SetTop(const long &y) { lt.SetY(y); }
-        inline void                         SetRight(const long &x) { rb.SetX(x); }
-        inline void                         SetBottom(const long &y) { rb.SetY(y); }
+        inline void __vectorcall            Set(const Triangle2DF &in) { Set(in.pt[0], in.pt[1], in.pt[2]); }
+        inline void __vectorcall            Set(const FloatPoint2 &pt1In, const FloatPoint2 &pt2In, const FloatPoint2 &pt3In) { pt[0] = pt1In; pt[1] = pt2In; pt[2] = pt3In; }
+        inline void __vectorcall            SetVertex(const uint32_t vertexIn012, const FloatPoint2 &ptIn) { pt[vertexIn012] = ptIn; }
     };
     /******************************************************************************
     *   Rectangle2DF
-    *   lt -------
+    *   lt -------  
     *      |     |
     *      |     |
     *      ------- rb
     ******************************************************************************/
-    __declspec(align(16)) class Rectangle2DF
+    alignas(16) class Rectangle2DF
     {
         /* variables */
     public:
@@ -321,7 +226,13 @@ namespace King {
         inline float                        GetBottom() const { return rb.GetY(); }
         inline const FloatPoint2 &          GetLT() const { return lt; }
         inline const FloatPoint2 &          GetRB() const { return rb; }
+        inline const auto                   GetLB() const { return FloatPoint2(lt.GetX(), rb.GetY()); }
+        inline const auto                   GetRT() const { return FloatPoint2(rb.GetX(), lt.GetY()); }
         inline RECT                         Get_RECT() const { RECT r; r.left = (long)GetLeft(); r.top = (long)GetTop(); r.right = (long)GetRight(); r.bottom = (long)GetBottom(); return r; }
+        inline auto                         Get_Triangle2DF_LB_CCW() const { Triangle2DF(GetLT(), GetLB(), GetRB()); } // CCW winding
+        inline auto                         Get_Triangle2DF_RT_CCW() const { Triangle2DF(GetRB(), GetRT(), GetLT()); } // CCW winding+
+        inline auto                         Get_Triangle2DF_LT_CW() const { Triangle2DF(GetLB(), GetLT(), GetRT()); } // CW winding
+        inline auto                         Get_Triangle2DF_RB_CW() const { Triangle2DF(GetRT(), GetRB(), GetLB()); } // CW winding
         // Assignments
         inline void __vectorcall            Set(const Rectangle2DF &rIn) { *this = rIn; }
         inline void __vectorcall            Set(const Triangle2DF &triIn) { Set(Min(Min(triIn.GetVertex(0), triIn.GetVertex(1)), triIn.GetVertex(2)), Max(Max(triIn.GetVertex(0), triIn.GetVertex(1)), triIn.GetVertex(2))); }
@@ -338,5 +249,106 @@ namespace King {
         inline void                         SetRight(const float &x) { rb.SetX(x); }
         inline void                         SetBottom(const float &y) { rb.SetY(y); }
     };
+    /******************************************************************************
+    *   Rectangle2D
+    *   lt -------
+    *      |     |
+    *      |     |
+    *      ------- rb
+    ******************************************************************************/
+    alignas(16) class Rectangle2D
+    {
+        /* variables */
+    public:
+        IntPoint2       lt;
+        IntPoint2       rb;
+    protected:
 
+    private:
+
+        /* methods */
+    public:
+        // Creation/Life cycle
+        static std::shared_ptr<Rectangle2D> Create() { return std::make_shared<Rectangle2D>(); }
+        static std::unique_ptr<Rectangle2D> CreateUnique() { return std::make_unique<Rectangle2D>(); }
+
+        Rectangle2D() = default;
+        Rectangle2D(const Rectangle2D &in) { *this = in; } // copy, involk operator=(&int)
+        Rectangle2D(Rectangle2D &&in) { *this = std::move(in); } // move, involk operator=(&&in)
+        Rectangle2D(const RECT &rIn) { Set(rIn); } // copy
+        Rectangle2D(const IntPoint2 &ptIn) : lt(0l, 0l), rb(ptIn) { ; }
+        Rectangle2D(const IntPoint2 &ltIn, const IntPoint2 &rbIn) : lt(ltIn), rb(rbIn) { ; }
+        Rectangle2D(const IntPoint2 &ltIn, const UIntPoint2 &whIn) : lt(ltIn), rb(ltIn + whIn) { ; }
+        Rectangle2D(const long &x, const long &y) : lt(0l, 0l), rb(x, y) { ; }
+        Rectangle2D(const int &x, const int &y) : lt(0l, 0l), rb(static_cast<long>(x), static_cast<long>(y)) { ; }
+        Rectangle2D(const unsigned int &x, const unsigned int &y) : lt(0l, 0l), rb(static_cast<long>(x), static_cast<long>(y)) { ; }
+        Rectangle2D(const unsigned long &x, const unsigned long &y) : lt(0l, 0l), rb(static_cast<long>(x), static_cast<long>(y)) { ; }
+        Rectangle2D(const long &x1, const long &y1, const long &x2, const long &y2) : lt(x1, y1), rb(x2, y2) { ; }
+
+        virtual ~Rectangle2D() = default;
+        // Operators 
+        void * operator new (size_t size) { return _aligned_malloc(size, 16); }
+        void   operator delete (void *p) { _aligned_free(static_cast<Rectangle2D*>(p)); }
+        inline Rectangle2D & operator= (const Rectangle2D &in) { Set(in); return *this; } // copy assignment
+        inline Rectangle2D & operator= (const RECT &rIn) { Set(rIn); return *this; }
+        inline Rectangle2D & operator= (const IntPoint2 &in) { lt = in; rb = in; return *this; }
+        inline Rectangle2D & operator= (Rectangle2D &&in) = default; // move assignment
+        inline Rectangle2D operator- () const { Rectangle2D rtn(*this); rtn.SetLT(-rtn.GetLT()); rtn.SetRB(-rtn.GetRB()); return rtn; }
+        inline Rectangle2D operator+ (const IntPoint2 in) const { Rectangle2D rtn(*this); rtn.MoveBy(in); return rtn; }
+        inline Rectangle2D operator- (const IntPoint2 in) const { Rectangle2D rtn(*this); rtn.MoveBy(-in); return rtn; }
+        inline Rectangle2D operator* (const IntPoint2 in) const { Rectangle2D rtn(*this); rtn.Grow(FloatPoint2(in)); return rtn; }
+        inline Rectangle2D operator/ (const IntPoint2 in) const { Rectangle2D rtn(*this); rtn.Grow(FloatPoint2(1.0f) / FloatPoint2(in)); return rtn; }
+        inline Rectangle2D & operator*= (const float scaleIn) { rb *= scaleIn; return *this; }
+        inline Rectangle2D & operator/= (const float scaleIn) { rb /= scaleIn; return *this; }
+
+        inline Rectangle2D & operator-= (const IntPoint2 deltaIn) { MoveBy(-deltaIn); return *this; }
+        inline Rectangle2D & operator+= (const IntPoint2 deltaIn) { MoveBy(deltaIn); return *this; }
+        inline Rectangle2D & operator*= (const IntPoint2 in) { Grow(FloatPoint2(in)); return *this; }
+        inline Rectangle2D & operator/= (const IntPoint2 in) { Grow(FloatPoint2(1.0f) / FloatPoint2(in)); return *this; }
+        // Conversions
+        inline operator RECT() const { return Get_RECT(); }
+        inline operator const RECT() const { return Get_RECT(); }
+        // Functionality
+        inline void                         MoveBy(const IntPoint2 deltaIn) { lt += deltaIn; rb += deltaIn; }
+        inline void                         MoveBy(const long &dxIn, const long &dyIn) { lt.Set(lt.GetX() + dxIn, lt.GetY() + dyIn); rb.Set(rb.GetX() + dxIn, rb.GetY() + dyIn); }
+        inline void                         MoveDX(const long &dxIn) { lt.SetX(lt.GetX() + dxIn); rb.SetX(rb.GetX() + dxIn); }
+        inline void                         MoveDY(const long &dyIn) { lt.SetY(lt.GetY() + dyIn); rb.SetY(rb.GetY() + dyIn); }
+        inline void                         MoveTo(const IntPoint2 &pt2In) { auto wh = GetSize(); lt = pt2In; rb = lt + wh; }
+        inline bool                         MoveTo(const long &xIn, const long &yIn) { MoveTo(IntPoint2(xIn, yIn)); }
+
+        inline void __vectorcall            Grow(const FloatPoint2 &scale3In) { auto s = scale3In * GetSize(); SetWH(s); }
+
+        inline bool                         Intersects(const Rectangle2D &rectIn) const { return (rectIn.lt.GetX() < rb.GetX()) && (lt.GetX() < rectIn.rb.GetX()) && (rectIn.lt.GetY() < rb.GetY()) && (lt.GetY() < rectIn.rb.GetY()); }
+        inline bool                         Intersects(const RECT &rectIn) const { return (rectIn.left < rb.GetX()) && (lt.GetX() < rectIn.right) && (rectIn.top < rb.GetY()) && (lt.GetY() < rectIn.bottom); }
+        inline bool                         Contains(const IntPoint2 pt2In) const { return (lt.GetX() <= pt2In.GetX()) && (pt2In.GetX() < rb.GetX()) && (lt.GetY() <= pt2In.GetY()) && (pt2In.GetY() < rb.GetY()); }
+        inline bool                         Contains(const long &xIn, const long &yIn) const { return (lt.GetX() <= xIn) && (xIn < rb.GetX()) && (lt.GetY() <= yIn) && (yIn < rb.GetY()); }
+        // Accessors
+        inline IntPoint2                    GetSize() const { IntPoint2 a(rb - lt); a.MakeAbsolute(); return a; } // width & height
+        inline IntPoint2                    GetCenter() const { return IntPoint2(lt + (rb - lt) / 2l); }
+        inline long                         GetWidth() const { return std::abs(rb.GetX() - lt.GetX()); }
+        inline long                         GetHeight() const { return std::abs(rb.GetY() - lt.GetY()); }
+        inline long                         GetLeft() const { return lt.GetX(); }
+        inline long                         GetRight() const { return rb.GetX(); }
+        inline long                         GetTop() const { return lt.GetY(); }
+        inline long                         GetBottom() const { return rb.GetY(); }
+        inline const IntPoint2 &            GetLT() const { return lt; }
+        inline const IntPoint2 &            GetRB() const { return rb; }
+        inline const IntPoint2              GetLB() const { return IntPoint2(lt.GetX(), rb.GetY()); }
+        inline const IntPoint2              GetRT() const { return IntPoint2(rb.GetX(), lt.GetY()); }
+        inline RECT                         Get_RECT() const { RECT r; r.left = GetLeft(); r.top = GetTop(); r.right = GetRight(); r.bottom = GetBottom(); return r; }
+        // Assignments
+        inline void                         Set(const Rectangle2D &rIn) { lt = rIn.lt; rb = rIn.rb; }
+        inline void                         Set(const RECT &rIn) { lt = IntPoint2(rIn.left, rIn.top); rb = IntPoint2(rIn.right, rIn.bottom); }
+        inline void                         Set(const IntPoint2 &ltIn, const IntPoint2 &rbIn) { lt = ltIn; rb = rbIn; }
+        inline void                         SetLT(const IntPoint2 &ltIn) { lt = ltIn; }
+        inline void                         SetRB(const IntPoint2 &rbIn) { rb = rbIn; }
+        inline void                         SetSize(const UIntPoint2 &sz) { rb = lt + sz; }
+        inline void                         SetWH(const UIntPoint2 &whIn) { UIntPoint2 offset = Abs(whIn) / 2ul; FloatPoint3 c = GetCenter(); lt = c - offset; rb = c + offset; }
+        inline void                         SetWidth(const long &w) { rb.SetX(lt.GetX() + w); }
+        inline void                         SetHeight(const long &h) { rb.SetY(lt.GetY() + h); }
+        inline void                         SetLeft(const long &x) { lt.SetX(x); }
+        inline void                         SetTop(const long &y) { lt.SetY(y); }
+        inline void                         SetRight(const long &x) { rb.SetX(x); }
+        inline void                         SetBottom(const long &y) { rb.SetY(y); }
+    };
 }
