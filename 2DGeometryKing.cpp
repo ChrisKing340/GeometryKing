@@ -58,7 +58,41 @@ bool King::Line2DF::Intersects(const Line2DF &lineIn, FloatPoint2 *intersectPoin
     return true;
 }
 /******************************************************************************
-*   Line2D::LineTraverse
+*	Line2DF::FindNearestPointOnLineSegment
+*		Desc:		Given a line (segment) and a point in 2-dimensional space,
+*					find the point on the line (segment) that is closest to the
+*					point.
+*		Input:		a point in 2-dimensional space
+*		Output:		nearest point on line to input point
+*		Returns:	none
+*		Remarks:	Adapted from:
+|						 Book Title: Game Programming Gems II
+|						 Chapter Title: Fast, Robust Intersection of 3D Line Segments
+|						 Author: Graham Rhodes
+|						 Revisions: 05-Apr-2001 - GSR. Original.
+******************************************************************************/
+King::FloatPoint2 King::Line2DF::FindNearestPointOnLineSegment(const FloatPoint2 & pointIn)
+{
+    const float epsilon_squared = FLT_EPSILON * FLT_EPSILON;
+    FloatPoint2 ray = pt[1] - pt[0];
+
+    // Line/Segment is degenerate (distance between them is near zero)
+    float d = FloatPoint2::SumComponents(DirectX::XMVectorPow(ray, { 2.f,2.f ,2.f ,2.f }));
+    if (d < epsilon_squared)
+        return pt[0];
+
+    FloatPoint2 ab = pointIn - pt[0];
+
+    // parametric coordinate of the nearest point along the line (infinite in direction of ray)
+    float parameter = FloatPoint2::SumComponents(ray * ab) / d;
+    parameter = std::fmaxf(0.0f, std::fminf(1.0f, parameter)); // limit to the line segment (with range 0.0 to 1.0)
+
+    FloatPoint2 nearestPoint = parameter * ray + pt[0];
+
+    return nearestPoint;
+}
+/******************************************************************************
+*   Line2DF::LineTraverse
 *       Desc:       raterizes the line and traverses it point by point
 *       Input:      function pointer (or lamda) to callback for each point of the line
 *       Output:     none

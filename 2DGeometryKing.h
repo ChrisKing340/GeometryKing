@@ -88,7 +88,8 @@ namespace King {
         inline Line2DF & operator= (Line2DF &&in) = default; // move assignment
 
         // Functionality
-        bool                                Intersects(const Line2DF &lineIn, FloatPoint2 *intersectPointOut);
+        bool __vectorcall                   Intersects(const Line2DF &lineIn, FloatPoint2 *intersectPointOut = nullptr);
+        FloatPoint2 __vectorcall			FindNearestPointOnLineSegment(const FloatPoint2 &pointIn);
         void                                LineTraverse(std::function<void(IntPoint2 ptOut)> callBack); // rasterize the line and callback for each point along the line
         // Accessors
         const auto &                        GetVertex(const uint32_t vertexIndexIn) const { return pt[vertexIndexIn]; }
