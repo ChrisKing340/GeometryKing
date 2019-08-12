@@ -73,12 +73,12 @@ DirectX::XMFLOAT3 King::Quaternion::GetEulerAngles() const
     // Store the Euler angles in radians, credit to:
     // http://www.gamedev.net/topic/597324-quaternion-to-euler-angles-and-back-why-is-the-rotation-changing/
 
-    XMFLOAT3 pitchYawRoll; // output
+    DirectX::XMFLOAT3 pitchYawRoll; // output
 
     float4 sqVec = DirectX::XMVectorMultiply(v, v);
-    XMFLOAT4 sq = sqVec;
+    DirectX::XMFLOAT4 sq = sqVec;
     
-    XMFLOAT4 q;
+    DirectX::XMFLOAT4 q;
     DirectX::XMStoreFloat4(&q, v);
 
     // If quaternion is normalised the unit is one, otherwise it is the correction factor

@@ -79,8 +79,8 @@ using json = nlohmann::json;
 #include <iomanip>
 #include <sal.h>
 
-using namespace std;
-using namespace DirectX;
+//using namespace std;
+//using namespace DirectX;
 
 namespace King {
     // unique data types built on Single Instruction Multiple Data, SIMD, DirectXMath library of intrinsics for speed and simple implementation
@@ -137,7 +137,7 @@ namespace King {
         // Operators 
         inline UIntPoint2 & operator= (const UIntPoint2 &in) = default; // copy assignment
         inline UIntPoint2 & operator= (const DirectX::XMUINT2 &in) { Set(in); return *this; } // copy assignment
-        inline UIntPoint2 & operator= (const DirectX::XMVECTOR &vecIn) { XMUINT2 d; auto v = DirectX::XMConvertVectorFloatToUInt(vecIn, 0); DirectX::XMStoreUInt2(&d, vecIn); Set(d); return *this; } // untested
+        inline UIntPoint2 & operator= (const DirectX::XMVECTOR &vecIn) { DirectX::XMUINT2 d; auto v = DirectX::XMConvertVectorFloatToUInt(vecIn, 0); DirectX::XMStoreUInt2(&d, vecIn); Set(d); return *this; } // untested
         inline UIntPoint2 & operator= (UIntPoint2 &&in) = default; // move assignment
         // Conversions
         inline unsigned int& operator[](int idx) { return GetPtr()[idx]; }
@@ -423,7 +423,7 @@ namespace King {
     /******************************************************************************
     *   FloatPoint2
     ******************************************************************************/
-    class alignas(16) FloatPoint2 : public XMVECTORF32
+    class alignas(16) FloatPoint2 : public DirectX::XMVECTORF32
     {
         /* variables */
     public:
@@ -472,22 +472,22 @@ namespace King {
         inline FloatPoint2 operator- (const FloatPoint2 &p) const { return FloatPoint2(DirectX::XMVectorSubtract(v, p.v)); }
         inline FloatPoint2 operator* (const FloatPoint2 &p) const { return FloatPoint2(DirectX::XMVectorMultiply(v, p.v)); }
         inline FloatPoint2 operator/ (const FloatPoint2 &p) const { return FloatPoint2(DirectX::XMVectorDivide(v, p.v)); }
-        inline XMVECTOR & operator+= (const FloatPoint2 &p) { return v = DirectX::XMVectorAdd(v, p.v); }
-        inline XMVECTOR & operator-= (const FloatPoint2 &p) { return v = DirectX::XMVectorSubtract(v, p.v); }
-        inline XMVECTOR & operator*= (const FloatPoint2 &p) { return v = DirectX::XMVectorMultiply(v, p.v); }
-        inline XMVECTOR & operator/= (const FloatPoint2 &p) { return v = DirectX::XMVectorDivide(v, p.v); }
-        inline FloatPoint2 & operator+= (const XMVECTOR &vecIn) { v = DirectX::XMVectorAdd(v, vecIn); return *this; }
-        inline FloatPoint2 & operator-= (const XMVECTOR &vecIn) { v = DirectX::XMVectorSubtract(v, vecIn); return *this; }
-        inline FloatPoint2 & operator*= (const XMVECTOR &vecIn) { v = DirectX::XMVectorMultiply(v, vecIn); return *this; }
-        inline FloatPoint2 & operator/= (const XMVECTOR &vecIn) { v = DirectX::XMVectorDivide(v, vecIn); return *this; }
+        inline DirectX::XMVECTOR & operator+= (const FloatPoint2 &p) { return v = DirectX::XMVectorAdd(v, p.v); }
+        inline DirectX::XMVECTOR & operator-= (const FloatPoint2 &p) { return v = DirectX::XMVectorSubtract(v, p.v); }
+        inline DirectX::XMVECTOR & operator*= (const FloatPoint2 &p) { return v = DirectX::XMVectorMultiply(v, p.v); }
+        inline DirectX::XMVECTOR & operator/= (const FloatPoint2 &p) { return v = DirectX::XMVectorDivide(v, p.v); }
+        inline FloatPoint2 & operator+= (const DirectX::XMVECTOR &vecIn) { v = DirectX::XMVectorAdd(v, vecIn); return *this; }
+        inline FloatPoint2 & operator-= (const DirectX::XMVECTOR &vecIn) { v = DirectX::XMVectorSubtract(v, vecIn); return *this; }
+        inline FloatPoint2 & operator*= (const DirectX::XMVECTOR &vecIn) { v = DirectX::XMVectorMultiply(v, vecIn); return *this; }
+        inline FloatPoint2 & operator/= (const DirectX::XMVECTOR &vecIn) { v = DirectX::XMVectorDivide(v, vecIn); return *this; }
         inline FloatPoint2 operator+ (float s) const { return FloatPoint2(DirectX::XMVectorAdd(v, FloatPoint2(s))); }
         inline FloatPoint2 operator- (float s) const { return FloatPoint2(DirectX::XMVectorSubtract(v, FloatPoint2(s))); }
         inline FloatPoint2 operator* (float s) const { return FloatPoint2(DirectX::XMVectorMultiply(v, FloatPoint2(s))); }
         inline FloatPoint2 operator/ (float s) const { return FloatPoint2(DirectX::XMVectorDivide(v, FloatPoint2(s))); }
-        inline XMVECTOR & operator+= (float s) { return v = DirectX::XMVectorAdd(v, FloatPoint2(s)); }
-        inline XMVECTOR & operator-= (float s) { return v = DirectX::XMVectorSubtract(v, FloatPoint2(s)); }
-        inline XMVECTOR & operator*= (float s) { return v = DirectX::XMVectorScale(v, s); }
-        inline XMVECTOR & operator/= (float s) { return v = DirectX::XMVectorDivide(v, FloatPoint2(s)); }
+        inline DirectX::XMVECTOR & operator+= (float s) { return v = DirectX::XMVectorAdd(v, FloatPoint2(s)); }
+        inline DirectX::XMVECTOR & operator-= (float s) { return v = DirectX::XMVectorSubtract(v, FloatPoint2(s)); }
+        inline DirectX::XMVECTOR & operator*= (float s) { return v = DirectX::XMVectorScale(v, s); }
+        inline DirectX::XMVECTOR & operator/= (float s) { return v = DirectX::XMVectorDivide(v, FloatPoint2(s)); }
         // Comparators
         inline bool operator<  (const FloatPoint2 &rhs) { return DirectX::XMVector2Less(v, rhs); }
         inline bool operator<= (const FloatPoint2 &rhs) { return DirectX::XMVector2LessOrEqual(v, rhs); }
@@ -578,28 +578,28 @@ namespace King {
         inline FloatPoint3 operator- (const FloatPoint3 s) const { return FloatPoint3(DirectX::XMVectorSubtract(v, s.v)); }
         inline FloatPoint3 operator* (const FloatPoint3 s) const { return FloatPoint3(DirectX::XMVectorMultiply(v, s.v)); }
         inline FloatPoint3 operator/ (const FloatPoint3 s) const { return FloatPoint3(DirectX::XMVectorDivide(v, s.v)); }
-        inline XMVECTOR & operator+= (const FloatPoint3 &s) { return v = DirectX::XMVectorAdd(v, s.v); }
-        inline XMVECTOR & operator-= (const FloatPoint3 &s) { return v = DirectX::XMVectorSubtract(v, s.v); }
-        inline XMVECTOR & operator*= (const FloatPoint3 &s) { return v = DirectX::XMVectorMultiply(v, s.v); }
-        inline XMVECTOR & operator/= (const FloatPoint3 &s) { return v = DirectX::XMVectorDivide(v, s.v); }
-        inline FloatPoint3 operator+ (const XMVECTOR vecIn) const { return FloatPoint3(DirectX::XMVectorAdd(v, vecIn)); }
-        inline FloatPoint3 operator- (const XMVECTOR vecIn) const { return FloatPoint3(DirectX::XMVectorSubtract(v, vecIn)); }
-        inline FloatPoint3 operator* (const XMVECTOR vecIn) const { return FloatPoint3(DirectX::XMVectorMultiply(v, vecIn)); }
-        inline FloatPoint3 operator/ (const XMVECTOR vecIn) const { return FloatPoint3(DirectX::XMVectorDivide(v, vecIn)); }
-        inline FloatPoint3 & operator+= (const XMVECTOR &vecIn) { v = DirectX::XMVectorAdd(v, vecIn); return *this; }
-        inline FloatPoint3 & operator-= (const XMVECTOR &vecIn) { v = DirectX::XMVectorSubtract(v, vecIn); return *this; }
-        inline FloatPoint3 & operator*= (const XMVECTOR &vecIn) { v = DirectX::XMVectorMultiply(v, vecIn); return *this; }
-        inline FloatPoint3 & operator/= (const XMVECTOR &vecIn) { v = DirectX::XMVectorDivide(v, vecIn); return *this; }
-        inline FloatPoint3 operator+ (float s) const { XMVECTOR sv = _mm_set_ps1(s); return FloatPoint3(DirectX::XMVectorAdd(v, sv)); }
-        inline FloatPoint3 operator- (float s) const { XMVECTOR sv = _mm_set_ps1(s); return FloatPoint3(DirectX::XMVectorSubtract(v, sv)); }
+        inline DirectX::XMVECTOR & operator+= (const FloatPoint3 &s) { return v = DirectX::XMVectorAdd(v, s.v); }
+        inline DirectX::XMVECTOR & operator-= (const FloatPoint3 &s) { return v = DirectX::XMVectorSubtract(v, s.v); }
+        inline DirectX::XMVECTOR & operator*= (const FloatPoint3 &s) { return v = DirectX::XMVectorMultiply(v, s.v); }
+        inline DirectX::XMVECTOR & operator/= (const FloatPoint3 &s) { return v = DirectX::XMVectorDivide(v, s.v); }
+        inline FloatPoint3 operator+ (const DirectX::XMVECTOR vecIn) const { return FloatPoint3(DirectX::XMVectorAdd(v, vecIn)); }
+        inline FloatPoint3 operator- (const DirectX::XMVECTOR vecIn) const { return FloatPoint3(DirectX::XMVectorSubtract(v, vecIn)); }
+        inline FloatPoint3 operator* (const DirectX::XMVECTOR vecIn) const { return FloatPoint3(DirectX::XMVectorMultiply(v, vecIn)); }
+        inline FloatPoint3 operator/ (const DirectX::XMVECTOR vecIn) const { return FloatPoint3(DirectX::XMVectorDivide(v, vecIn)); }
+        inline FloatPoint3 & operator+= (const DirectX::XMVECTOR &vecIn) { v = DirectX::XMVectorAdd(v, vecIn); return *this; }
+        inline FloatPoint3 & operator-= (const DirectX::XMVECTOR &vecIn) { v = DirectX::XMVectorSubtract(v, vecIn); return *this; }
+        inline FloatPoint3 & operator*= (const DirectX::XMVECTOR &vecIn) { v = DirectX::XMVectorMultiply(v, vecIn); return *this; }
+        inline FloatPoint3 & operator/= (const DirectX::XMVECTOR &vecIn) { v = DirectX::XMVectorDivide(v, vecIn); return *this; }
+        inline FloatPoint3 operator+ (float s) const { DirectX::XMVECTOR sv = _mm_set_ps1(s); return FloatPoint3(DirectX::XMVectorAdd(v, sv)); }
+        inline FloatPoint3 operator- (float s) const { DirectX::XMVECTOR sv = _mm_set_ps1(s); return FloatPoint3(DirectX::XMVectorSubtract(v, sv)); }
         inline FloatPoint3 operator* (float s) const { return FloatPoint3(DirectX::XMVectorScale(v, s)); }
-        inline FloatPoint3 operator/ (float s) const { XMVECTOR sv = _mm_set_ps1(s); return FloatPoint3(DirectX::XMVectorDivide(v, sv)); }
-        inline XMVECTOR & operator+= (float s) { XMVECTOR sv = _mm_set_ps1(s); return v = DirectX::XMVectorAdd(v, sv); }
-        inline XMVECTOR & operator-= (float s) { XMVECTOR sv = _mm_set_ps1(s); return v = DirectX::XMVectorSubtract(v, sv); }
-        inline XMVECTOR & operator*= (float s) { return v = DirectX::XMVectorScale(v, s); }
-        inline XMVECTOR & operator/= (float s) { XMVECTOR sv = _mm_set_ps1(s); return v = DirectX::XMVectorDivide(v, sv); }
-        inline XMVECTOR operator* (const XMMATRIX &m) { return DirectX::XMVector3Transform(v, m); }
-        inline XMVECTOR & operator*= (const XMMATRIX &m) { return v = DirectX::XMVector3Transform(v, m); }
+        inline FloatPoint3 operator/ (float s) const { DirectX::XMVECTOR sv = _mm_set_ps1(s); return FloatPoint3(DirectX::XMVectorDivide(v, sv)); }
+        inline DirectX::XMVECTOR & operator+= (float s) { DirectX::XMVECTOR sv = _mm_set_ps1(s); return v = DirectX::XMVectorAdd(v, sv); }
+        inline DirectX::XMVECTOR & operator-= (float s) { DirectX::XMVECTOR sv = _mm_set_ps1(s); return v = DirectX::XMVectorSubtract(v, sv); }
+        inline DirectX::XMVECTOR & operator*= (float s) { return v = DirectX::XMVectorScale(v, s); }
+        inline DirectX::XMVECTOR & operator/= (float s) { DirectX::XMVECTOR sv = _mm_set_ps1(s); return v = DirectX::XMVectorDivide(v, sv); }
+        inline DirectX::XMVECTOR operator* (const DirectX::XMMATRIX &m) { return DirectX::XMVector3Transform(v, m); }
+        inline DirectX::XMVECTOR & operator*= (const DirectX::XMMATRIX &m) { return v = DirectX::XMVector3Transform(v, m); }
         // Comparators
         inline bool operator<  (const FloatPoint3 &rhs) { return DirectX::XMVector3Less(v, rhs.GetVecConst()); }
         inline bool operator<= (const FloatPoint3 &rhs) { return DirectX::XMVector3LessOrEqual(v, rhs.GetVecConst()); }
@@ -681,29 +681,28 @@ namespace King {
         inline FloatPoint4 operator- (const FloatPoint4 &s) { return FloatPoint4(DirectX::XMVectorSubtract(v, s.v)); }
         inline FloatPoint4 operator* (const FloatPoint4 &s) { return FloatPoint4(DirectX::XMVectorMultiply(v, s.v)); }
         inline FloatPoint4 operator/ (const FloatPoint4 &s) { return FloatPoint4(DirectX::XMVectorDivide(v, s.v)); }
-        inline XMVECTOR & operator+= (const FloatPoint4 &s) { return v = DirectX::XMVectorAdd(v, s.v); }
-        inline XMVECTOR & operator-= (const FloatPoint4 &s) { return v = DirectX::XMVectorSubtract(v, s.v); }
-        inline XMVECTOR & operator*= (const FloatPoint4 &s) { return v = DirectX::XMVectorMultiply(v, s.v); }
-        inline XMVECTOR & operator/= (const FloatPoint4 &s) { return v = DirectX::XMVectorDivide(v, s.v); }
-        inline FloatPoint4 operator+ (const XMVECTOR &vecIn) { return FloatPoint4(DirectX::XMVectorAdd(v, vecIn)); }
-        inline FloatPoint4 operator- (const XMVECTOR &vecIn) { return FloatPoint4(DirectX::XMVectorSubtract(v, vecIn)); }
-        inline FloatPoint4 operator* (const XMVECTOR &vecIn) { return FloatPoint4(DirectX::XMVectorMultiply(v, vecIn)); }
-        inline FloatPoint4 operator/ (const XMVECTOR &vecIn) { return FloatPoint4(DirectX::XMVectorDivide(v, vecIn)); }
-        inline FloatPoint4 & operator+= (const XMVECTOR &vecIn) { v = DirectX::XMVectorAdd(v, vecIn); return *this; }
-        inline FloatPoint4 & operator-= (const XMVECTOR &vecIn) { v = DirectX::XMVectorSubtract(v, vecIn); return *this; }
-        inline FloatPoint4 & operator*= (const XMVECTOR &vecIn) { v = DirectX::XMVectorMultiply(v, vecIn); return *this; }
-        inline FloatPoint4 & operator/= (const XMVECTOR &vecIn) { v = DirectX::XMVectorDivide(v, vecIn); return *this; }
+        inline DirectX::XMVECTOR & operator+= (const FloatPoint4 &s) { return v = DirectX::XMVectorAdd(v, s.v); }
+        inline DirectX::XMVECTOR & operator-= (const FloatPoint4 &s) { return v = DirectX::XMVectorSubtract(v, s.v); }
+        inline DirectX::XMVECTOR & operator*= (const FloatPoint4 &s) { return v = DirectX::XMVectorMultiply(v, s.v); }
+        inline DirectX::XMVECTOR & operator/= (const FloatPoint4 &s) { return v = DirectX::XMVectorDivide(v, s.v); }
+        inline FloatPoint4 operator+ (const DirectX::XMVECTOR &vecIn) { return FloatPoint4(DirectX::XMVectorAdd(v, vecIn)); }
+        inline FloatPoint4 operator- (const DirectX::XMVECTOR &vecIn) { return FloatPoint4(DirectX::XMVectorSubtract(v, vecIn)); }
+        inline FloatPoint4 operator* (const DirectX::XMVECTOR &vecIn) { return FloatPoint4(DirectX::XMVectorMultiply(v, vecIn)); }
+        inline FloatPoint4 operator/ (const DirectX::XMVECTOR &vecIn) { return FloatPoint4(DirectX::XMVectorDivide(v, vecIn)); }
+        inline FloatPoint4 & operator+= (const DirectX::XMVECTOR &vecIn) { v = DirectX::XMVectorAdd(v, vecIn); return *this; }
+        inline FloatPoint4 & operator-= (const DirectX::XMVECTOR &vecIn) { v = DirectX::XMVectorSubtract(v, vecIn); return *this; }
+        inline FloatPoint4 & operator*= (const DirectX::XMVECTOR &vecIn) { v = DirectX::XMVectorMultiply(v, vecIn); return *this; }
+        inline FloatPoint4 & operator/= (const DirectX::XMVECTOR &vecIn) { v = DirectX::XMVectorDivide(v, vecIn); return *this; }
         inline FloatPoint4 operator+ (float s) { return FloatPoint4(DirectX::XMVectorAdd(v, DirectX::XMVectorReplicate(s))); }
         inline FloatPoint4 operator- (float s) { return FloatPoint4(DirectX::XMVectorSubtract(v, DirectX::XMVectorReplicate(s))); }
         inline FloatPoint4 operator* (float s) { return FloatPoint4(DirectX::XMVectorScale(v, s)); }
         inline FloatPoint4 operator/ (float s) { return FloatPoint4(DirectX::XMVectorDivide(v, DirectX::XMVectorReplicate(s))); }
-        inline XMVECTOR & operator+= (float s) { return v = DirectX::XMVectorAdd(v, DirectX::XMVectorReplicate(s)); }
-        inline XMVECTOR & operator-= (float s) { return v = DirectX::XMVectorSubtract(v, DirectX::XMVectorReplicate(s)); }
-        inline XMVECTOR & operator*= (float s) { return v = DirectX::XMVectorScale(v, s); }
-        inline XMVECTOR & operator/= (float s) { return v = DirectX::XMVectorDivide(v, DirectX::XMVectorReplicate(s)); }
-        inline FloatPoint4 operator* (const XMMATRIX &m) { return FloatPoint4(DirectX::XMVector3Transform(v, m)); }
-        //inline XMVECTOR operator* (const XMMATRIX &m) { return XMVector3Transform(v, m); }
-        inline XMVECTOR & operator*=  (const XMMATRIX &m) { return v = DirectX::XMVector3Transform(v, m); }
+        inline DirectX::XMVECTOR & operator+= (float s) { return v = DirectX::XMVectorAdd(v, DirectX::XMVectorReplicate(s)); }
+        inline DirectX::XMVECTOR & operator-= (float s) { return v = DirectX::XMVectorSubtract(v, DirectX::XMVectorReplicate(s)); }
+        inline DirectX::XMVECTOR & operator*= (float s) { return v = DirectX::XMVectorScale(v, s); }
+        inline DirectX::XMVECTOR & operator/= (float s) { return v = DirectX::XMVectorDivide(v, DirectX::XMVectorReplicate(s)); }
+        inline FloatPoint4 operator* (const DirectX::XMMATRIX &m) { return FloatPoint4(DirectX::XMVector3Transform(v, m)); }
+        inline DirectX::XMVECTOR & operator*=  (const DirectX::XMMATRIX &m) { return v = DirectX::XMVector3Transform(v, m); }
         // Comparators
         inline bool operator<  (const FloatPoint4 &rhs) { return DirectX::XMVector4Less(v, rhs.GetVecConst()); }
         inline bool operator<= (const FloatPoint4 &rhs) { return DirectX::XMVector4LessOrEqual(v, rhs.GetVecConst()); }
