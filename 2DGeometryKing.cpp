@@ -196,3 +196,56 @@ bool King::Triangle2DF::Contains(const FloatPoint2 & ptIn)
     if (Cross(p21, p1).GetX() > 0.f != s_ab) return false;
     return true;
 }
+inline bool __vectorcall King::Circle2DF::Intersects(const FloatPoint2 & pt2In) const 
+{ 
+    FloatPoint2 test(pt2In - GetCenter()); 
+    test *= test;
+    auto r_sq(GetRadius());
+    r_sq *= r_sq;
+    return test > r_sq ? false : true;
+}
+
+inline bool King::Circle2DF::Intersects(const float & xIn, const float & yIn) const 
+{ 
+    FloatPoint2 test(xIn, yIn); 
+    test -= GetCenter(); 
+    test *= test;
+    auto r_sq(GetRadius());
+    r_sq *= r_sq;
+    return test > r_sq ? false : true; 
+}
+
+inline bool King::Circle2DF::Intersects(const Rectangle2DF & rectIn) const
+{
+    auto rectPointNearest = rectIn.FindNearestPoint(GetCenter());
+    return Intersects(rectPointNearest);
+}
+
+inline FloatPoint2 King::Circle2DF::FindNearestPoint(const FloatPoint2 & pt2In) const
+{
+    auto c = GetCenter();
+    auto r = GetRadius();
+
+    auto dist = pt2In - c;
+    dist.MakeNormalize();
+
+    return c + (dist * r);
+}
+
+inline bool King::Rectangle2DF::Intersects(const Rectangle2DF & rectIn) const { return (rectIn.lt.GetX() < rb.GetX()) && (lt.GetX() < rectIn.rb.GetX()) && (rectIn.lt.GetY() < rb.GetY()) && (lt.GetY() < rectIn.rb.GetY()); }
+
+inline bool King::Rectangle2DF::Intersects(const RECT & rectIn) const { return (rectIn.left < rb.GetX()) && (lt.GetX() < rectIn.right) && (rectIn.top < rb.GetY()) && (lt.GetY() < rectIn.bottom); }
+
+
+inline bool King::Rectangle2DF::Intersects(const float & xIn, const float & yIn) const { return (lt.GetX() <= xIn) && (xIn < rb.GetX()) && (lt.GetY() <= yIn) && (yIn < rb.GetY()); }
+
+inline bool King::Rectangle2DF::Intersects(const Circle2DF & circleIn) const
+{
+    auto rectPointNearest = FindNearestPoint(circleIn.GetCenter());
+    return circleIn.Intersects(rectPointNearest);
+}
+
+inline FloatPoint2 King::Rectangle2DF::FindNearestPoint(const FloatPoint2 & pt2In) const
+{
+    return Max(lt, Min(pt2In, rb));
+}

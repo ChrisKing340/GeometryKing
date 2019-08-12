@@ -9,17 +9,17 @@ using namespace std;
 std::ostream & King::operator<< (std::ostream & os, const King::UIntPoint2 &in) { return os << "{ " << "x: " << in.GetX() << " y: " << in.GetY() << " }"; }
 std::ostream & King::operator<< (std::ostream & os, const King::IntPoint2 &in) { return os << "{ " << "x: " << in.GetX() << " y: " << in.GetY() << " }"; }
 std::ostream & King::operator<< (std::ostream & os, const King::IntPoint3 &in) { return os << "{ " << "x: " << in.GetX() << " y: " << in.GetY() << " z: " << in.GetZ() << " }"; }
-std::ostream & King::operator<< (std::ostream & os, const King::FloatPoint2 &in) { return os << "{ " << "x: " << in.f[0] << " y: " << in.f[1] << " }"; }
-std::ostream & King::operator<< (std::ostream & os, const King::FloatPoint3 &in) { return os << "{ " << "x: " << in.f[0] << " y: " << in.f[1] << " z: " << in.f[2] << " }"; }
-std::ostream & King::operator<< (std::ostream & os, const King::FloatPoint4 &in) { return os << "{ " << "x: " << in.f[0] << " y: " << in.f[1] << " z: " << in.f[2] << " w: " << in.f[3] << " }"; }
+std::ostream & King::operator<< (std::ostream & os, const King::FloatPoint2 &in) { return os << "{ " << "x: " << setw(9) << in.f[0] << " y: " << setw(9) << in.f[1] << " }"; }
+std::ostream & King::operator<< (std::ostream & os, const King::FloatPoint3 &in) { return os << "{ " << "x: " << setw(9) << in.f[0] << " y: " << setw(9) << in.f[1] << " z: " << setw(9) << in.f[2] << " }"; }
+std::ostream & King::operator<< (std::ostream & os, const King::FloatPoint4 &in) { return os << "{ " << "x: " << setw(9) << in.f[0] << " y: " << setw(9) << in.f[1] << " z: " << setw(9) << in.f[2] << " w: " << setw(9) << in.f[3] << " }"; }
 
 std::wostream & King::operator<< (std::wostream & os, const King::UIntPoint2 &in) { return os << L"{ " << L"x: " << in.GetX() << L" y: " << in.GetY() << L" }"; }
 std::wostream & King::operator<< (std::wostream & os, const King::IntPoint2 &in) { return os << L"{ " << L"x: " << in.GetX() << L" y: " << in.GetY() << L" }"; }
 std::wostream & King::operator<< (std::wostream & os, const King::IntPoint3 &in) { return os << L"{ " << L"x: " << in.GetX() << L" y: " << in.GetY() << L" z: " << in.GetZ() << L" }"; }
-std::wostream & King::operator<< (std::wostream & os, const King::FloatPoint2 &in) { return os << L"{ " << L"x: " << in.f[0] << L" y: " << in.f[1] << L" }"; }
-std::wostream & King::operator<< (std::wostream & os, const King::FloatPoint3 &in) { return os << L"{ " << L"x: " << in.f[0] << L" y: " << in.f[1] << L" z: " << in.f[2] << L" }"; }
-std::wostream & King::operator<< (std::wostream & os, const King::FloatPoint4 &in) { return os << L"{ " << L"x: " << in.f[0] << L" y: " << in.f[1] << L" z: " << in.f[2] << L" w: " << in.f[3] << L" }"; }
-                                                
+std::wostream & King::operator<< (std::wostream & os, const King::FloatPoint2 &in) { return os << L"{ " << L"x: " << setw(9) << in.f[0] << L" y: " << setw(9) << in.f[1] << L" }"; }
+std::wostream & King::operator<< (std::wostream & os, const King::FloatPoint3 &in) { return os << L"{ " << L"x: " << setw(9) << in.f[0] << L" y: " << setw(9) << in.f[1] << L" z: " << setw(9) << in.f[2] << L" }"; }
+std::wostream & King::operator<< (std::wostream & os, const King::FloatPoint4 &in) { return os << L"{ " << L"x: " << setw(9) << in.f[0] << L" y: " << setw(9) << in.f[1] << L" z: " << setw(9) << in.f[2] << L" w: " << setw(9) << in.f[3] << L" }"; }
+
 std::istream & King::operator>> (std::istream & is, King::UIntPoint2 &in) { unsigned int ui[2]; is >> ui[0] >> ui[1]; in.Set(ui[0],ui[1]); return is; }
 std::istream & King::operator>> (std::istream & is, IntPoint2 &in) { int i[2]; is >> i[0] >> i[1]; in.Set(i[0], i[1]); return is; }
 std::istream & King::operator>> (std::istream & is, FloatPoint2 &in) { DirectX::XMFLOAT2 f; is >> f.x >> f.y; in.Set(f); return is; }

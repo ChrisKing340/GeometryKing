@@ -1,7 +1,10 @@
 /*%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 Title:          2DGeometryKing
 
-Description:    CPU side 2D geometry utilizing our SIMD math library.
+Description:    CPU side 2D geometry utilizing our SIMD math library for 
+                accelerated math operations.  Includes json support so that
+                these data types may be serialized easily for network 
+                communication, file storage, or inspection during debugging.
 
 Usage:          Use the typedef keywords in your applications as a generic
                 use of the library.  Most of the code is inline and won't be 
@@ -9,7 +12,7 @@ Usage:          Use the typedef keywords in your applications as a generic
                 to be complied for 64 bit operating systems with native 
                 16 byte alignment.  16 byte alignment is specified so this code
                 should work with 32 bit operating systems but not part of my
-                testing resources.
+                testing regiment.
                                 
 Contact:        https://chrisking340.github.io/GeometryKing/
 
@@ -41,21 +44,20 @@ SOFTWARE.
 
 #include "MathSIMD.h"
 
-using namespace std;
-using namespace DirectX;
-
 namespace King {
     // 2D objects
     class Line2DF; // SIMD
     class Triangle2DF; // SIMD
     class Rectangle2DF; // SIMD
     class Rectangle2D; // not accelerated, replaces Windows RECT class thourgh conversions
+    class Circle2DF; // SIMD
 
     // alias
     typedef Line2DF         lineF; // float data types
     typedef Triangle2DF     triF; // float data types
     typedef Rectangle2DF    rectF; // float data types
     typedef Rectangle2D     rect; // integer data types
+    typedef Circle2DF       circleF; // float data types
 
     /******************************************************************************
     *   Line2DF
@@ -77,19 +79,19 @@ namespace King {
         Line2DF(const Line2DF &in) { *this = in; } // copy, involk operator=(&int)
         Line2DF(Line2DF &&in) { *this = std::move(in); } // move, involk operator=(&&in)
         Line2DF(const FloatPoint2 &pt1In, const FloatPoint2 &pt2In) { pt[0] = pt1In; pt[1] = pt2In; }
-        explicit Line2DF(std::initializer_list<FloatPoint2> il) { assert(il.size() < 3); size_t count = 0; for (auto & each : il) { pt[count] = each; ++count; } }
+        explicit Line2DF(std::initializer_list<FloatPoint2> il) { assert(il.size() < 3); std::size_t count = 0; for (auto & each : il) { pt[count] = each; ++count; } }
 
         virtual ~Line2DF() = default;
 
         // Operators 
-        void * operator new (size_t size) { return _aligned_malloc(size, 16); }
+        void * operator new (std::size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<Line2DF*>(p)); }
         inline Line2DF & operator= (const Line2DF &in) { Set(in); } // copy assignment
         inline Line2DF & operator= (Line2DF &&in) = default; // move assignment
 
         // Functionality
         bool __vectorcall                   Intersects(const Line2DF &lineIn, FloatPoint2 *intersectPointOut = nullptr);
-        FloatPoint2 __vectorcall			FindNearestPointOnLineSegment(const FloatPoint2 &pointIn);
+        FloatPoint2 __vectorcall            FindNearestPointOnLineSegment(const FloatPoint2 &pointIn);
         void                                LineTraverse(std::function<void(IntPoint2 ptOut)> callBack); // rasterize the line and callback for each point along the line
         // Accessors
         const auto &                        GetVertex(const uint32_t vertexIndexIn) const { return pt[vertexIndexIn]; }
@@ -212,10 +214,13 @@ namespace King {
 
         inline void __vectorcall            Grow(const FloatPoint2 &scale3In) { auto s = scale3In * GetSize(); SetWH(s); }
 
-        inline bool __vectorcall            Intersects(const Rectangle2DF &rectIn) const { return (rectIn.lt.GetX() < rb.GetX()) && (lt.GetX() < rectIn.rb.GetX()) && (rectIn.lt.GetY() < rb.GetY()) && (lt.GetY() < rectIn.rb.GetY()); }
-        inline bool                         Intersects(const RECT &rectIn) const { return (rectIn.left < rb.GetX()) && (lt.GetX() < rectIn.right) && (rectIn.top < rb.GetY()) && (lt.GetY() < rectIn.bottom); }
-        inline bool __vectorcall            Intersects(const FloatPoint2 &pt2In) const { return (lt.GetX() <= pt2In.GetX()) && (pt2In.GetX() < rb.GetX()) && (lt.GetY() <= pt2In.GetY()) && (pt2In.GetY() < rb.GetY()); }
-        inline bool                         Intersects(const float &xIn, const float &yIn) const { return (lt.GetX() <= xIn) && (xIn < rb.GetX()) && (lt.GetY() <= yIn) && (yIn < rb.GetY()); }
+        inline bool                         Intersects(const Rectangle2DF &rectIn) const;
+        inline bool                         Intersects(const RECT &rectIn) const;
+        inline bool __vectorcall            Intersects(const FloatPoint2 &pt2In) const { return (lt.GetX() <= pt2In.GetX()) && (pt2In.GetX() < rb.GetX()) && (lt.GetY() <= pt2In.GetY()) && (pt2In.GetY() < rb.GetY()); };
+        inline bool                         Intersects(const float &xIn, const float &yIn) const;
+        inline bool                         Intersects(const Circle2DF & circleIn) const;
+
+        inline FloatPoint2                  FindNearestPoint(const FloatPoint2 &pt2In) const;
         // Accessors
         inline FloatPoint2                  GetSize() const { FloatPoint2 a(rb - lt); a.MakeAbsolute(); return a; } // width & height
         inline FloatPoint2                  GetCenter() const { return FloatPoint2(lt + (rb - lt) / 2.f); }
@@ -353,7 +358,46 @@ namespace King {
         inline void                         SetRight(const long &x) { rb.SetX(x); }
         inline void                         SetBottom(const long &y) { rb.SetY(y); }
     };
+    /******************************************************************************
+    *   Circle2DF
+    *   pt1 ------- pt2
+    ******************************************************************************/
+    class alignas(16) Circle2DF
+    {
+        /* variables */
+    public:
+        FloatPoint3 centerXYradiusZ;
 
+        /* methods */
+    public:
+        // Creation/Life cycle
+        static std::shared_ptr<Circle2DF> Create() { return std::make_shared<Circle2DF>(); }
+        static std::unique_ptr<Circle2DF> CreateUnique() { return std::make_unique<Circle2DF>(); }
+        // Construction/Destruction
+        Circle2DF() = default;
+        Circle2DF(const Circle2DF &in) { *this = in; } // copy, involk operator=(&int)
+        Circle2DF(Circle2DF &&in) { *this = std::move(in); } // move, involk operator=(&&in)
+        Circle2DF(const FloatPoint2 &centerIn, const float &radiusIn) { centerXYradiusZ = DirectX::XMVectorSet(centerIn.GetX(), centerIn.GetY(), radiusIn, 0.0f); }
+
+        virtual ~Circle2DF() = default;
+
+        // Operators 
+        void * operator new (std::size_t size) { return _aligned_malloc(size, 16); }
+        void   operator delete (void *p) { _aligned_free(static_cast<Circle2DF*>(p)); }
+        inline Circle2DF & operator= (const Circle2DF &in) { Set(in); } // copy assignment
+        inline Circle2DF & operator= (Circle2DF &&in) = default; // move assignment
+        // Functionality
+        inline bool __vectorcall            Intersects(const FloatPoint2 &pt2In) const;
+        inline bool                         Intersects(const float &xIn, const float &yIn) const;
+        inline bool                         Intersects(const Rectangle2DF &rectIn) const;
+        
+        inline FloatPoint2                  FindNearestPoint(const FloatPoint2 &pt2In) const;
+        // Accessors
+        const FloatPoint2                   GetCenter() const { return FloatPoint2(centerXYradiusZ); }
+        const float                         GetRadius() const { return centerXYradiusZ.GetZ(); }
+        // Assignments
+        inline void __vectorcall            Set(const Circle2DF &in) { centerXYradiusZ = in.centerXYradiusZ; }
+    };
     /******************************************************************************
     *   json
     ******************************************************************************/

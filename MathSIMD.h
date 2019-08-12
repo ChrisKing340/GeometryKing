@@ -76,6 +76,7 @@ using json = nlohmann::json;
 #include <functional>
 #include <ostream>
 #include <istream>
+#include <iomanip>
 #include <sal.h>
 
 using namespace std;
@@ -175,7 +176,7 @@ namespace King {
         inline UIntPoint2 operator/  (float s) const { return UIntPoint2(static_cast<float>(u[0]) / (s), static_cast<float>(u[1]) / (s)); }
 
         // Assignments
-        inline void                             SetZero(void) { u[0] = u[1] = 0; }
+        inline void constexpr                   SetZero(void) { u[0] = u[1] = 0; }
         inline void                             SetX(const unsigned long x) { u[0] = static_cast<unsigned int>(x); }
         inline void                             SetY(const unsigned long y) { u[1] = static_cast<unsigned int>(y); }
         inline void                             Set(const unsigned long xy) { u[0] = u[1] = static_cast<unsigned int>(xy); }
@@ -209,7 +210,7 @@ namespace King {
     {
         /* variables */
     public:
-        int         i[2];
+        int         i[2] = {0, 0};
     protected:
 
     private:
@@ -220,7 +221,7 @@ namespace King {
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<IntPoint2*>(p)); }
 
-        inline IntPoint2() { SetZero(); }
+        inline constexpr IntPoint2() {}
         inline IntPoint2(const long xy) { Set(xy); }
         inline IntPoint2(const long x, const long y) { Set(x, y); }
         inline IntPoint2(const int x, const int y) { Set(x, y); }
@@ -283,7 +284,7 @@ namespace King {
         inline IntPoint2 & operator/= (const float s) { i[0] = static_cast<int>(static_cast<float>(i[0]) / s); i[1] = static_cast<int>(static_cast<float>(i[1]) / s); return *this; }
 
         // Assignments
-        inline void                             SetZero(void) { i[0] = i[1] = 0; }
+        inline void constexpr                   SetZero(void) { i[0] = i[1] = 0; }
         inline void                             SetX(const long x) { i[0] = static_cast<int>(x); }
         inline void                             SetY(const long y) { i[1] = static_cast<int>(y); }
         inline void                             Set(const long xy) { i[0] = i[1] = static_cast<int>(xy); }
@@ -319,7 +320,7 @@ namespace King {
     {
         /* variables */
     public:
-        int         i[3];
+        int         i[3] = {0, 0, 0};
     protected:
 
     private:
@@ -330,7 +331,7 @@ namespace King {
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<IntPoint3*>(p)); }
 
-        inline IntPoint3() { SetZero(); }
+        inline constexpr IntPoint3() {}
         inline IntPoint3(const long xyz) { Set(xyz); }
         inline IntPoint3(const long x, const long y, const long z) { Set(x, y, z); }
         inline IntPoint3(const int x, const int y, const int z) { Set(x, y, z); }
@@ -390,7 +391,7 @@ namespace King {
         inline IntPoint3 & operator*= (const float s) { i[0] = static_cast<int>(static_cast<float>(i[0]) * s); i[1] = static_cast<int>(static_cast<float>(i[1]) * s); i[2] = static_cast<int>(static_cast<float>(i[2]) * s); return *this; }
         inline IntPoint3 & operator/= (const float s) { i[0] = static_cast<int>(static_cast<float>(i[0]) / s); i[1] = static_cast<int>(static_cast<float>(i[1]) / s); i[2] = static_cast<int>(static_cast<float>(i[2]) / s); return *this; }
         // Assignments
-        inline void                             SetZero(void) { i[0] = i[1] = i[2] = 0; }
+        inline void constexpr                   SetZero(void) { i[0] = i[1] = i[2] = 0; }
         inline void                             SetX(const long x) { i[0] = static_cast<int>(x); }
         inline void                             SetY(const long y) { i[1] = static_cast<int>(y); }
         inline void                             SetZ(const long z) { i[2] = static_cast<int>(z); }
@@ -450,6 +451,7 @@ namespace King {
         inline FloatPoint2(const UIntPoint2 &in) { Set(in.Get_XMFLOAT2()); }
         inline FloatPoint2(FloatPoint2 &&in) { v = std::move(in.v); } // move
         inline FloatPoint2(const DirectX::XMVECTOR &vecIn) { v = vecIn; }
+        inline FloatPoint2(const DirectX::XMVECTORF32 &vecIn) { v = vecIn.v; }
         inline FloatPoint2(uint8_t *bytesIn) { auto fp = reinterpret_cast<DirectX::XMFLOAT2*>(bytesIn); v = DirectX::XMLoadFloat2(fp); }
         inline FloatPoint2(float *floatIn) { auto fp = reinterpret_cast<DirectX::XMFLOAT2*>(floatIn); v = DirectX::XMLoadFloat2(fp); }
         virtual ~FloatPoint2() = default;
@@ -459,6 +461,7 @@ namespace King {
         inline FloatPoint2 & operator= (const DirectX::XMVECTOR &vecIn) { v = vecIn; return *this; }
         inline FloatPoint2 & operator= (FloatPoint2 &&in) = default; // move assignment
         // Conversions
+        inline operator DirectX::XMVECTORF32() const { return *this; }
         inline operator DirectX::XMFLOAT2() const { return Get_XMFLOAT2(); }
         inline operator DirectX::XMFLOAT2A() const { return Get_XMFLOAT2A(); }
         inline operator DirectX::XMINT2() const { return Get_XMINT2(); }
@@ -550,11 +553,13 @@ namespace King {
         inline FloatPoint3() = default; // { SetZero(); }
         inline FloatPoint3(float xyz) { Set(xyz); }
         inline FloatPoint3(float x, float y, float z) { Set(x, y, z); }
+        inline FloatPoint3(const FloatPoint2 &in, const float &zIn) { v = FloatPoint2(in); SetZ(zIn); }
         inline FloatPoint3(const FloatPoint3 &in) { v = in.v; } // copy
         inline FloatPoint3(const IntPoint3 &in) { Set(in.Get_XMFLOAT3()); }
         inline FloatPoint3(const DirectX::XMFLOAT3 &in) { Set(in); }
         inline FloatPoint3(FloatPoint3 &&in) { v = std::move(in.v); } // move
         inline FloatPoint3(const DirectX::XMVECTOR &vecIn) { v = DirectX::XMVectorSetW(vecIn, 0.f); }
+        inline FloatPoint3(const DirectX::XMVECTORF32 &vecIn) { v = vecIn.v; }
         inline FloatPoint3(FloatPoint4 vecIn);
         inline FloatPoint3(uint8_t *bytesIn) { auto fp = reinterpret_cast<float*>(bytesIn); v = DirectX::XMLoadFloat3(&DirectX::XMFLOAT3(fp)); }
         inline FloatPoint3(float *floatIn) { v = DirectX::XMLoadFloat3(&DirectX::XMFLOAT3(floatIn)); }
@@ -658,6 +663,7 @@ namespace King {
         inline FloatPoint4(const DirectX::XMFLOAT4 &in) { Set(in); }
         inline FloatPoint4(FloatPoint4 &&in) { v = std::move(in.v); } // move
         inline FloatPoint4(const DirectX::FXMVECTOR &vecIn) { v = vecIn; }
+        inline FloatPoint4(const DirectX::XMVECTORF32 &vecIn) { v = vecIn.v; }
         inline FloatPoint4(uint8_t *bytesIn) { auto fp = reinterpret_cast<DirectX::XMFLOAT4*>(bytesIn); v = DirectX::XMLoadFloat4(fp); }
         inline FloatPoint4(float *floatIn) { auto fp = reinterpret_cast<DirectX::XMFLOAT4*>(floatIn); v = DirectX::XMLoadFloat4(fp); }
         virtual ~FloatPoint4() = default;
