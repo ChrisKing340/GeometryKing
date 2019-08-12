@@ -1,7 +1,7 @@
 # GeometryKing
 C++ Classes for 2D and 3D geometry 
 
-Generic code base inteded for 64 Bit Windows 10 and SIMD support from DirectXMath.  Compiled with Visual Studio 2019.
+Generic code base inteded for 64 Bit Windows 10 and SIMD support from DirectXMath.  Compiled with Visual Studio 2017.
 
 For the latest version of DirectXMath, visit:
 <https://github.com/Microsoft/DirectXMath>
