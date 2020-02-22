@@ -1,26 +1,28 @@
 /*%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 Title:          MathSIMD
 
-Description:    Data parallelism accelerated code through implementing SIMD
-                (single instruction, multiple data) math libraries.
-                Made easy with operator overloads to behave as a single data
-                type.  Uses the DirectXMath library for intrinsics and fall
-                back code if not supported on platform.
+Description:    Multiple data set variable types defined to simply code for
+                2D and 3D points and common math operations in Major 1 release.
+                Operator overloads and single varible tracking was the driving
+                reasons for building these classes within our engine.
 
-                This code base was originally written without SIMD. Therefore,
-                not all of the multiple data classes (such as int types) have
-                been converted.  Float types have been resulting in a dramatic
-                decrease in 3D math calculations time in my projects.
-                
+                Data parallelism accelerated code through implementing SIMD
+                (single instruction, multiple data) math libraries in Major 2.
+
+
+                The popular DirectXMath library for intrinsics and fall back
+                code is used to provide the intrinsics.  Note that this math
+                library does not require DirectX and is render system independent.
+
 Usage:          Use the typedef keywords in your applications as a generic
                 use of the library.  I personally do not like the term vector
                 for the multi-data variables, nor do I like it in std::vector,
-                as vectors are magnitude and direction.  Shade model has it
+                as vectors are magnitude and direction.  Shader model has it
                 right with float3, etc. and I type define my internals to that
                 throughout my code.
 
                 This code is intended to be complied for 64 bit operating systems.
-                
+
 Contact:        ChrisKing340@gmail.com
 
 References:     https://msdn.microsoft.com/en-us/library/windows/desktop/hh437833(v=vs.85).aspx
@@ -79,9 +81,6 @@ using json = nlohmann::json;
 #include <iomanip>
 #include <sal.h>
 
-//using namespace std;
-//using namespace DirectX;
-
 namespace King {
     // unique data types built on Single Instruction Multiple Data, SIMD, DirectXMath library of intrinsics for speed and simple implementation
     class UIntPoint2; // not accelerated
@@ -117,28 +116,28 @@ namespace King {
         /* methods */
     public:
         // Creation/Life cycle
-        void * operator new (size_t size) { return _aligned_malloc(size, 16); }
-        void   operator delete (void *p) { _aligned_free(static_cast<UIntPoint2*>(p)); }
+        void* operator new (size_t size) { return _aligned_malloc(size, 16); }
+        void   operator delete (void* p) { _aligned_free(static_cast<UIntPoint2*>(p)); }
 
         inline UIntPoint2() { SetZero(); }
-        inline UIntPoint2(const unsigned long &xy) { Set(xy); }
-        inline UIntPoint2(const long &xy) { Set(xy); }
-        inline UIntPoint2(const unsigned long &x, const unsigned long &y) { Set(x, y); }
-        inline UIntPoint2(const unsigned int &x, const unsigned int &y) { Set(x, y); }
-        inline UIntPoint2(const long &x, const long &y) { Set(x, y); }
-        inline UIntPoint2(const float &x, const float &y) { Set(x, y); }
-        inline UIntPoint2(const UIntPoint2 &in) = default; // copy
-        inline UIntPoint2(const DirectX::XMUINT2 &in) { Set(in); }
+        inline UIntPoint2(const unsigned long& xy) { Set(xy); }
+        inline UIntPoint2(const long& xy) { Set(xy); }
+        inline UIntPoint2(const unsigned long& x, const unsigned long& y) { Set(x, y); }
+        inline UIntPoint2(const unsigned int& x, const unsigned int& y) { Set(x, y); }
+        inline UIntPoint2(const long& x, const long& y) { Set(x, y); }
+        inline UIntPoint2(const float& x, const float& y) { Set(x, y); }
+        inline UIntPoint2(const UIntPoint2 & in) = default; // copy
+        inline UIntPoint2(const DirectX::XMUINT2 & in) { Set(in); }
         inline UIntPoint2(const IntPoint2 & in);
         inline UIntPoint2(const FloatPoint2 & in);
-        inline UIntPoint2(UIntPoint2 &&in) = default; // move
-        inline UIntPoint2(const DirectX::FXMVECTOR &vecIn) { DirectX::XMStoreInt2(u, vecIn); }
+        inline UIntPoint2(UIntPoint2 && in) = default; // move
+        inline UIntPoint2(const DirectX::FXMVECTOR & vecIn) { DirectX::XMStoreInt2(u, vecIn); }
         virtual ~UIntPoint2() = default;
         // Operators 
-        inline UIntPoint2 & operator= (const UIntPoint2 &in) = default; // copy assignment
-        inline UIntPoint2 & operator= (const DirectX::XMUINT2 &in) { Set(in); return *this; } // copy assignment
-        inline UIntPoint2 & operator= (const DirectX::XMVECTOR &vecIn) { DirectX::XMUINT2 d; auto v = DirectX::XMConvertVectorFloatToUInt(vecIn, 0); DirectX::XMStoreUInt2(&d, vecIn); Set(d); return *this; } // untested
-        inline UIntPoint2 & operator= (UIntPoint2 &&in) = default; // move assignment
+        inline UIntPoint2& operator= (const UIntPoint2 & in) = default; // copy assignment
+        inline UIntPoint2& operator= (const DirectX::XMUINT2 & in) { Set(in); return *this; } // copy assignment
+        inline UIntPoint2& operator= (const DirectX::XMVECTOR & vecIn) { DirectX::XMUINT2 d; auto v = DirectX::XMConvertVectorFloatToUInt(vecIn, 0); DirectX::XMStoreUInt2(&d, vecIn); Set(d); return *this; } // untested
+        inline UIntPoint2& operator= (UIntPoint2 && in) = default; // move assignment
         // Conversions
         inline unsigned int& operator[](int idx) { return GetPtr()[idx]; }
         inline operator DirectX::XMVECTOR() const { DirectX::XMVECTORU32 r; r.u[0] = u[0]; r.u[1] = u[1]; r.u[2] = r.u[3] = 0; return r; }
@@ -150,15 +149,15 @@ namespace King {
         inline UIntPoint2 operator* (const UIntPoint2 p) const { return UIntPoint2(u[0] * p.u[0], u[1] * p.u[1]); }
         inline UIntPoint2 operator/ (const UIntPoint2 p) const { return UIntPoint2(u[0] / p.u[0], u[1] / p.u[1]); }
 
-        inline UIntPoint2 & operator+= (const unsigned int s) { u[0] = u[0] + s; u[1] = u[1] + s; return *this; }
-        inline UIntPoint2 & operator-= (const unsigned int s) { u[0] = u[0] - s; u[1] = u[1] - s; return *this; }
-        inline UIntPoint2 & operator*= (const unsigned int s) { u[0] = u[0] * s; u[1] = u[1] * s; return *this; }
-        inline UIntPoint2 & operator/= (const unsigned int s) { u[0] = u[0] / s; u[1] = u[1] / s; return *this; }
+        inline UIntPoint2& operator+= (const unsigned int s) { u[0] = u[0] + s; u[1] = u[1] + s; return *this; }
+        inline UIntPoint2& operator-= (const unsigned int s) { u[0] = u[0] - s; u[1] = u[1] - s; return *this; }
+        inline UIntPoint2& operator*= (const unsigned int s) { u[0] = u[0] * s; u[1] = u[1] * s; return *this; }
+        inline UIntPoint2& operator/= (const unsigned int s) { u[0] = u[0] / s; u[1] = u[1] / s; return *this; }
 
-        inline UIntPoint2 & operator+= (const UIntPoint2 &p) { u[0] = u[0] + p.u[0]; u[1] = u[1] + p.u[1]; return *this; }
-        inline UIntPoint2 & operator-= (const UIntPoint2 &p) { u[0] = u[0] - p.u[0]; u[1] = u[1] - p.u[1]; return *this; }
-        inline UIntPoint2 & operator*= (const UIntPoint2 &p) { u[0] = u[0] * p.u[0]; u[1] = u[1] * p.u[1]; return *this; }
-        inline UIntPoint2 & operator/= (const UIntPoint2 &p) { u[0] = u[0] / p.u[0]; u[1] = u[1] / p.u[1]; return *this; }
+        inline UIntPoint2& operator+= (const UIntPoint2 & p) { u[0] = u[0] + p.u[0]; u[1] = u[1] + p.u[1]; return *this; }
+        inline UIntPoint2& operator-= (const UIntPoint2 & p) { u[0] = u[0] - p.u[0]; u[1] = u[1] - p.u[1]; return *this; }
+        inline UIntPoint2& operator*= (const UIntPoint2 & p) { u[0] = u[0] * p.u[0]; u[1] = u[1] * p.u[1]; return *this; }
+        inline UIntPoint2& operator/= (const UIntPoint2 & p) { u[0] = u[0] / p.u[0]; u[1] = u[1] / p.u[1]; return *this; }
 
         inline UIntPoint2 operator+  (unsigned int s) const { return UIntPoint2(u[0] + static_cast<UINT>(s), u[1] + static_cast<UINT>(s)); }
         inline UIntPoint2 operator-  (unsigned int s) const { return UIntPoint2(u[0] - static_cast<UINT>(s), u[1] - static_cast<UINT>(s)); }
@@ -172,7 +171,7 @@ namespace King {
 
         inline UIntPoint2 operator+  (float s) const { return UIntPoint2(static_cast<float>(u[0]) + (s), static_cast<float>(u[1]) + (s)); }
         inline UIntPoint2 operator-  (float s) const { return UIntPoint2(static_cast<float>(u[0]) - (s), static_cast<float>(u[1]) - (s)); }
-        inline UIntPoint2 operator*  (float s) const { return UIntPoint2(static_cast<float>(u[0]) * (s), static_cast<float>(u[1]) * (s)); }
+        inline UIntPoint2 operator*  (float s) const { return UIntPoint2(static_cast<float>(u[0])* (s), static_cast<float>(u[1])* (s)); }
         inline UIntPoint2 operator/  (float s) const { return UIntPoint2(static_cast<float>(u[0]) / (s), static_cast<float>(u[1]) / (s)); }
 
         // Assignments
@@ -186,11 +185,11 @@ namespace King {
         inline void                             Set(const unsigned int x, const unsigned int y) { u[0] = static_cast<unsigned int>(x); u[1] = static_cast<unsigned int>(y); }
         inline void                             Set(const long x, const long y) { u[0] = static_cast<unsigned int>(x); u[1] = static_cast<unsigned int>(y); }
         inline void                             Set(const float x, const float y) { u[0] = static_cast<unsigned int>(x); u[1] = static_cast<unsigned int>(y); }
-        inline void                             Set(const UIntPoint2 &in) { *this = in; }
-        inline void                             Set(const DirectX::XMUINT2 &point) { u[0] = point.x; u[1] = point.y; }
-        inline void                             Set(const POINT &point) { u[0] = static_cast<unsigned int>(point.x); u[1] = static_cast<unsigned int>(point.y); }
+        inline void                             Set(const UIntPoint2 & in) { *this = in; }
+        inline void                             Set(const DirectX::XMUINT2 & point) { u[0] = point.x; u[1] = point.y; }
+        inline void                             Set(const POINT & point) { u[0] = static_cast<unsigned int>(point.x); u[1] = static_cast<unsigned int>(point.y); }
         // Accessors
-        unsigned int*                           GetPtr() { return reinterpret_cast<unsigned int*>(this); }
+        unsigned int* GetPtr() { return reinterpret_cast<unsigned int*>(this); }
         inline const POINT                      Get_POINT() const { POINT pt = { static_cast<long>(u[0]), static_cast<long>(u[1]) }; return pt; }
         inline const DirectX::XMINT2            Get_XMINT2() const { DirectX::XMINT2 rtn; rtn = { static_cast<int>(u[0]), static_cast<int>(u[1]) }; return rtn; }
         inline const DirectX::XMUINT2           Get_XMUINT2() const { DirectX::XMUINT2 rtn; rtn = { static_cast<unsigned int>(u[0]), static_cast<unsigned int>(u[1]) }; return rtn; }
@@ -198,10 +197,10 @@ namespace King {
         inline const unsigned long              GetX() const { return (unsigned long)u[0]; }
         inline const unsigned long              GetY() const { return (unsigned long)u[1]; }
         // Functionality
-        inline void                             Min(const UIntPoint2 & in) { u[0] = u[0] < in.u[0] ? u[0] : in.u[1]; u[1] = u[1] < in.u[1] ? u[1] : in.u[1]; }
-        inline void                             Max(const UIntPoint2 & in) { u[0] = u[0] > in.u[0] ? u[0] : in.u[1]; u[1] = u[1] > in.u[1] ? u[1] : in.u[1]; }
+        inline void                             Min(const UIntPoint2& in) { u[0] = u[0] < in.u[0] ? u[0] : in.u[1]; u[1] = u[1] < in.u[1] ? u[1] : in.u[1]; }
+        inline void                             Max(const UIntPoint2& in) { u[0] = u[0] > in.u[0] ? u[0] : in.u[1]; u[1] = u[1] > in.u[1] ? u[1] : in.u[1]; }
         //Statics
-        static const float                      Magnitude(const UIntPoint2 &pIn) { return (float)std::sqrt(pIn.u[0] * pIn.u[0] + pIn.u[1] * pIn.u[1]); }
+        static const float                      Magnitude(const UIntPoint2& pIn) { return (float)std::sqrt(pIn.u[0] * pIn.u[0] + pIn.u[1] * pIn.u[1]); }
     };
     /******************************************************************************
     *   IntPoint2
@@ -210,7 +209,7 @@ namespace King {
     {
         /* variables */
     public:
-        int         i[2] = {0, 0};
+        int         i[2] = { 0, 0 };
     protected:
 
     private:
@@ -218,8 +217,8 @@ namespace King {
         /* methods */
     public:
         // Creation/Life cycle
-        void * operator new (size_t size) { return _aligned_malloc(size, 16); }
-        void   operator delete (void *p) { _aligned_free(static_cast<IntPoint2*>(p)); }
+        void* operator new (size_t size) { return _aligned_malloc(size, 16); }
+        void   operator delete (void* p) { _aligned_free(static_cast<IntPoint2*>(p)); }
 
         inline constexpr IntPoint2() {}
         inline IntPoint2(const long xy) { Set(xy); }
@@ -228,19 +227,19 @@ namespace King {
         inline IntPoint2(const unsigned int x, const unsigned int y) { Set(x, y); }
         inline IntPoint2(const float x, const float y) { Set(x, y); }
         inline IntPoint2(const unsigned long x, const unsigned long y) { Set(x, y); }
-        inline IntPoint2(const IntPoint2 &in) = default; // copy
-        inline IntPoint2(const UIntPoint2 &in) { Set(in); }
-        inline IntPoint2(const FloatPoint2 &in);
-        inline IntPoint2(const POINT &in) { Set(in); }
-        inline IntPoint2(const DirectX::XMINT2 &in) { Set(in); }
-        inline IntPoint2(IntPoint2 &&in) = default; // move
+        inline IntPoint2(const IntPoint2 & in) = default; // copy
+        inline IntPoint2(const UIntPoint2 & in) { Set(in); }
+        inline IntPoint2(const FloatPoint2 & in);
+        inline IntPoint2(const POINT & in) { Set(in); }
+        inline IntPoint2(const DirectX::XMINT2 & in) { Set(in); }
+        inline IntPoint2(IntPoint2 && in) = default; // move
         inline explicit IntPoint2(const DirectX::XMVECTOR vecIn) { DirectX::XMINT2 t; DirectX::XMStoreSInt2(&t, vecIn); i[0] = t.x; i[1] = t.y; } // integer vector input NOT float
         virtual ~IntPoint2() = default;
         // Operators 
-        inline IntPoint2 & operator= (const IntPoint2 &in) = default; // copy assignment
-        inline IntPoint2 & operator= (const DirectX::XMINT2 &in) { Set(in); return *this; } // copy assignment
-        inline IntPoint2 & operator= (const DirectX::XMVECTOR &vecIn) { unsigned int d[2]; auto v = DirectX::XMConvertVectorFloatToInt(vecIn, 0); DirectX::XMStoreInt2(d, vecIn); i[0] = (long)d[0]; i[1] = (long)d[1]; return *this; } // untested
-        inline IntPoint2 & operator= (IntPoint2 &&in) = default; // move assignment
+        inline IntPoint2& operator= (const IntPoint2 & in) = default; // copy assignment
+        inline IntPoint2& operator= (const DirectX::XMINT2 & in) { Set(in); return *this; } // copy assignment
+        inline IntPoint2& operator= (const DirectX::XMVECTOR & vecIn) { unsigned int d[2]; auto v = DirectX::XMConvertVectorFloatToInt(vecIn, 0); DirectX::XMStoreInt2(d, vecIn); i[0] = (long)d[0]; i[1] = (long)d[1]; return *this; } // untested
+        inline IntPoint2& operator= (IntPoint2 && in) = default; // move assignment
         // Conversions
         inline int& operator[](int idx) { return GetPtr()[idx]; }
         inline operator DirectX::XMVECTOR() const { DirectX::XMVECTORI32 r; r.i[0] = i[0]; r.i[1] = i[1]; r.i[2] = r.i[3] = 0; return r.v; }
@@ -253,15 +252,15 @@ namespace King {
         inline IntPoint2 operator* (const IntPoint2 p) const { return IntPoint2(i[0] * p.i[0], i[1] * p.i[1]); }
         inline IntPoint2 operator/ (const IntPoint2 p) const { return IntPoint2(i[0] / p.i[0], i[1] / p.i[1]); }
 
-        inline IntPoint2 & operator+= (const int s) { i[0] = i[0] + s; i[1] = i[1] + s; return *this; }
-        inline IntPoint2 & operator-= (const int s) { i[0] = i[0] - s; i[1] = i[1] - s; return *this; }
-        inline IntPoint2 & operator*= (const int s) { i[0] = i[0] * s; i[1] = i[1] * s; return *this; }
-        inline IntPoint2 & operator/= (const int s) { i[0] = i[0] / s; i[1] = i[1] / s; return *this; }
+        inline IntPoint2& operator+= (const int s) { i[0] = i[0] + s; i[1] = i[1] + s; return *this; }
+        inline IntPoint2& operator-= (const int s) { i[0] = i[0] - s; i[1] = i[1] - s; return *this; }
+        inline IntPoint2& operator*= (const int s) { i[0] = i[0] * s; i[1] = i[1] * s; return *this; }
+        inline IntPoint2& operator/= (const int s) { i[0] = i[0] / s; i[1] = i[1] / s; return *this; }
 
-        inline IntPoint2 & operator+= (const IntPoint2 &p) { i[0] = i[0] + p.i[0]; i[1] = i[1] + p.i[1];; return *this; }
-        inline IntPoint2 & operator-= (const IntPoint2 &p) { i[0] = i[0] - p.i[0]; i[1] = i[1] - p.i[1];; return *this; }
-        inline IntPoint2 & operator*= (const IntPoint2 &p) { i[0] = i[0] * p.i[0]; i[1] = i[1] * p.i[1];; return *this; }
-        inline IntPoint2 & operator/= (const IntPoint2 &p) { i[0] = i[0] / p.i[0]; i[1] = i[1] / p.i[1];; return *this; }
+        inline IntPoint2& operator+= (const IntPoint2 & p) { i[0] = i[0] + p.i[0]; i[1] = i[1] + p.i[1];; return *this; }
+        inline IntPoint2& operator-= (const IntPoint2 & p) { i[0] = i[0] - p.i[0]; i[1] = i[1] - p.i[1];; return *this; }
+        inline IntPoint2& operator*= (const IntPoint2 & p) { i[0] = i[0] * p.i[0]; i[1] = i[1] * p.i[1];; return *this; }
+        inline IntPoint2& operator/= (const IntPoint2 & p) { i[0] = i[0] / p.i[0]; i[1] = i[1] / p.i[1];; return *this; }
 
         inline IntPoint2 operator+  (int s) const { return IntPoint2(i[0] + static_cast<long>(s), i[1] + static_cast<long>(s)); }
         inline IntPoint2 operator-  (int s) const { return IntPoint2(i[0] - static_cast<long>(s), i[1] - static_cast<long>(s)); }
@@ -275,13 +274,13 @@ namespace King {
 
         inline IntPoint2 operator+  (float s) const { return IntPoint2(static_cast<float>(i[0]) + (s), static_cast<float>(i[1]) + (s)); }
         inline IntPoint2 operator-  (float s) const { return IntPoint2(static_cast<float>(i[0]) - (s), static_cast<float>(i[1]) - (s)); }
-        inline IntPoint2 operator*  (float s) const { return IntPoint2(static_cast<float>(i[0]) * (s), static_cast<float>(i[1]) * (s)); }
+        inline IntPoint2 operator*  (float s) const { return IntPoint2(static_cast<float>(i[0])* (s), static_cast<float>(i[1])* (s)); }
         inline IntPoint2 operator/  (float s) const { return IntPoint2(static_cast<float>(i[0]) / (s), static_cast<float>(i[1]) / (s)); }
 
-        inline IntPoint2 & operator+= (const float s) { i[0] = static_cast<int>(static_cast<float>(i[0]) + s); i[1] = static_cast<int>(static_cast<float>(i[1]) + s); return *this; }
-        inline IntPoint2 & operator-= (const float s) { i[0] = static_cast<int>(static_cast<float>(i[0]) - s); i[1] = static_cast<int>(static_cast<float>(i[1]) - s); return *this; }
-        inline IntPoint2 & operator*= (const float s) { i[0] = static_cast<int>(static_cast<float>(i[0]) * s); i[1] = static_cast<int>(static_cast<float>(i[1]) * s); return *this; }
-        inline IntPoint2 & operator/= (const float s) { i[0] = static_cast<int>(static_cast<float>(i[0]) / s); i[1] = static_cast<int>(static_cast<float>(i[1]) / s); return *this; }
+        inline IntPoint2& operator+= (const float s) { i[0] = static_cast<int>(static_cast<float>(i[0]) + s); i[1] = static_cast<int>(static_cast<float>(i[1]) + s); return *this; }
+        inline IntPoint2& operator-= (const float s) { i[0] = static_cast<int>(static_cast<float>(i[0]) - s); i[1] = static_cast<int>(static_cast<float>(i[1]) - s); return *this; }
+        inline IntPoint2& operator*= (const float s) { i[0] = static_cast<int>(static_cast<float>(i[0])* s); i[1] = static_cast<int>(static_cast<float>(i[1])* s); return *this; }
+        inline IntPoint2& operator/= (const float s) { i[0] = static_cast<int>(static_cast<float>(i[0]) / s); i[1] = static_cast<int>(static_cast<float>(i[1]) / s); return *this; }
 
         // Assignments
         inline void constexpr                   SetZero(void) { i[0] = i[1] = 0; }
@@ -294,12 +293,12 @@ namespace King {
         inline void                             Set(const unsigned int x, const unsigned int y) { i[0] = static_cast<int>(x); i[1] = static_cast<int>(y); }
         inline void                             Set(const float x, const float y) { i[0] = static_cast<int>(x); i[1] = static_cast<int>(y); }
         inline void                             Set(const unsigned long x, const unsigned long y) { i[0] = static_cast<int>(x); i[1] = static_cast<int>(y); }
-        inline void                             Set(const IntPoint2 &in) { *this = in; }
-        inline void                             Set(const UIntPoint2 &in) { i[0] = static_cast<int>(in.GetX()); i[1] = static_cast<int>(in.GetY()); }
-        inline void                             Set(const DirectX::XMINT2 &point) { i[0] = point.x; i[1] = point.y; }
-        inline void                             Set(const POINT &point) { i[0] = static_cast<int>(point.x); i[1] = static_cast<int>(point.y); }
+        inline void                             Set(const IntPoint2 & in) { *this = in; }
+        inline void                             Set(const UIntPoint2 & in) { i[0] = static_cast<int>(in.GetX()); i[1] = static_cast<int>(in.GetY()); }
+        inline void                             Set(const DirectX::XMINT2 & point) { i[0] = point.x; i[1] = point.y; }
+        inline void                             Set(const POINT & point) { i[0] = static_cast<int>(point.x); i[1] = static_cast<int>(point.y); }
         // Accessors
-        int*                                    GetPtr() { return reinterpret_cast<int*>(this); }
+        int* GetPtr() { return reinterpret_cast<int*>(this); }
         inline const POINT                      Get_POINT() const { POINT pt = { static_cast<long>(i[0]), static_cast<long>(i[1]) }; return pt; }
         inline const DirectX::XMINT2            Get_XMINT2() const { DirectX::XMINT2 rtn; rtn = { static_cast<int>(i[0]), static_cast<int>(i[1]) }; return rtn; }
         inline const DirectX::XMUINT2           Get_XMUINT2() const { DirectX::XMUINT2 rtn; rtn = { static_cast<unsigned int>(i[0]), static_cast<unsigned int>(i[1]) }; return rtn; }
@@ -307,11 +306,11 @@ namespace King {
         inline const int                        GetX() const { return (int)i[0]; }
         inline const int                        GetY() const { return (int)i[1]; }
         // Functionality
-        inline void                             Min(const IntPoint2 & in) { i[0] = i[0] < in.i[0] ? i[0] : in.i[0]; i[1] = i[1] < in.i[1] ? i[1] : in.i[1]; }
-        inline void                             Max(const IntPoint2 & in) { i[0] = i[0] > in.i[0] ? i[0] : in.i[0]; i[1] = i[1] > in.i[1] ? i[1] : in.i[1]; }
+        inline void                             Min(const IntPoint2& in) { i[0] = i[0] < in.i[0] ? i[0] : in.i[0]; i[1] = i[1] < in.i[1] ? i[1] : in.i[1]; }
+        inline void                             Max(const IntPoint2& in) { i[0] = i[0] > in.i[0] ? i[0] : in.i[0]; i[1] = i[1] > in.i[1] ? i[1] : in.i[1]; }
         inline void                             MakeAbsolute() { i[0] = std::abs(i[0]); i[1] = std::abs(i[1]); }
         // Statics
-        static const float                      Magnitude(const IntPoint2 &pIn) { return (float)std::sqrt(pIn.i[0] * pIn.i[0] + pIn.i[1] * pIn.i[1]); }
+        static const float                      Magnitude(const IntPoint2& pIn) { return (float)std::sqrt(pIn.i[0] * pIn.i[0] + pIn.i[1] * pIn.i[1]); }
     };
     /******************************************************************************
     *   IntPoint3
@@ -320,7 +319,7 @@ namespace King {
     {
         /* variables */
     public:
-        int         i[3] = {0, 0, 0};
+        int         i[3] = { 0, 0, 0 };
     protected:
 
     private:
@@ -328,8 +327,8 @@ namespace King {
         /* methods */
     public:
         // Creation/Life cycle
-        void * operator new (size_t size) { return _aligned_malloc(size, 16); }
-        void   operator delete (void *p) { _aligned_free(static_cast<IntPoint3*>(p)); }
+        void* operator new (size_t size) { return _aligned_malloc(size, 16); }
+        void   operator delete (void* p) { _aligned_free(static_cast<IntPoint3*>(p)); }
 
         inline constexpr IntPoint3() {}
         inline IntPoint3(const long xyz) { Set(xyz); }
@@ -338,17 +337,17 @@ namespace King {
         inline IntPoint3(const unsigned int x, const unsigned int y, const unsigned int z) { Set(x, y, z); }
         inline IntPoint3(const float x, const float y, const float z) { Set(x, y, z); }
         inline IntPoint3(const unsigned long x, const unsigned long y, const unsigned long z) { Set(x, y, z); }
-        inline IntPoint3(const IntPoint3 &in) = default; // copy
-        inline IntPoint3(const FloatPoint3 &in);
-        inline IntPoint3(const DirectX::XMINT3 &in) { Set(in); }
-        inline IntPoint3(IntPoint3 &&in) = default; // move 
+        inline IntPoint3(const IntPoint3 & in) = default; // copy
+        inline IntPoint3(const FloatPoint3 & in);
+        inline IntPoint3(const DirectX::XMINT3 & in) { Set(in); }
+        inline IntPoint3(IntPoint3 && in) = default; // move 
         inline explicit IntPoint3(const DirectX::XMVECTOR vecIn) { DirectX::XMINT3 t; DirectX::XMStoreSInt3(&t, vecIn); i[0] = t.x; i[1] = t.y; i[2] = t.z; } // integer vector input NOT float
         virtual ~IntPoint3() = default;
         // Operators 
-        inline IntPoint3 & operator= (const IntPoint3 &in) = default; // copy assignment
-        inline IntPoint3 & operator= (const DirectX::XMINT3 &in) { Set(in); return *this; } // copy assignment
-        inline IntPoint3 & operator= (const DirectX::XMVECTOR &vecIn) { unsigned int d[3]; auto v = DirectX::XMConvertVectorFloatToInt(vecIn, 0); DirectX::XMStoreInt3(d, vecIn); i[0] = (long)d[0]; i[1] = (long)d[1]; i[2] = (long)d[2]; return *this; } // untested
-        inline IntPoint3 & operator= (IntPoint3 &&in) = default; // move assignment
+        inline IntPoint3& operator= (const IntPoint3 & in) = default; // copy assignment
+        inline IntPoint3& operator= (const DirectX::XMINT3 & in) { Set(in); return *this; } // copy assignment
+        inline IntPoint3& operator= (const DirectX::XMVECTOR & vecIn) { unsigned int d[3]; auto v = DirectX::XMConvertVectorFloatToInt(vecIn, 0); DirectX::XMStoreInt3(d, vecIn); i[0] = (long)d[0]; i[1] = (long)d[1]; i[2] = (long)d[2]; return *this; } // untested
+        inline IntPoint3& operator= (IntPoint3 && in) = default; // move assignment
         // Conversions
         inline int& operator[](int idx) { return GetPtr()[idx]; }
         inline operator DirectX::XMVECTOR() const { DirectX::XMVECTORI32 r; r.i[0] = i[0]; r.i[1] = i[1]; r.i[2] = i[2]; r.i[3] = 0; return r.v; }
@@ -361,15 +360,15 @@ namespace King {
         inline IntPoint3 operator* (const IntPoint3 p) const { return IntPoint3(i[0] * p.i[0], i[1] * p.i[1], i[2] * p.i[2]); }
         inline IntPoint3 operator/ (const IntPoint3 p) const { return IntPoint3(i[0] / p.i[0], i[1] / p.i[1], i[2] / p.i[2]); }
 
-        inline IntPoint3 & operator+= (const int s) { i[0] = i[0] + s; i[1] = i[1] + s; i[2] = i[2] + s; return *this; }
-        inline IntPoint3 & operator-= (const int s) { i[0] = i[0] - s; i[1] = i[1] - s; i[2] = i[2] - s; return *this; }
-        inline IntPoint3 & operator*= (const int s) { i[0] = i[0] * s; i[1] = i[1] * s; i[2] = i[2] * s; return *this; }
-        inline IntPoint3 & operator/= (const int s) { i[0] = i[0] / s; i[1] = i[1] / s; i[2] = i[2] / s; return *this; }
+        inline IntPoint3& operator+= (const int s) { i[0] = i[0] + s; i[1] = i[1] + s; i[2] = i[2] + s; return *this; }
+        inline IntPoint3& operator-= (const int s) { i[0] = i[0] - s; i[1] = i[1] - s; i[2] = i[2] - s; return *this; }
+        inline IntPoint3& operator*= (const int s) { i[0] = i[0] * s; i[1] = i[1] * s; i[2] = i[2] * s; return *this; }
+        inline IntPoint3& operator/= (const int s) { i[0] = i[0] / s; i[1] = i[1] / s; i[2] = i[2] / s; return *this; }
 
-        inline IntPoint3 & operator+= (const IntPoint3 &p) { i[0] = i[0] + p.i[0]; i[1] = i[1] + p.i[1]; i[2] = i[2] + p.i[2]; return *this; }
-        inline IntPoint3 & operator-= (const IntPoint3 &p) { i[0] = i[0] - p.i[0]; i[1] = i[1] - p.i[1]; i[2] = i[2] - p.i[2]; return *this; }
-        inline IntPoint3 & operator*= (const IntPoint3 &p) { i[0] = i[0] * p.i[0]; i[1] = i[1] * p.i[1]; i[2] = i[2] * p.i[2]; return *this; }
-        inline IntPoint3 & operator/= (const IntPoint3 &p) { i[0] = i[0] / p.i[0]; i[1] = i[1] / p.i[1]; i[2] = i[2] / p.i[2]; return *this; }
+        inline IntPoint3& operator+= (const IntPoint3 & p) { i[0] = i[0] + p.i[0]; i[1] = i[1] + p.i[1]; i[2] = i[2] + p.i[2]; return *this; }
+        inline IntPoint3& operator-= (const IntPoint3 & p) { i[0] = i[0] - p.i[0]; i[1] = i[1] - p.i[1]; i[2] = i[2] - p.i[2]; return *this; }
+        inline IntPoint3& operator*= (const IntPoint3 & p) { i[0] = i[0] * p.i[0]; i[1] = i[1] * p.i[1]; i[2] = i[2] * p.i[2]; return *this; }
+        inline IntPoint3& operator/= (const IntPoint3 & p) { i[0] = i[0] / p.i[0]; i[1] = i[1] / p.i[1]; i[2] = i[2] / p.i[2]; return *this; }
 
         inline IntPoint3 operator+  (int s) const { return IntPoint3(i[0] + static_cast<long>(s), i[1] + static_cast<long>(s), i[2] + static_cast<long>(s)); }
         inline IntPoint3 operator-  (int s) const { return IntPoint3(i[0] - static_cast<long>(s), i[1] - static_cast<long>(s), i[2] - static_cast<long>(s)); }
@@ -383,13 +382,13 @@ namespace King {
 
         inline IntPoint3 operator+  (float s) const { return IntPoint3(static_cast<float>(i[0]) + (s), static_cast<float>(i[1]) + (s), static_cast<float>(i[2]) + (s)); }
         inline IntPoint3 operator-  (float s) const { return IntPoint3(static_cast<float>(i[0]) - (s), static_cast<float>(i[1]) - (s), static_cast<float>(i[2]) - (s)); }
-        inline IntPoint3 operator*  (float s) const { return IntPoint3(static_cast<float>(i[0]) * (s), static_cast<float>(i[1]) * (s), static_cast<float>(i[2]) * (s)); }
+        inline IntPoint3 operator*  (float s) const { return IntPoint3(static_cast<float>(i[0])* (s), static_cast<float>(i[1])* (s), static_cast<float>(i[2])* (s)); }
         inline IntPoint3 operator/  (float s) const { return IntPoint3(static_cast<float>(i[0]) / (s), static_cast<float>(i[1]) / (s), static_cast<float>(i[2]) / (s)); }
 
-        inline IntPoint3 & operator+= (const float s) { i[0] = static_cast<int>(static_cast<float>(i[0]) + s); i[1] = static_cast<int>(static_cast<float>(i[1]) + s); i[2] = static_cast<int>(static_cast<float>(i[2]) + s); return *this; }
-        inline IntPoint3 & operator-= (const float s) { i[0] = static_cast<int>(static_cast<float>(i[0]) - s); i[1] = static_cast<int>(static_cast<float>(i[1]) - s); i[2] = static_cast<int>(static_cast<float>(i[2]) - s); return *this; }
-        inline IntPoint3 & operator*= (const float s) { i[0] = static_cast<int>(static_cast<float>(i[0]) * s); i[1] = static_cast<int>(static_cast<float>(i[1]) * s); i[2] = static_cast<int>(static_cast<float>(i[2]) * s); return *this; }
-        inline IntPoint3 & operator/= (const float s) { i[0] = static_cast<int>(static_cast<float>(i[0]) / s); i[1] = static_cast<int>(static_cast<float>(i[1]) / s); i[2] = static_cast<int>(static_cast<float>(i[2]) / s); return *this; }
+        inline IntPoint3& operator+= (const float s) { i[0] = static_cast<int>(static_cast<float>(i[0]) + s); i[1] = static_cast<int>(static_cast<float>(i[1]) + s); i[2] = static_cast<int>(static_cast<float>(i[2]) + s); return *this; }
+        inline IntPoint3& operator-= (const float s) { i[0] = static_cast<int>(static_cast<float>(i[0]) - s); i[1] = static_cast<int>(static_cast<float>(i[1]) - s); i[2] = static_cast<int>(static_cast<float>(i[2]) - s); return *this; }
+        inline IntPoint3& operator*= (const float s) { i[0] = static_cast<int>(static_cast<float>(i[0])* s); i[1] = static_cast<int>(static_cast<float>(i[1])* s); i[2] = static_cast<int>(static_cast<float>(i[2])* s); return *this; }
+        inline IntPoint3& operator/= (const float s) { i[0] = static_cast<int>(static_cast<float>(i[0]) / s); i[1] = static_cast<int>(static_cast<float>(i[1]) / s); i[2] = static_cast<int>(static_cast<float>(i[2]) / s); return *this; }
         // Assignments
         inline void constexpr                   SetZero(void) { i[0] = i[1] = i[2] = 0; }
         inline void                             SetX(const long x) { i[0] = static_cast<int>(x); }
@@ -402,11 +401,11 @@ namespace King {
         inline void                             Set(const unsigned int x, const unsigned int y, const unsigned int z) { i[0] = static_cast<int>(x); i[1] = static_cast<int>(y); i[2] = static_cast<int>(z); }
         inline void                             Set(const float x, const float y, const float z) { i[0] = static_cast<int>(x); i[1] = static_cast<int>(y); i[2] = static_cast<int>(z); }
         inline void                             Set(const unsigned long x, const unsigned long y, const unsigned long z) { i[0] = static_cast<int>(x); i[1] = static_cast<int>(y); i[2] = static_cast<int>(z); }
-        inline void                             Set(const IntPoint3 &in) { *this = in; }
+        inline void                             Set(const IntPoint3 & in) { *this = in; }
         //      inline void                             Set(const UIntPoint3 &in) { i[0] = static_cast<int>(in.u[0]); i[1] = static_cast<int>(in.u[1]); i[2] = static_cast<int>(in.u[2]); }
-        inline void                             Set(const DirectX::XMINT3 &point) { i[0] = point.x; i[1] = point.y; i[2] = point.z; }
+        inline void                             Set(const DirectX::XMINT3 & point) { i[0] = point.x; i[1] = point.y; i[2] = point.z; }
         // Accessors
-        int*                                    GetPtr() { return reinterpret_cast<int*>(this); }
+        int* GetPtr() { return reinterpret_cast<int*>(this); }
         inline const DirectX::XMINT3            Get_XMINT3() const { DirectX::XMINT3 rtn; rtn = { static_cast<int>(i[0]), static_cast<int>(i[1]), static_cast<int>(i[2]) }; return rtn; }
         inline const DirectX::XMUINT3           Get_XMUINT3() const { DirectX::XMUINT3 rtn; rtn = { static_cast<unsigned int>(i[0]), static_cast<unsigned int>(i[1]), static_cast<unsigned int>(i[2]) }; return rtn; }
         inline const DirectX::XMFLOAT3          Get_XMFLOAT3() const { DirectX::XMFLOAT3 rtn; rtn = { static_cast<float>(i[0]), static_cast<float>(i[1]), static_cast<float>(i[2]) }; return rtn; }
@@ -414,11 +413,11 @@ namespace King {
         inline const int                        GetY() const { return (int)i[1]; }
         inline const int                        GetZ() const { return (int)i[2]; }
         // Functionality
-        inline void                             Max(const IntPoint3 & in) { i[0] = i[0] > in.i[0] ? i[0] : in.i[0]; i[1] = i[1] > in.i[1] ? i[1] : in.i[1]; i[2] = i[2] > in.i[2] ? i[2] : in.i[2]; }
-        inline void                             Min(const IntPoint3 & in) { i[0] = i[0] < in.i[0] ? i[0] : in.i[0]; i[1] = i[1] < in.i[1] ? i[1] : in.i[1]; i[2] = i[2] < in.i[2] ? i[2] : in.i[2]; }
+        inline void                             Max(const IntPoint3& in) { i[0] = i[0] > in.i[0] ? i[0] : in.i[0]; i[1] = i[1] > in.i[1] ? i[1] : in.i[1]; i[2] = i[2] > in.i[2] ? i[2] : in.i[2]; }
+        inline void                             Min(const IntPoint3& in) { i[0] = i[0] < in.i[0] ? i[0] : in.i[0]; i[1] = i[1] < in.i[1] ? i[1] : in.i[1]; i[2] = i[2] < in.i[2] ? i[2] : in.i[2]; }
         inline void                             MakeAbsolute() { i[0] = std::abs(i[0]); i[1] = std::abs(i[1]); i[2] = std::abs(i[2]); }
         // Statics
-        static const float                      Magnitude(const IntPoint3 &pIn) { return (float)std::sqrt(pIn.i[0] * pIn.i[0] + pIn.i[1] * pIn.i[1] + pIn.i[2] * pIn.i[2]); }
+        static const float                      Magnitude(const IntPoint3& pIn) { return (float)std::sqrt(pIn.i[0] * pIn.i[0] + pIn.i[1] * pIn.i[1] + pIn.i[2] * pIn.i[2]); }
     };
     /******************************************************************************
     *   FloatPoint2
@@ -444,22 +443,22 @@ namespace King {
         inline FloatPoint2(const unsigned int x, const unsigned int y) { Set(x, y); }
         inline FloatPoint2(const long x, const long y) { Set(x, y); }
         inline FloatPoint2(const unsigned long x, unsigned const long y) { Set(x, y); }
-        inline FloatPoint2(const FloatPoint2 &in) { v = in.v; } // copy
-        inline FloatPoint2(const DirectX::XMFLOAT2 &in) { Set(in); }
-        inline FloatPoint2(const DirectX::XMINT2 &in) { Set(in); }
-        inline FloatPoint2(const IntPoint2 &in) { Set(in.Get_XMFLOAT2()); }
-        inline FloatPoint2(const UIntPoint2 &in) { Set(in.Get_XMFLOAT2()); }
-        inline FloatPoint2(FloatPoint2 &&in) { v = std::move(in.v); } // move
-        inline FloatPoint2(const DirectX::XMVECTOR &vecIn) { v = vecIn; }
-        inline FloatPoint2(const DirectX::XMVECTORF32 &vecIn) { v = vecIn.v; }
-        inline FloatPoint2(uint8_t *bytesIn) { auto fp = reinterpret_cast<DirectX::XMFLOAT2*>(bytesIn); v = DirectX::XMLoadFloat2(fp); }
-        inline FloatPoint2(float *floatIn) { auto fp = reinterpret_cast<DirectX::XMFLOAT2*>(floatIn); v = DirectX::XMLoadFloat2(fp); }
+        inline FloatPoint2(const FloatPoint2 & in) { v = in.v; } // copy
+        inline FloatPoint2(const DirectX::XMFLOAT2 & in) { Set(in); }
+        inline FloatPoint2(const DirectX::XMINT2 & in) { Set(in); }
+        inline FloatPoint2(const IntPoint2 & in) { Set(in.Get_XMFLOAT2()); }
+        inline FloatPoint2(const UIntPoint2 & in) { Set(in.Get_XMFLOAT2()); }
+        inline FloatPoint2(FloatPoint2 && in) { v = std::move(in.v); } // move
+        inline FloatPoint2(const DirectX::XMVECTOR & vecIn) { v = vecIn; }
+        inline FloatPoint2(const DirectX::XMVECTORF32 & vecIn) { v = vecIn.v; }
+        inline FloatPoint2(uint8_t * bytesIn) { auto fp = reinterpret_cast<DirectX::XMFLOAT2*>(bytesIn); v = DirectX::XMLoadFloat2(fp); }
+        inline FloatPoint2(const float* floatIn) { v = DirectX::XMLoadFloat2(&DirectX::XMFLOAT2(floatIn)); }
         virtual ~FloatPoint2() = default;
         // Operators 
-        inline FloatPoint2 & operator= (const FloatPoint2 &in) = default; // copy assignment
-        inline FloatPoint2 & operator= (const DirectX::XMFLOAT2 &in) { Set(in); return *this; } // copy assignment
-        inline FloatPoint2 & operator= (const DirectX::XMVECTOR &vecIn) { v = vecIn; return *this; }
-        inline FloatPoint2 & operator= (FloatPoint2 &&in) = default; // move assignment
+        inline FloatPoint2& operator= (const FloatPoint2 & in) = default; // copy assignment
+        inline FloatPoint2& operator= (const DirectX::XMFLOAT2 & in) { Set(in); return *this; } // copy assignment
+        inline FloatPoint2& operator= (const DirectX::XMVECTOR & vecIn) { v = vecIn; return *this; }
+        inline FloatPoint2& operator= (FloatPoint2 && in) = default; // move assignment
         // Conversions
         inline operator DirectX::XMVECTORF32() const { return *this; }
         inline operator DirectX::XMFLOAT2() const { return Get_XMFLOAT2(); }
@@ -468,43 +467,43 @@ namespace King {
         inline operator DirectX::XMUINT2() const { return Get_XMUINT2(); }
         // Math Operators
         inline FloatPoint2 operator- () { return FloatPoint2(DirectX::XMVectorNegate(v)); }
-        inline FloatPoint2 operator+ (const FloatPoint2 &p) const { return FloatPoint2(DirectX::XMVectorAdd(v, p.v)); }
-        inline FloatPoint2 operator- (const FloatPoint2 &p) const { return FloatPoint2(DirectX::XMVectorSubtract(v, p.v)); }
-        inline FloatPoint2 operator* (const FloatPoint2 &p) const { return FloatPoint2(DirectX::XMVectorMultiply(v, p.v)); }
-        inline FloatPoint2 operator/ (const FloatPoint2 &p) const { return FloatPoint2(DirectX::XMVectorDivide(v, p.v)); }
-        inline DirectX::XMVECTOR & operator+= (const FloatPoint2 &p) { return v = DirectX::XMVectorAdd(v, p.v); }
-        inline DirectX::XMVECTOR & operator-= (const FloatPoint2 &p) { return v = DirectX::XMVectorSubtract(v, p.v); }
-        inline DirectX::XMVECTOR & operator*= (const FloatPoint2 &p) { return v = DirectX::XMVectorMultiply(v, p.v); }
-        inline DirectX::XMVECTOR & operator/= (const FloatPoint2 &p) { return v = DirectX::XMVectorDivide(v, p.v); }
-        inline FloatPoint2 & operator+= (const DirectX::XMVECTOR &vecIn) { v = DirectX::XMVectorAdd(v, vecIn); return *this; }
-        inline FloatPoint2 & operator-= (const DirectX::XMVECTOR &vecIn) { v = DirectX::XMVectorSubtract(v, vecIn); return *this; }
-        inline FloatPoint2 & operator*= (const DirectX::XMVECTOR &vecIn) { v = DirectX::XMVectorMultiply(v, vecIn); return *this; }
-        inline FloatPoint2 & operator/= (const DirectX::XMVECTOR &vecIn) { v = DirectX::XMVectorDivide(v, vecIn); return *this; }
+        inline FloatPoint2 operator+ (const FloatPoint2 & p) const { return FloatPoint2(DirectX::XMVectorAdd(v, p.v)); }
+        inline FloatPoint2 operator- (const FloatPoint2 & p) const { return FloatPoint2(DirectX::XMVectorSubtract(v, p.v)); }
+        inline FloatPoint2 operator* (const FloatPoint2 & p) const { return FloatPoint2(DirectX::XMVectorMultiply(v, p.v)); }
+        inline FloatPoint2 operator/ (const FloatPoint2 & p) const { return FloatPoint2(DirectX::XMVectorDivide(v, p.v)); }
+        inline DirectX::XMVECTOR& operator+= (const FloatPoint2 & p) { return v = DirectX::XMVectorAdd(v, p.v); }
+        inline DirectX::XMVECTOR& operator-= (const FloatPoint2 & p) { return v = DirectX::XMVectorSubtract(v, p.v); }
+        inline DirectX::XMVECTOR& operator*= (const FloatPoint2 & p) { return v = DirectX::XMVectorMultiply(v, p.v); }
+        inline DirectX::XMVECTOR& operator/= (const FloatPoint2 & p) { return v = DirectX::XMVectorDivide(v, p.v); }
+        inline FloatPoint2& operator+= (const DirectX::XMVECTOR & vecIn) { v = DirectX::XMVectorAdd(v, vecIn); return *this; }
+        inline FloatPoint2& operator-= (const DirectX::XMVECTOR & vecIn) { v = DirectX::XMVectorSubtract(v, vecIn); return *this; }
+        inline FloatPoint2& operator*= (const DirectX::XMVECTOR & vecIn) { v = DirectX::XMVectorMultiply(v, vecIn); return *this; }
+        inline FloatPoint2& operator/= (const DirectX::XMVECTOR & vecIn) { v = DirectX::XMVectorDivide(v, vecIn); return *this; }
         inline FloatPoint2 operator+ (float s) const { return FloatPoint2(DirectX::XMVectorAdd(v, FloatPoint2(s))); }
         inline FloatPoint2 operator- (float s) const { return FloatPoint2(DirectX::XMVectorSubtract(v, FloatPoint2(s))); }
         inline FloatPoint2 operator* (float s) const { return FloatPoint2(DirectX::XMVectorMultiply(v, FloatPoint2(s))); }
         inline FloatPoint2 operator/ (float s) const { return FloatPoint2(DirectX::XMVectorDivide(v, FloatPoint2(s))); }
-        inline DirectX::XMVECTOR & operator+= (float s) { return v = DirectX::XMVectorAdd(v, FloatPoint2(s)); }
-        inline DirectX::XMVECTOR & operator-= (float s) { return v = DirectX::XMVectorSubtract(v, FloatPoint2(s)); }
-        inline DirectX::XMVECTOR & operator*= (float s) { return v = DirectX::XMVectorScale(v, s); }
-        inline DirectX::XMVECTOR & operator/= (float s) { return v = DirectX::XMVectorDivide(v, FloatPoint2(s)); }
+        inline DirectX::XMVECTOR& operator+= (float s) { return v = DirectX::XMVectorAdd(v, FloatPoint2(s)); }
+        inline DirectX::XMVECTOR& operator-= (float s) { return v = DirectX::XMVectorSubtract(v, FloatPoint2(s)); }
+        inline DirectX::XMVECTOR& operator*= (float s) { return v = DirectX::XMVectorScale(v, s); }
+        inline DirectX::XMVECTOR& operator/= (float s) { return v = DirectX::XMVectorDivide(v, FloatPoint2(s)); }
         // Comparators
-        inline bool operator<  (const FloatPoint2 &rhs) { return DirectX::XMVector2Less(v, rhs); }
-        inline bool operator<= (const FloatPoint2 &rhs) { return DirectX::XMVector2LessOrEqual(v, rhs); }
-        inline bool operator>  (const FloatPoint2 &rhs) { return DirectX::XMVector2Greater(v, rhs); }
-        inline bool operator>= (const FloatPoint2 &rhs) { return DirectX::XMVector2GreaterOrEqual(v, rhs); }
-        inline bool operator== (const FloatPoint2 &rhs) { return DirectX::XMVector2Equal(v, rhs); }
-        inline bool operator!= (const FloatPoint2 &rhs) { return DirectX::XMVector2NotEqual(v, rhs); }
+        inline bool operator<  (const FloatPoint2 & rhs) { return DirectX::XMVector2Less(v, rhs); }
+        inline bool operator<= (const FloatPoint2 & rhs) { return DirectX::XMVector2LessOrEqual(v, rhs); }
+        inline bool operator>  (const FloatPoint2 & rhs) { return DirectX::XMVector2Greater(v, rhs); }
+        inline bool operator>= (const FloatPoint2 & rhs) { return DirectX::XMVector2GreaterOrEqual(v, rhs); }
+        inline bool operator== (const FloatPoint2 & rhs) { return DirectX::XMVector2Equal(v, rhs); }
+        inline bool operator!= (const FloatPoint2 & rhs) { return DirectX::XMVector2NotEqual(v, rhs); }
         // Accessors
-        float*                                  GetPtr() { return reinterpret_cast<float*>(this); } // returns a float
+        float* GetPtr() { return reinterpret_cast<float*>(this); } // returns a float
         inline const DirectX::XMFLOAT2          Get_XMFLOAT2() const { DirectX::XMFLOAT2 rtn; DirectX::XMStoreFloat2(&rtn, v); return rtn; }
         inline const DirectX::XMFLOAT2A         Get_XMFLOAT2A() const { DirectX::XMFLOAT2A rtn; DirectX::XMStoreFloat2A(&rtn, v); return rtn; }
         inline const DirectX::XMINT2            Get_XMINT2() const { DirectX::XMINT2 rtn; rtn.x = static_cast<int>(f[0]); rtn.y = static_cast<int>(f[1]); return rtn; }
         inline const DirectX::XMUINT2           Get_XMUINT2() const { DirectX::XMUINT2 rtn; rtn.x = static_cast<unsigned int>(f[0]); rtn.y = static_cast<unsigned int>(f[1]); return rtn; }
         inline const float                      GetX() const { return (float)DirectX::XMVectorGetX(v); }
         inline const float                      GetY() const { return (float)DirectX::XMVectorGetY(v); }
-        inline DirectX::XMVECTOR &              GetVec() { return v; } // modifiable type
-        inline const DirectX::XMVECTOR &        GetVecConst() const { return v; } // constant type
+        inline DirectX::XMVECTOR& GetVec() { return v; } // modifiable type
+        inline const DirectX::XMVECTOR& GetVecConst() const { return v; } // constant type
         // Assignments
         inline void                             SetZero(void) { v = DirectX::XMVectorZero(); }
         void                                    SetX(const float x) { v = DirectX::XMVectorSetX(v, x); }
@@ -515,23 +514,23 @@ namespace King {
         inline void                             Set(const unsigned int x, const unsigned int y) { v = DirectX::XMVectorSet(static_cast<float>(x), static_cast<float>(y), 0.f, 0.f); }
         inline void                             Set(const long x, const long y) { v = DirectX::XMVectorSet(static_cast<float>(x), static_cast<float>(y), 0.f, 0.f); }
         inline void                             Set(const unsigned long x, const unsigned long y) { v = DirectX::XMVectorSet(static_cast<float>(x), static_cast<float>(y), 0.f, 0.f); }
-        inline void                             Set(const IntPoint2 &in) { Set(in.Get_XMFLOAT2()); }
-        inline void                             Set(const UIntPoint2 &in) { Set(in.Get_XMFLOAT2()); }
-        inline void                             Set(const DirectX::XMFLOAT2 &point) { v = DirectX::XMLoadFloat2(&point); }
-        inline void                             Set(const DirectX::XMUINT2 &point) { v = DirectX::XMLoadUInt2(&point); v = DirectX::XMConvertVectorUIntToFloat(v, 0); }
-        inline void                             Set(const DirectX::XMINT2 &point) { v = DirectX::XMLoadSInt2(&point); v = DirectX::XMConvertVectorIntToFloat(v, 0); }
+        inline void                             Set(const IntPoint2 & in) { Set(in.Get_XMFLOAT2()); }
+        inline void                             Set(const UIntPoint2 & in) { Set(in.Get_XMFLOAT2()); }
+        inline void                             Set(const DirectX::XMFLOAT2 & point) { v = DirectX::XMLoadFloat2(&point); }
+        inline void                             Set(const DirectX::XMUINT2 & point) { v = DirectX::XMLoadUInt2(&point); v = DirectX::XMConvertVectorUIntToFloat(v, 0); }
+        inline void                             Set(const DirectX::XMINT2 & point) { v = DirectX::XMLoadSInt2(&point); v = DirectX::XMConvertVectorIntToFloat(v, 0); }
         // Functionality
         void                                    MakeAbsolute() { v = DirectX::XMVectorAbs(v); }
         inline virtual void                     MakeNormalize() { v = DirectX::XMVector2Normalize(v); }
         // Statics
-        static FloatPoint2 __vectorcall         Absolute(const FloatPoint2 &point2In) { return FloatPoint2(DirectX::XMVectorAbs(point2In)); }
-        static FloatPoint2 __vectorcall         Normal(const FloatPoint2 &point2In) { return FloatPoint2(DirectX::XMVector2Normalize(point2In)); }
-        static const float __vectorcall         Magnitude(const FloatPoint2 &point2In) { return DirectX::XMVectorGetX(DirectX::XMVector2Length(point2In)); }
-        static FloatPoint2 __vectorcall         DotProduct(const FloatPoint2 &vec1In, const FloatPoint2 &vec2In) { return DirectX::XMVector2Dot(vec1In, vec2In); } // order does not mater A•B = B•A
-        static FloatPoint2 __vectorcall         CrossProduct(const FloatPoint2 &vec1In, const FloatPoint2 &vec2In) { return DirectX::XMVector2Cross(vec1In, vec2In); } // order does mater AxB = -(BxA)
-        static float __vectorcall               SumComponents(const FloatPoint2 &vec1In) { return DirectX::XMVectorGetX(DirectX::XMVectorSum(vec1In)); }
-        static FloatPoint2 __vectorcall         MultiplyAdd(const FloatPoint2 &vec1MulIn, const FloatPoint2 &vec2MulIn, const FloatPoint2 &vec3AddIn) { return DirectX::XMVectorMultiplyAdd(vec1MulIn, vec2MulIn, vec3AddIn); }
-        static FloatPoint2                      Average(const std::vector<FloatPoint2> &arrayIn) { assert(arrayIn.size()); FloatPoint2 ave; for (const auto & each : arrayIn) ave += each; ave /= (float)arrayIn.size(); return ave; }
+        static FloatPoint2 __vectorcall         Absolute(const FloatPoint2 & point2In) { return FloatPoint2(DirectX::XMVectorAbs(point2In)); }
+        static FloatPoint2 __vectorcall         Normal(const FloatPoint2 & point2In) { return FloatPoint2(DirectX::XMVector2Normalize(point2In)); }
+        static const float __vectorcall         Magnitude(const FloatPoint2 & point2In) { return DirectX::XMVectorGetX(DirectX::XMVector2Length(point2In)); }
+        static FloatPoint2 __vectorcall         DotProduct(const FloatPoint2 & vec1In, const FloatPoint2 & vec2In) { return DirectX::XMVector2Dot(vec1In, vec2In); } // order does not mater A•B = B•A
+        static FloatPoint2 __vectorcall         CrossProduct(const FloatPoint2 & vec1In, const FloatPoint2 & vec2In) { return DirectX::XMVector2Cross(vec1In, vec2In); } // order does mater AxB = -(BxA)
+        static float __vectorcall               SumComponents(const FloatPoint2 & vec1In) { return DirectX::XMVectorGetX(DirectX::XMVectorSum(vec1In)); }
+        static FloatPoint2 __vectorcall         MultiplyAdd(const FloatPoint2 & vec1MulIn, const FloatPoint2 & vec2MulIn, const FloatPoint2 & vec3AddIn) { return DirectX::XMVectorMultiplyAdd(vec1MulIn, vec2MulIn, vec3AddIn); }
+        static FloatPoint2                      Average(const std::vector<FloatPoint2> & arrayIn) { assert(arrayIn.size()); FloatPoint2 ave; for (const auto& each : arrayIn) ave += each; ave /= (float)arrayIn.size(); return ave; }
     };
     /******************************************************************************
     *   FloatPoint3
@@ -553,22 +552,22 @@ namespace King {
         inline FloatPoint3() = default; // { SetZero(); }
         inline FloatPoint3(float xyz) { Set(xyz); }
         inline FloatPoint3(float x, float y, float z) { Set(x, y, z); }
-        inline FloatPoint3(const FloatPoint2 &in, const float &zIn) { v = FloatPoint2(in); SetZ(zIn); }
-        inline FloatPoint3(const FloatPoint3 &in) { v = in.v; } // copy
-        inline FloatPoint3(const IntPoint3 &in) { Set(in.Get_XMFLOAT3()); }
-        inline FloatPoint3(const DirectX::XMFLOAT3 &in) { Set(in); }
-        inline FloatPoint3(FloatPoint3 &&in) { v = std::move(in.v); } // move
-        inline FloatPoint3(const DirectX::XMVECTOR &vecIn) { v = DirectX::XMVectorSetW(vecIn, 0.f); }
-        inline FloatPoint3(const DirectX::XMVECTORF32 &vecIn) { v = vecIn.v; }
+        inline FloatPoint3(const FloatPoint2 & in, const float& zIn) { v = FloatPoint2(in); SetZ(zIn); }
+        inline FloatPoint3(const FloatPoint3 & in) { v = in.v; } // copy
+        inline FloatPoint3(const IntPoint3 & in) { Set(in.Get_XMFLOAT3()); }
+        inline FloatPoint3(const DirectX::XMFLOAT3 & in) { Set(in); }
+        inline FloatPoint3(FloatPoint3 && in) { v = std::move(in.v); } // move
+        inline FloatPoint3(const DirectX::XMVECTOR & vecIn) { v = DirectX::XMVectorSetW(vecIn, 0.f); }
+        inline FloatPoint3(const DirectX::XMVECTORF32 & vecIn) { v = vecIn.v; }
         inline FloatPoint3(FloatPoint4 vecIn);
-        inline FloatPoint3(uint8_t *bytesIn) { auto fp = reinterpret_cast<float*>(bytesIn); v = DirectX::XMLoadFloat3(&DirectX::XMFLOAT3(fp)); }
-        inline FloatPoint3(float *floatIn) { v = DirectX::XMLoadFloat3(&DirectX::XMFLOAT3(floatIn)); }
+        inline FloatPoint3(uint8_t * bytesIn) { auto fp = reinterpret_cast<float*>(bytesIn); v = DirectX::XMLoadFloat3(&DirectX::XMFLOAT3(fp)); }
+        inline FloatPoint3(const float* floatIn) { v = DirectX::XMLoadFloat3(&DirectX::XMFLOAT3(floatIn)); }
         virtual ~FloatPoint3() = default;
         // Operators 
-        inline FloatPoint3 & operator= (const FloatPoint3 &in) = default; // copy assignment
-        inline FloatPoint3 & operator= (const DirectX::XMFLOAT3 &in) { Set(in); return *this; } // copy assignment
-        inline FloatPoint3 & operator= (const DirectX::XMVECTOR &vecIn) { v = vecIn; return *this; }
-        inline FloatPoint3 & operator= (FloatPoint3 &&in) = default; // move assignment
+        inline FloatPoint3& operator= (const FloatPoint3 & in) = default; // copy assignment
+        inline FloatPoint3& operator= (const DirectX::XMFLOAT3 & in) { Set(in); return *this; } // copy assignment
+        inline FloatPoint3& operator= (const DirectX::XMVECTOR & vecIn) { v = vecIn; return *this; }
+        inline FloatPoint3& operator= (FloatPoint3 && in) = default; // move assignment
         // Conversions
         inline operator DirectX::XMFLOAT3() const { return Get_XMFLOAT3(); }
         inline operator DirectX::XMFLOAT3A() const { return Get_XMFLOAT3A(); }
@@ -578,35 +577,35 @@ namespace King {
         inline FloatPoint3 operator- (const FloatPoint3 s) const { return FloatPoint3(DirectX::XMVectorSubtract(v, s.v)); }
         inline FloatPoint3 operator* (const FloatPoint3 s) const { return FloatPoint3(DirectX::XMVectorMultiply(v, s.v)); }
         inline FloatPoint3 operator/ (const FloatPoint3 s) const { return FloatPoint3(DirectX::XMVectorDivide(v, s.v)); }
-        inline DirectX::XMVECTOR & operator+= (const FloatPoint3 &s) { return v = DirectX::XMVectorAdd(v, s.v); }
-        inline DirectX::XMVECTOR & operator-= (const FloatPoint3 &s) { return v = DirectX::XMVectorSubtract(v, s.v); }
-        inline DirectX::XMVECTOR & operator*= (const FloatPoint3 &s) { return v = DirectX::XMVectorMultiply(v, s.v); }
-        inline DirectX::XMVECTOR & operator/= (const FloatPoint3 &s) { return v = DirectX::XMVectorDivide(v, s.v); }
+        inline DirectX::XMVECTOR& operator+= (const FloatPoint3 & s) { return v = DirectX::XMVectorAdd(v, s.v); }
+        inline DirectX::XMVECTOR& operator-= (const FloatPoint3 & s) { return v = DirectX::XMVectorSubtract(v, s.v); }
+        inline DirectX::XMVECTOR& operator*= (const FloatPoint3 & s) { return v = DirectX::XMVectorMultiply(v, s.v); }
+        inline DirectX::XMVECTOR& operator/= (const FloatPoint3 & s) { return v = DirectX::XMVectorDivide(v, s.v); }
         inline FloatPoint3 operator+ (const DirectX::XMVECTOR vecIn) const { return FloatPoint3(DirectX::XMVectorAdd(v, vecIn)); }
         inline FloatPoint3 operator- (const DirectX::XMVECTOR vecIn) const { return FloatPoint3(DirectX::XMVectorSubtract(v, vecIn)); }
         inline FloatPoint3 operator* (const DirectX::XMVECTOR vecIn) const { return FloatPoint3(DirectX::XMVectorMultiply(v, vecIn)); }
         inline FloatPoint3 operator/ (const DirectX::XMVECTOR vecIn) const { return FloatPoint3(DirectX::XMVectorDivide(v, vecIn)); }
-        inline FloatPoint3 & operator+= (const DirectX::XMVECTOR &vecIn) { v = DirectX::XMVectorAdd(v, vecIn); return *this; }
-        inline FloatPoint3 & operator-= (const DirectX::XMVECTOR &vecIn) { v = DirectX::XMVectorSubtract(v, vecIn); return *this; }
-        inline FloatPoint3 & operator*= (const DirectX::XMVECTOR &vecIn) { v = DirectX::XMVectorMultiply(v, vecIn); return *this; }
-        inline FloatPoint3 & operator/= (const DirectX::XMVECTOR &vecIn) { v = DirectX::XMVectorDivide(v, vecIn); return *this; }
+        inline FloatPoint3& operator+= (const DirectX::XMVECTOR & vecIn) { v = DirectX::XMVectorAdd(v, vecIn); return *this; }
+        inline FloatPoint3& operator-= (const DirectX::XMVECTOR & vecIn) { v = DirectX::XMVectorSubtract(v, vecIn); return *this; }
+        inline FloatPoint3& operator*= (const DirectX::XMVECTOR & vecIn) { v = DirectX::XMVectorMultiply(v, vecIn); return *this; }
+        inline FloatPoint3& operator/= (const DirectX::XMVECTOR & vecIn) { v = DirectX::XMVectorDivide(v, vecIn); return *this; }
         inline FloatPoint3 operator+ (float s) const { DirectX::XMVECTOR sv = _mm_set_ps1(s); return FloatPoint3(DirectX::XMVectorAdd(v, sv)); }
         inline FloatPoint3 operator- (float s) const { DirectX::XMVECTOR sv = _mm_set_ps1(s); return FloatPoint3(DirectX::XMVectorSubtract(v, sv)); }
         inline FloatPoint3 operator* (float s) const { return FloatPoint3(DirectX::XMVectorScale(v, s)); }
         inline FloatPoint3 operator/ (float s) const { DirectX::XMVECTOR sv = _mm_set_ps1(s); return FloatPoint3(DirectX::XMVectorDivide(v, sv)); }
-        inline DirectX::XMVECTOR & operator+= (float s) { DirectX::XMVECTOR sv = _mm_set_ps1(s); return v = DirectX::XMVectorAdd(v, sv); }
-        inline DirectX::XMVECTOR & operator-= (float s) { DirectX::XMVECTOR sv = _mm_set_ps1(s); return v = DirectX::XMVectorSubtract(v, sv); }
-        inline DirectX::XMVECTOR & operator*= (float s) { return v = DirectX::XMVectorScale(v, s); }
-        inline DirectX::XMVECTOR & operator/= (float s) { DirectX::XMVECTOR sv = _mm_set_ps1(s); return v = DirectX::XMVectorDivide(v, sv); }
-        inline DirectX::XMVECTOR operator* (const DirectX::XMMATRIX &m) { return DirectX::XMVector3Transform(v, m); }
-        inline DirectX::XMVECTOR & operator*= (const DirectX::XMMATRIX &m) { return v = DirectX::XMVector3Transform(v, m); }
+        inline DirectX::XMVECTOR& operator+= (float s) { DirectX::XMVECTOR sv = _mm_set_ps1(s); return v = DirectX::XMVectorAdd(v, sv); }
+        inline DirectX::XMVECTOR& operator-= (float s) { DirectX::XMVECTOR sv = _mm_set_ps1(s); return v = DirectX::XMVectorSubtract(v, sv); }
+        inline DirectX::XMVECTOR& operator*= (float s) { return v = DirectX::XMVectorScale(v, s); }
+        inline DirectX::XMVECTOR& operator/= (float s) { DirectX::XMVECTOR sv = _mm_set_ps1(s); return v = DirectX::XMVectorDivide(v, sv); }
+        inline DirectX::XMVECTOR operator* (const DirectX::XMMATRIX & m) { return DirectX::XMVector3Transform(v, m); }
+        inline DirectX::XMVECTOR& operator*= (const DirectX::XMMATRIX & m) { return v = DirectX::XMVector3Transform(v, m); }
         // Comparators
-        inline bool operator<  (const FloatPoint3 &rhs) { return DirectX::XMVector3Less(v, rhs.GetVecConst()); }
-        inline bool operator<= (const FloatPoint3 &rhs) { return DirectX::XMVector3LessOrEqual(v, rhs.GetVecConst()); }
-        inline bool operator>  (const FloatPoint3 &rhs) { return DirectX::XMVector3Greater(v, rhs.GetVecConst()); }
-        inline bool operator>= (const FloatPoint3 &rhs) { return DirectX::XMVector3GreaterOrEqual(v, rhs.GetVecConst()); }
-        inline bool operator== (const FloatPoint3 &rhs) { return DirectX::XMVector3Equal(v, rhs.GetVecConst()); }
-        inline bool operator!= (const FloatPoint3 &rhs) { return DirectX::XMVector3NotEqual(v, rhs.GetVecConst()); }
+        inline bool operator<  (const FloatPoint3 & rhs) { return DirectX::XMVector3Less(v, rhs.GetVecConst()); }
+        inline bool operator<= (const FloatPoint3 & rhs) { return DirectX::XMVector3LessOrEqual(v, rhs.GetVecConst()); }
+        inline bool operator>  (const FloatPoint3 & rhs) { return DirectX::XMVector3Greater(v, rhs.GetVecConst()); }
+        inline bool operator>= (const FloatPoint3 & rhs) { return DirectX::XMVector3GreaterOrEqual(v, rhs.GetVecConst()); }
+        inline bool operator== (const FloatPoint3 & rhs) { return DirectX::XMVector3Equal(v, rhs.GetVecConst()); }
+        inline bool operator!= (const FloatPoint3 & rhs) { return DirectX::XMVector3NotEqual(v, rhs.GetVecConst()); }
         // Accessors
         inline const DirectX::XMFLOAT3          Get_XMFLOAT3() const { DirectX::XMFLOAT3 rtn; DirectX::XMStoreFloat3(&rtn, v); return rtn; }
         inline const DirectX::XMFLOAT3A         Get_XMFLOAT3A() const { DirectX::XMFLOAT3A rtn; DirectX::XMStoreFloat3A(&rtn, v); return rtn; }
@@ -621,22 +620,22 @@ namespace King {
         inline void                             Set(const long x, const long y, const long z) { v = DirectX::XMVectorSet(static_cast<float>(x), static_cast<float>(y), static_cast<float>(z), 0.f); }
         inline void                             Set(const unsigned long x, const unsigned long y, const unsigned long z) { v = DirectX::XMVectorSet(static_cast<float>(x), static_cast<float>(y), static_cast<float>(z), 0.f); }
 
-        inline void                             Set(const DirectX::XMFLOAT3 &point) { v = DirectX::XMLoadFloat3(&point); }
-        inline void                             Set(const DirectX::XMUINT3 &point) { v = DirectX::XMLoadUInt3(&point); v = DirectX::XMConvertVectorUIntToFloat(v, 0); }
-        inline void                             Set(const DirectX::XMINT3 &point) { v = DirectX::XMLoadSInt3(&point); v = DirectX::XMConvertVectorIntToFloat(v, 0); }
+        inline void                             Set(const DirectX::XMFLOAT3 & point) { v = DirectX::XMLoadFloat3(&point); }
+        inline void                             Set(const DirectX::XMUINT3 & point) { v = DirectX::XMLoadUInt3(&point); v = DirectX::XMConvertVectorUIntToFloat(v, 0); }
+        inline void                             Set(const DirectX::XMINT3 & point) { v = DirectX::XMLoadSInt3(&point); v = DirectX::XMConvertVectorIntToFloat(v, 0); }
         // Functionality
         inline virtual void                     MakeNormalize() { v = DirectX::XMVector3Normalize(v); }
-        float __vectorcall                      DotProduct(const FloatPoint3 &vecIn) { return (float)DirectX::XMVectorGetX(DirectX::XMVector3Dot(v, vecIn)); } // order does not mater A•B = B•A
-        FloatPoint3 __vectorcall                CrossProduct(const FloatPoint3 &vecIn) { return DirectX::XMVector3Cross(v, vecIn); } // order does matter AxB = -(BxA)
+        float __vectorcall                      DotProduct(const FloatPoint3 & vecIn) { return (float)DirectX::XMVectorGetX(DirectX::XMVector3Dot(v, vecIn)); } // order does not mater A•B = B•A
+        FloatPoint3 __vectorcall                CrossProduct(const FloatPoint3 & vecIn) { return DirectX::XMVector3Cross(v, vecIn); } // order does matter AxB = -(BxA)
         // Statics
-        static FloatPoint3 __vectorcall         Absolute(const FloatPoint3 &point3In) { return FloatPoint3(DirectX::XMVectorAbs(point3In.GetVecConst())); }
-        static FloatPoint3 __vectorcall         Normal(const FloatPoint3 &point3In) { return FloatPoint3(DirectX::XMVector3Normalize(point3In.GetVecConst())); }
-        static const float __vectorcall         Magnitude(const FloatPoint3 &point3In) { return DirectX::XMVectorGetX(DirectX::XMVector3Length(point3In.GetVecConst())); }
-        static FloatPoint3 __vectorcall         DotProduct(const FloatPoint3 &vec1In, const FloatPoint3 &vec2In) { return DirectX::XMVector3Dot(vec1In, vec2In); } // order does not mater A•B = B•A
-        static FloatPoint3 __vectorcall         CrossProduct(const FloatPoint3 &vec1In, const FloatPoint3 &vec2In) { return DirectX::XMVector3Cross(vec1In, vec2In); } // order does mater AxB = -(BxA)
-        static float __vectorcall               SumComponents(const FloatPoint3 &vec1In) { return DirectX::XMVectorGetX(DirectX::XMVectorSum(vec1In)); }
-        static FloatPoint3 __vectorcall         MultiplyAdd(const FloatPoint3 &vec1MulIn, const FloatPoint3 &vec2MulIn, const FloatPoint3 &vec3AddIn) { return DirectX::XMVectorMultiplyAdd(vec1MulIn, vec2MulIn, vec3AddIn); }
-        static FloatPoint3                      Average(const std::vector<FloatPoint3> &arrayIn) { assert(arrayIn.size()); FloatPoint2(); FloatPoint3 ave; for (const auto & each : arrayIn) ave += each; ave /= (float)arrayIn.size(); return ave; }
+        static FloatPoint3 __vectorcall         Absolute(const FloatPoint3 & point3In) { return FloatPoint3(DirectX::XMVectorAbs(point3In.GetVecConst())); }
+        static FloatPoint3 __vectorcall         Normal(const FloatPoint3 & point3In) { return FloatPoint3(DirectX::XMVector3Normalize(point3In.GetVecConst())); }
+        static const float __vectorcall         Magnitude(const FloatPoint3 & point3In) { return DirectX::XMVectorGetX(DirectX::XMVector3Length(point3In.GetVecConst())); }
+        static FloatPoint3 __vectorcall         DotProduct(const FloatPoint3 & vec1In, const FloatPoint3 & vec2In) { return DirectX::XMVector3Dot(vec1In, vec2In); } // order does not mater A•B = B•A
+        static FloatPoint3 __vectorcall         CrossProduct(const FloatPoint3 & vec1In, const FloatPoint3 & vec2In) { return DirectX::XMVector3Cross(vec1In, vec2In); } // order does mater AxB = -(BxA)
+        static float __vectorcall               SumComponents(const FloatPoint3 & vec1In) { return DirectX::XMVectorGetX(DirectX::XMVectorSum(vec1In)); }
+        static FloatPoint3 __vectorcall         MultiplyAdd(const FloatPoint3 & vec1MulIn, const FloatPoint3 & vec2MulIn, const FloatPoint3 & vec3AddIn) { return DirectX::XMVectorMultiplyAdd(vec1MulIn, vec2MulIn, vec3AddIn); }
+        static FloatPoint3                      Average(const std::vector<FloatPoint3> & arrayIn) { assert(arrayIn.size()); FloatPoint3 ave; for (const auto& each : arrayIn) ave += each; ave /= (float)arrayIn.size(); return ave; }
     };
     /******************************************************************************
     *   FloatPoint4
@@ -659,57 +658,57 @@ namespace King {
         inline FloatPoint4(float xyzw) { Set(xyzw); }
         inline FloatPoint4(FloatPoint3 in, float w) { Set(in, w); }
         inline FloatPoint4(float x, float y, float z, float w) { Set(x, y, z, w); }
-        inline FloatPoint4(const FloatPoint4 &in) { v = in.v; } // copy
-        inline FloatPoint4(const DirectX::XMFLOAT4 &in) { Set(in); }
-        inline FloatPoint4(FloatPoint4 &&in) { v = std::move(in.v); } // move
-        inline FloatPoint4(const DirectX::FXMVECTOR &vecIn) { v = vecIn; }
-        inline FloatPoint4(const DirectX::XMVECTORF32 &vecIn) { v = vecIn.v; }
-        inline FloatPoint4(uint8_t *bytesIn) { auto fp = reinterpret_cast<DirectX::XMFLOAT4*>(bytesIn); v = DirectX::XMLoadFloat4(fp); }
-        inline FloatPoint4(float *floatIn) { auto fp = reinterpret_cast<DirectX::XMFLOAT4*>(floatIn); v = DirectX::XMLoadFloat4(fp); }
+        inline FloatPoint4(const FloatPoint4 & in) { v = in.v; } // copy
+        inline FloatPoint4(const DirectX::XMFLOAT4 & in) { Set(in); }
+        inline FloatPoint4(FloatPoint4 && in) { v = std::move(in.v); } // move
+        inline FloatPoint4(const DirectX::FXMVECTOR & vecIn) { v = vecIn; }
+        inline FloatPoint4(const DirectX::XMVECTORF32 & vecIn) { v = vecIn.v; }
+        inline FloatPoint4(uint8_t * bytesIn) { auto fp = reinterpret_cast<DirectX::XMFLOAT4*>(bytesIn); v = DirectX::XMLoadFloat4(fp); }
+        inline FloatPoint4(const float* floatIn) { v = DirectX::XMLoadFloat4(&DirectX::XMFLOAT4(floatIn)); }
         virtual ~FloatPoint4() = default;
         // Operators 
-        inline FloatPoint4 & operator= (const FloatPoint4 &in) = default; // copy assignment
-        inline FloatPoint4 & operator= (const DirectX::XMFLOAT4 &in) { Set(in); return *this; } // copy assignment
-        inline FloatPoint4 & operator= (const DirectX::XMVECTOR &vecIn) { v = vecIn; return *this; }
-        inline FloatPoint4 & operator= (FloatPoint4 &&in) = default; // move assignment
+        inline FloatPoint4& operator= (const FloatPoint4 & in) = default; // copy assignment
+        inline FloatPoint4& operator= (const DirectX::XMFLOAT4 & in) { Set(in); return *this; } // copy assignment
+        inline FloatPoint4& operator= (const DirectX::XMVECTOR & vecIn) { v = vecIn; return *this; }
+        inline FloatPoint4& operator= (FloatPoint4 && in) = default; // move assignment
         // Conversions
         inline operator DirectX::XMFLOAT4() const { return Get_XMFLOAT4(); }
         inline operator DirectX::XMFLOAT4A() const { return Get_XMFLOAT4A(); }
         // Math Operators
         inline FloatPoint4 operator- () { return FloatPoint4(DirectX::XMVectorNegate(v)); }
-        inline FloatPoint4 operator+ (const FloatPoint4 &s) { return FloatPoint4(DirectX::XMVectorAdd(v, s.v)); }
-        inline FloatPoint4 operator- (const FloatPoint4 &s) { return FloatPoint4(DirectX::XMVectorSubtract(v, s.v)); }
-        inline FloatPoint4 operator* (const FloatPoint4 &s) { return FloatPoint4(DirectX::XMVectorMultiply(v, s.v)); }
-        inline FloatPoint4 operator/ (const FloatPoint4 &s) { return FloatPoint4(DirectX::XMVectorDivide(v, s.v)); }
-        inline DirectX::XMVECTOR & operator+= (const FloatPoint4 &s) { return v = DirectX::XMVectorAdd(v, s.v); }
-        inline DirectX::XMVECTOR & operator-= (const FloatPoint4 &s) { return v = DirectX::XMVectorSubtract(v, s.v); }
-        inline DirectX::XMVECTOR & operator*= (const FloatPoint4 &s) { return v = DirectX::XMVectorMultiply(v, s.v); }
-        inline DirectX::XMVECTOR & operator/= (const FloatPoint4 &s) { return v = DirectX::XMVectorDivide(v, s.v); }
-        inline FloatPoint4 operator+ (const DirectX::XMVECTOR &vecIn) { return FloatPoint4(DirectX::XMVectorAdd(v, vecIn)); }
-        inline FloatPoint4 operator- (const DirectX::XMVECTOR &vecIn) { return FloatPoint4(DirectX::XMVectorSubtract(v, vecIn)); }
-        inline FloatPoint4 operator* (const DirectX::XMVECTOR &vecIn) { return FloatPoint4(DirectX::XMVectorMultiply(v, vecIn)); }
-        inline FloatPoint4 operator/ (const DirectX::XMVECTOR &vecIn) { return FloatPoint4(DirectX::XMVectorDivide(v, vecIn)); }
-        inline FloatPoint4 & operator+= (const DirectX::XMVECTOR &vecIn) { v = DirectX::XMVectorAdd(v, vecIn); return *this; }
-        inline FloatPoint4 & operator-= (const DirectX::XMVECTOR &vecIn) { v = DirectX::XMVectorSubtract(v, vecIn); return *this; }
-        inline FloatPoint4 & operator*= (const DirectX::XMVECTOR &vecIn) { v = DirectX::XMVectorMultiply(v, vecIn); return *this; }
-        inline FloatPoint4 & operator/= (const DirectX::XMVECTOR &vecIn) { v = DirectX::XMVectorDivide(v, vecIn); return *this; }
+        inline FloatPoint4 operator+ (const FloatPoint4 & s) { return FloatPoint4(DirectX::XMVectorAdd(v, s.v)); }
+        inline FloatPoint4 operator- (const FloatPoint4 & s) { return FloatPoint4(DirectX::XMVectorSubtract(v, s.v)); }
+        inline FloatPoint4 operator* (const FloatPoint4 & s) { return FloatPoint4(DirectX::XMVectorMultiply(v, s.v)); }
+        inline FloatPoint4 operator/ (const FloatPoint4 & s) { return FloatPoint4(DirectX::XMVectorDivide(v, s.v)); }
+        inline DirectX::XMVECTOR& operator+= (const FloatPoint4 & s) { return v = DirectX::XMVectorAdd(v, s.v); }
+        inline DirectX::XMVECTOR& operator-= (const FloatPoint4 & s) { return v = DirectX::XMVectorSubtract(v, s.v); }
+        inline DirectX::XMVECTOR& operator*= (const FloatPoint4 & s) { return v = DirectX::XMVectorMultiply(v, s.v); }
+        inline DirectX::XMVECTOR& operator/= (const FloatPoint4 & s) { return v = DirectX::XMVectorDivide(v, s.v); }
+        inline FloatPoint4 operator+ (const DirectX::XMVECTOR & vecIn) { return FloatPoint4(DirectX::XMVectorAdd(v, vecIn)); }
+        inline FloatPoint4 operator- (const DirectX::XMVECTOR & vecIn) { return FloatPoint4(DirectX::XMVectorSubtract(v, vecIn)); }
+        inline FloatPoint4 operator* (const DirectX::XMVECTOR & vecIn) { return FloatPoint4(DirectX::XMVectorMultiply(v, vecIn)); }
+        inline FloatPoint4 operator/ (const DirectX::XMVECTOR & vecIn) { return FloatPoint4(DirectX::XMVectorDivide(v, vecIn)); }
+        inline FloatPoint4& operator+= (const DirectX::XMVECTOR & vecIn) { v = DirectX::XMVectorAdd(v, vecIn); return *this; }
+        inline FloatPoint4& operator-= (const DirectX::XMVECTOR & vecIn) { v = DirectX::XMVectorSubtract(v, vecIn); return *this; }
+        inline FloatPoint4& operator*= (const DirectX::XMVECTOR & vecIn) { v = DirectX::XMVectorMultiply(v, vecIn); return *this; }
+        inline FloatPoint4& operator/= (const DirectX::XMVECTOR & vecIn) { v = DirectX::XMVectorDivide(v, vecIn); return *this; }
         inline FloatPoint4 operator+ (float s) { return FloatPoint4(DirectX::XMVectorAdd(v, DirectX::XMVectorReplicate(s))); }
         inline FloatPoint4 operator- (float s) { return FloatPoint4(DirectX::XMVectorSubtract(v, DirectX::XMVectorReplicate(s))); }
         inline FloatPoint4 operator* (float s) { return FloatPoint4(DirectX::XMVectorScale(v, s)); }
         inline FloatPoint4 operator/ (float s) { return FloatPoint4(DirectX::XMVectorDivide(v, DirectX::XMVectorReplicate(s))); }
-        inline DirectX::XMVECTOR & operator+= (float s) { return v = DirectX::XMVectorAdd(v, DirectX::XMVectorReplicate(s)); }
-        inline DirectX::XMVECTOR & operator-= (float s) { return v = DirectX::XMVectorSubtract(v, DirectX::XMVectorReplicate(s)); }
-        inline DirectX::XMVECTOR & operator*= (float s) { return v = DirectX::XMVectorScale(v, s); }
-        inline DirectX::XMVECTOR & operator/= (float s) { return v = DirectX::XMVectorDivide(v, DirectX::XMVectorReplicate(s)); }
-        inline FloatPoint4 operator* (const DirectX::XMMATRIX &m) { return FloatPoint4(DirectX::XMVector3Transform(v, m)); }
-        inline DirectX::XMVECTOR & operator*=  (const DirectX::XMMATRIX &m) { return v = DirectX::XMVector3Transform(v, m); }
+        inline DirectX::XMVECTOR& operator+= (float s) { return v = DirectX::XMVectorAdd(v, DirectX::XMVectorReplicate(s)); }
+        inline DirectX::XMVECTOR& operator-= (float s) { return v = DirectX::XMVectorSubtract(v, DirectX::XMVectorReplicate(s)); }
+        inline DirectX::XMVECTOR& operator*= (float s) { return v = DirectX::XMVectorScale(v, s); }
+        inline DirectX::XMVECTOR& operator/= (float s) { return v = DirectX::XMVectorDivide(v, DirectX::XMVectorReplicate(s)); }
+        inline FloatPoint4 operator* (const DirectX::XMMATRIX & m) { return FloatPoint4(DirectX::XMVector3Transform(v, m)); }
+        inline DirectX::XMVECTOR& operator*=  (const DirectX::XMMATRIX & m) { return v = DirectX::XMVector3Transform(v, m); }
         // Comparators
-        inline bool operator<  (const FloatPoint4 &rhs) { return DirectX::XMVector4Less(v, rhs.GetVecConst()); }
-        inline bool operator<= (const FloatPoint4 &rhs) { return DirectX::XMVector4LessOrEqual(v, rhs.GetVecConst()); }
-        inline bool operator>  (const FloatPoint4 &rhs) { return DirectX::XMVector4Greater(v, rhs.GetVecConst()); }
-        inline bool operator>= (const FloatPoint4 &rhs) { return DirectX::XMVector4GreaterOrEqual(v, rhs.GetVecConst()); }
-        inline bool operator== (const FloatPoint4 &rhs) { return DirectX::XMVector4Equal(v, rhs.GetVecConst()); }
-        inline bool operator!= (const FloatPoint4 &rhs) { return DirectX::XMVector4NotEqual(v, rhs.GetVecConst()); }
+        inline bool operator<  (const FloatPoint4 & rhs) { return DirectX::XMVector4Less(v, rhs.GetVecConst()); }
+        inline bool operator<= (const FloatPoint4 & rhs) { return DirectX::XMVector4LessOrEqual(v, rhs.GetVecConst()); }
+        inline bool operator>  (const FloatPoint4 & rhs) { return DirectX::XMVector4Greater(v, rhs.GetVecConst()); }
+        inline bool operator>= (const FloatPoint4 & rhs) { return DirectX::XMVector4GreaterOrEqual(v, rhs.GetVecConst()); }
+        inline bool operator== (const FloatPoint4 & rhs) { return DirectX::XMVector4Equal(v, rhs.GetVecConst()); }
+        inline bool operator!= (const FloatPoint4 & rhs) { return DirectX::XMVector4NotEqual(v, rhs.GetVecConst()); }
         // Accessors
         inline const DirectX::XMFLOAT4          Get_XMFLOAT4() const { DirectX::XMFLOAT4 rtn; DirectX::XMStoreFloat4(&rtn, v); return rtn; }
         inline const DirectX::XMFLOAT4A         Get_XMFLOAT4A() const { DirectX::XMFLOAT4A rtn; DirectX::XMStoreFloat4A(&rtn, v); return rtn; }
@@ -725,21 +724,21 @@ namespace King {
         inline void                             Set(const long x, const long y, const long z, const long w) { v = DirectX::XMVectorSet(static_cast<float>(x), static_cast<float>(y), static_cast<float>(z), static_cast<float>(w)); }
         inline void                             Set(const unsigned long x, const unsigned long y, const unsigned long z, const unsigned long w) { v = DirectX::XMVectorSet(static_cast<float>(x), static_cast<float>(y), static_cast<float>(z), static_cast<float>(w)); }
 
-        inline void                             Set(const DirectX::XMFLOAT4 &point) { v = DirectX::XMLoadFloat4(&point); }
-        inline void                             Set(const DirectX::XMUINT4 &point) { v = DirectX::XMLoadUInt4(&point); v = DirectX::XMConvertVectorUIntToFloat(v, 0); }
-        inline void                             Set(const DirectX::XMINT4 &point) { v = DirectX::XMLoadSInt4(&point); v = DirectX::XMConvertVectorIntToFloat(v, 0); }
+        inline void                             Set(const DirectX::XMFLOAT4 & point) { v = DirectX::XMLoadFloat4(&point); }
+        inline void                             Set(const DirectX::XMUINT4 & point) { v = DirectX::XMLoadUInt4(&point); v = DirectX::XMConvertVectorUIntToFloat(v, 0); }
+        inline void                             Set(const DirectX::XMINT4 & point) { v = DirectX::XMLoadSInt4(&point); v = DirectX::XMConvertVectorIntToFloat(v, 0); }
         // Functionality
         inline virtual void                     MakeNormalize() { v = DirectX::XMVector4Normalize(v); }
-        float __vectorcall                      DotProduct(const FloatPoint4 &vecIn) { return (float)DirectX::XMVectorGetX(DirectX::XMVector4Dot(v, vecIn)); } // order does not mater A•B = B•A
+        float __vectorcall                      DotProduct(const FloatPoint4 & vecIn) { return (float)DirectX::XMVectorGetX(DirectX::XMVector4Dot(v, vecIn)); } // order does not mater A•B = B•A
         // Statics
-        static FloatPoint4 __vectorcall         Absolute(const FloatPoint4 &point4In) { return FloatPoint4(DirectX::XMVectorAbs(point4In.GetVecConst())); }
-        static FloatPoint4 __vectorcall         Normal(const FloatPoint4 &point4In) { return FloatPoint4(DirectX::XMVector4Normalize(point4In.GetVecConst())); }
-        static const float __vectorcall         Magnitude(const FloatPoint4 &point4In) { return DirectX::XMVectorGetX(DirectX::XMVector4Length(point4In.GetVecConst())); }
-        static FloatPoint4 __vectorcall         DotProduct(const FloatPoint4 &vec1In, const FloatPoint4 &vec2In) { return DirectX::XMVector4Dot(vec1In, vec2In); } // order does not mater A•B = B•A
-        static FloatPoint4 __vectorcall         CrossProduct(const FloatPoint4 &vec1In, const FloatPoint4 &vec2In, const FloatPoint4 &vec3In) { return DirectX::XMVector4Cross(vec1In, vec2In, vec3In); } // order does mater AxB = -(BxA)
-        static float __vectorcall               SumComponents(const FloatPoint4 &vec1In) { return DirectX::XMVectorGetX(DirectX::XMVectorSum(vec1In)); }
-        static FloatPoint4 __vectorcall         MultiplyAdd(const FloatPoint4 &vec1MulIn, const FloatPoint4 &vec2MulIn, const FloatPoint4 &vec3AddIn) { return DirectX::XMVectorMultiplyAdd(vec1MulIn, vec2MulIn, vec3AddIn); }
-        static FloatPoint4                      Average(const std::vector<FloatPoint4> &arrayIn) { assert(arrayIn.size()); FloatPoint4 ave; for (const auto & each : arrayIn) ave += each; ave /= (float)arrayIn.size(); return ave; }
+        static FloatPoint4 __vectorcall         Absolute(const FloatPoint4 & point4In) { return FloatPoint4(DirectX::XMVectorAbs(point4In.GetVecConst())); }
+        static FloatPoint4 __vectorcall         Normal(const FloatPoint4 & point4In) { return FloatPoint4(DirectX::XMVector4Normalize(point4In.GetVecConst())); }
+        static const float __vectorcall         Magnitude(const FloatPoint4 & point4In) { return DirectX::XMVectorGetX(DirectX::XMVector4Length(point4In.GetVecConst())); }
+        static FloatPoint4 __vectorcall         DotProduct(const FloatPoint4 & vec1In, const FloatPoint4 & vec2In) { return DirectX::XMVector4Dot(vec1In, vec2In); } // order does not mater A•B = B•A
+        static FloatPoint4 __vectorcall         CrossProduct(const FloatPoint4 & vec1In, const FloatPoint4 & vec2In, const FloatPoint4 & vec3In) { return DirectX::XMVector4Cross(vec1In, vec2In, vec3In); } // order does mater AxB = -(BxA)
+        static float __vectorcall               SumComponents(const FloatPoint4 & vec1In) { return DirectX::XMVectorGetX(DirectX::XMVectorSum(vec1In)); }
+        static FloatPoint4 __vectorcall         MultiplyAdd(const FloatPoint4 & vec1MulIn, const FloatPoint4 & vec2MulIn, const FloatPoint4 & vec3AddIn) { return DirectX::XMVectorMultiplyAdd(vec1MulIn, vec2MulIn, vec3AddIn); }
+        static FloatPoint4                      Average(const std::vector<FloatPoint4> & arrayIn) { assert(arrayIn.size()); FloatPoint4 ave; for (const auto& each : arrayIn) ave += each; ave /= (float)arrayIn.size(); return ave; }
 
     };
     /******************************************************************************
@@ -768,31 +767,32 @@ namespace King {
         inline explicit Quaternion() { v = DirectX::XMQuaternionIdentity(); }
         inline explicit Quaternion(const FloatPoint3 axis) { SetAxisAngle(axis, 0.f); }
         inline explicit Quaternion(const FloatPoint3 axis, const float angle) { SetAxisAngle(axis, angle); }
+        inline explicit Quaternion(const DirectX::XMFLOAT3 & pitchYawRoll) { v = DirectX::XMQuaternionRotationRollPitchYaw(pitchYawRoll.x, pitchYawRoll.y, pitchYawRoll.z); }
         inline explicit Quaternion(float pitch, float yaw, float roll) { v = DirectX::XMQuaternionRotationRollPitchYaw(pitch, yaw, roll); }
-        inline explicit Quaternion(const DirectX::XMMATRIX& matrix) { v = DirectX::XMQuaternionRotationMatrix(matrix); }
+        inline explicit Quaternion(const DirectX::XMMATRIX & matrix) { v = DirectX::XMQuaternionRotationMatrix(matrix); }
         inline explicit Quaternion(const float3 v1From, const float3 v2To) { Set(v1From, v2To); }
-        inline explicit Quaternion(const DirectX::XMVECTOR &vec) { v = vec; }
+        inline explicit Quaternion(const DirectX::XMVECTOR & vec) { v = vec; }
         inline explicit Quaternion(const FloatPoint4 q) { v = q; }
-        inline Quaternion(const Quaternion &in) { Set(in); }
-        inline Quaternion(Quaternion &&in) = default; // move
+        inline Quaternion(const Quaternion & in) { Set(in); }
+        inline Quaternion(Quaternion && in) = default; // move
         virtual ~Quaternion() = default;
         // Operators 
-        inline Quaternion & operator= (const Quaternion &in) = default; // copy assignment
-        inline Quaternion & operator= (Quaternion &&in) = default; // move assignment
-        inline Quaternion & operator= (const DirectX::FXMVECTOR &in) { v = in; return *this; }
+        inline Quaternion& operator= (const Quaternion & in) = default; // copy assignment
+        inline Quaternion& operator= (Quaternion && in) = default; // move assignment
+        inline Quaternion& operator= (const DirectX::FXMVECTOR & in) { v = in; return *this; }
         inline Quaternion operator~ (void) const { return Quaternion(DirectX::XMQuaternionConjugate(v)); }
         inline Quaternion operator- (void) const { return Quaternion(DirectX::XMVectorNegate(v)); }
         inline Quaternion operator- (const Quaternion rhs) const { return *this * rhs.Inverse(); }
         inline Quaternion operator+ (const Quaternion rhs) const { return Quaternion(DirectX::XMQuaternionMultiply(v, rhs)); }
         inline Quaternion operator* (const Quaternion rhs) const { return Quaternion(DirectX::XMQuaternionMultiply(v, rhs)); }
-        inline Quaternion operator* (const float &scalerAngle) const { return Quaternion(GetAxis(), scalerAngle*GetAngle()); }
+        inline Quaternion operator* (const float& scalerAngle) const { return Quaternion(GetAxis(), scalerAngle * GetAngle()); }
         inline Quaternion operator/ (const Quaternion rhs) const { return *this * rhs.Inverse(); }
         inline FloatPoint3 operator* (const FloatPoint3 rhs) const { return FloatPoint3(DirectX::XMVector3Rotate(rhs, v)); }
         inline FloatPoint3 operator* (const DirectX::XMVECTOR rhs) const { return FloatPoint3(DirectX::XMVector3Rotate(rhs, v)); }
-        inline Quaternion & operator*= (const Quaternion rhs) { *this = *this * rhs; return *this; } // same as adding two rotations (multiply the transforms)
-        inline Quaternion & operator/= (const Quaternion rhs) { *this = *this * rhs.Inverse(); return *this; } // same as subtracting two rotations
-        inline Quaternion & operator+= (const Quaternion rhs) { *this = *this * rhs; return *this; }
-        inline Quaternion & operator-= (const Quaternion rhs) { *this = *this * rhs.Inverse(); return *this; }
+        inline Quaternion& operator*= (const Quaternion rhs) { *this = *this * rhs; return *this; } // same as adding two rotations (multiply the transforms)
+        inline Quaternion& operator/= (const Quaternion rhs) { *this = *this * rhs.Inverse(); return *this; } // same as subtracting two rotations
+        inline Quaternion& operator+= (const Quaternion rhs) { *this = *this * rhs; return *this; }
+        inline Quaternion& operator-= (const Quaternion rhs) { *this = *this * rhs.Inverse(); return *this; }
         // Conversions
         inline operator bool() { return abs(GetW()) < 0.999998f ? true : false; } // if W is 1.0, there is no rotation to apply
         operator char() = delete;
@@ -805,23 +805,23 @@ namespace King {
         DirectX::XMFLOAT3   CalculateAngularVelocity(const Quaternion previousRotation, float deltaTime) const;
         void                Validate() { if (DirectX::XMQuaternionIsNaN(v)) v = DirectX::XMQuaternionIdentity(); }
         // Accessors
-        inline float3       GetAxis() const { float3 xyz = v; xyz.MakeNormalize(); return xyz; }
+        inline float3       GetAxis() const { float3 xyz = v; xyz.MakeNormalize(); return xyz; } // since v.xyz = N * sin(angle / 2), we can just re-normalized to retrieve the axis
         inline float        GetAngle() const { auto a = 2.0f * DirectX::XMScalarACos(GetW()); return a; } // radians; if w = 0, angle = pi, w = 1, angle = 0
         // Assignments
-        void                SetAxisAngle(const float3 &vector, const float &angleRadians);
+        void                SetAxisAngle(const float3 & vector, const float& angleRadians);
         inline void         SetAxis(const float3 vector) { SetAxisAngle(vector, GetAngle()); }
         inline void         SetAngle(const float angleRadians) { SetAxisAngle(GetAxis(), angleRadians); }
-        inline void         SetEulerAngles(const float3 eulerAngles) { DirectX::XMQuaternionRotationRollPitchYawFromVector(eulerAngles); }
-        inline void         Set(const Quaternion &qIn) { v = qIn; }
+        inline void         SetEulerAngles(const float3 & eulerAngles) { v = DirectX::XMQuaternionRotationRollPitchYawFromVector(eulerAngles); }
+        inline void         Set(const Quaternion & qIn) { v = qIn; Validate(); }
         void                Set(const float3 vFrom, const float3 vTo);
     };
 
     /******************************************************************************
     *   Conversions
     ******************************************************************************/
-    inline UIntPoint2::UIntPoint2(const IntPoint2 & in) { auto temp = in.Get_XMUINT2(); u[0] = temp.x; u[1] = temp.y; }
-    inline UIntPoint2::UIntPoint2(const FloatPoint2 & in) { auto temp = in.Get_XMUINT2(); u[0] = temp.x; u[1] = temp.y; }
-    inline IntPoint2::IntPoint2(const FloatPoint2 & in) { auto temp = in.Get_XMINT2(); i[0] = temp.x; i[1] = temp.y; }
+    inline UIntPoint2::UIntPoint2(const IntPoint2& in) { auto temp = in.Get_XMUINT2(); u[0] = temp.x; u[1] = temp.y; }
+    inline UIntPoint2::UIntPoint2(const FloatPoint2& in) { auto temp = in.Get_XMUINT2(); u[0] = temp.x; u[1] = temp.y; }
+    inline IntPoint2::IntPoint2(const FloatPoint2& in) { auto temp = in.Get_XMINT2(); i[0] = temp.x; i[1] = temp.y; }
 
     /******************************************************************************
     *   Math functions
@@ -839,49 +839,52 @@ namespace King {
     inline Type __vectorcall Pow( Type b, Type e ) { return Type(XMVectorPow(b, e)); } \
     inline Type __vectorcall Max( Type a, Type b ) { return Type(XMVectorMax(a, b)); } \
     inline Type __vectorcall Min( Type a, Type b ) { return Type(XMVectorMin(a, b)); } \
-    inline Type __vectorcall Clamp( Type v, Type a, Type b ) { return Min(Max(v, a), b); } \
+    inline Type __vectorcall Clamp( Type v, Type a, Type b ) { return XMVectorClamp(v, a, b); } \
     inline Type __vectorcall Lerp( Type a, Type b, Type t ) { return Type(XMVectorLerpV(a, b, t)); }
 
     MAKE_SIMD_FUNCS(FloatPoint2);
     MAKE_SIMD_FUNCS(FloatPoint3);
     MAKE_SIMD_FUNCS(FloatPoint4);
 #undef MAKE_SIMD_FUNCS
-    inline float __vectorcall Dot(const FloatPoint2 &vec1In, const FloatPoint2 &vec2In) { return FloatPoint2(DirectX::XMVector2Dot(vec1In, vec2In)).GetX(); } // order does not mater A•B = B•A
-    inline float __vectorcall Dot(const FloatPoint3 &vec1In, const FloatPoint3 &vec2In) { return FloatPoint3(DirectX::XMVector3Dot(vec1In, vec2In)).GetX(); }
-    inline float __vectorcall Dot(const FloatPoint4 &vec1In, const FloatPoint4 &vec2In) { return FloatPoint4(DirectX::XMVector4Dot(vec1In, vec2In)).GetX(); }
+    inline float __vectorcall Dot(const FloatPoint2& vec1In, const FloatPoint2& vec2In) { return FloatPoint2(DirectX::XMVector2Dot(vec1In, vec2In)).GetX(); } // order does not mater A•B = B•A
+    inline float __vectorcall Dot(const FloatPoint3& vec1In, const FloatPoint3& vec2In) { return FloatPoint3(DirectX::XMVector3Dot(vec1In, vec2In)).GetX(); }
+    inline float __vectorcall Dot(const FloatPoint4& vec1In, const FloatPoint4& vec2In) { return FloatPoint4(DirectX::XMVector4Dot(vec1In, vec2In)).GetX(); }
 
-    inline FloatPoint2 __vectorcall Cross(const FloatPoint2 &vec1In, const FloatPoint2 &vec2In) { return FloatPoint2(DirectX::XMVector2Cross(vec1In, vec2In)); } // order does mater AxB = -(BxA)
-    inline FloatPoint3 __vectorcall Cross(const FloatPoint3 &vec1In, const FloatPoint3 &vec2In) { return FloatPoint3(DirectX::XMVector3Cross(vec1In, vec2In)); }
-    inline FloatPoint4 __vectorcall Cross(const FloatPoint4 &vec1In, const FloatPoint4 &vec2In, const FloatPoint4 &vec3In) { return FloatPoint4(DirectX::XMVector4Cross(vec1In, vec2In, vec3In)); }
+    inline FloatPoint2 __vectorcall Cross(const FloatPoint2& vec1In, const FloatPoint2& vec2In) { return FloatPoint2(DirectX::XMVector2Cross(vec1In, vec2In)); } // order does mater AxB = -(BxA)
+    inline FloatPoint3 __vectorcall Cross(const FloatPoint3& vec1In, const FloatPoint3& vec2In) { return FloatPoint3(DirectX::XMVector3Cross(vec1In, vec2In)); }
+    inline FloatPoint4 __vectorcall Cross(const FloatPoint4& vec1In, const FloatPoint4& vec2In, const FloatPoint4& vec3In) { return FloatPoint4(DirectX::XMVector4Cross(vec1In, vec2In, vec3In)); }
 
+    inline FloatPoint2 __vectorcall Normalize(const FloatPoint2& vec1In) { return FloatPoint2(DirectX::XMVector2Normalize(vec1In)); }
+    inline FloatPoint3 __vectorcall Normalize(const FloatPoint3& vec1In) { return FloatPoint3(DirectX::XMVector3Normalize(vec1In)); }
+    inline FloatPoint4 __vectorcall Normalize(const FloatPoint4& vec1In) { return FloatPoint4(DirectX::XMVector4Normalize(vec1In)); }
     /******************************************************************************
     *   Streams
     ******************************************************************************/
-    std::ostream& operator<< (std::ostream &os, const UIntPoint2 &in);
-    std::ostream& operator<< (std::ostream &os, const IntPoint2 &in);
-    std::ostream& operator<< (std::ostream &os, const IntPoint3 &in);
-    std::ostream& operator<< (std::ostream &os, const FloatPoint2 &in);
-    std::ostream& operator<< (std::ostream &os, const FloatPoint3 &in);
-    std::ostream& operator<< (std::ostream &os, const FloatPoint4 &in);
+    std::ostream& operator<< (std::ostream& os, const UIntPoint2& in);
+    std::ostream& operator<< (std::ostream& os, const IntPoint2& in);
+    std::ostream& operator<< (std::ostream& os, const IntPoint3& in);
+    std::ostream& operator<< (std::ostream& os, const FloatPoint2& in);
+    std::ostream& operator<< (std::ostream& os, const FloatPoint3& in);
+    std::ostream& operator<< (std::ostream& os, const FloatPoint4& in);
 
-    std::wostream& operator<< (std::wostream &os, const UIntPoint2 &in);
-    std::wostream& operator<< (std::wostream &os, const IntPoint2 &in);
-    std::wostream& operator<< (std::wostream &os, const IntPoint3 &in);
-    std::wostream& operator<< (std::wostream &os, const FloatPoint2 &in);
-    std::wostream& operator<< (std::wostream &os, const FloatPoint3 &in);
-    std::wostream& operator<< (std::wostream &os, const FloatPoint4 &in);
+    std::wostream& operator<< (std::wostream& os, const UIntPoint2& in);
+    std::wostream& operator<< (std::wostream& os, const IntPoint2& in);
+    std::wostream& operator<< (std::wostream& os, const IntPoint3& in);
+    std::wostream& operator<< (std::wostream& os, const FloatPoint2& in);
+    std::wostream& operator<< (std::wostream& os, const FloatPoint3& in);
+    std::wostream& operator<< (std::wostream& os, const FloatPoint4& in);
 
-    std::istream& operator>> (std::istream &is, King::UIntPoint2 &in);
-    std::istream& operator>> (std::istream &is, King::IntPoint2 &in);
-    std::istream& operator>> (std::istream &is, King::FloatPoint2 &in);
-    std::istream& operator>> (std::istream &is, King::FloatPoint3 &in);
-    std::istream& operator>> (std::istream &is, King::FloatPoint4 &in);
+    std::istream& operator>> (std::istream& is, King::UIntPoint2& in);
+    std::istream& operator>> (std::istream& is, King::IntPoint2& in);
+    std::istream& operator>> (std::istream& is, King::FloatPoint2& in);
+    std::istream& operator>> (std::istream& is, King::FloatPoint3& in);
+    std::istream& operator>> (std::istream& is, King::FloatPoint4& in);
 
-    std::wistream& operator>> (std::wistream &is, King::UIntPoint2 &in);
-    std::wistream& operator>> (std::wistream &is, King::IntPoint2 &in);
-    std::wistream& operator>> (std::wistream &is, King::FloatPoint2 &in);
-    std::wistream& operator>> (std::wistream &is, King::FloatPoint3 &in);
-    std::wistream& operator>> (std::wistream &is, King::FloatPoint4 &in);
+    std::wistream& operator>> (std::wistream& is, King::UIntPoint2& in);
+    std::wistream& operator>> (std::wistream& is, King::IntPoint2& in);
+    std::wistream& operator>> (std::wistream& is, King::FloatPoint2& in);
+    std::wistream& operator>> (std::wistream& is, King::FloatPoint3& in);
+    std::wistream& operator>> (std::wistream& is, King::FloatPoint4& in);
 
     /******************************************************************************
     *   json
@@ -892,7 +895,7 @@ namespace King {
     void to_json(json& j, const FloatPoint2& from);
     void to_json(json& j, const FloatPoint3& from);
     void to_json(json& j, const FloatPoint4& from);
-    void to_json(json& j, const Quaternion & from);
+    void to_json(json& j, const Quaternion& from);
 
     void from_json(const json& j, UIntPoint2& to);
     void from_json(const json& j, IntPoint2& to);
@@ -900,6 +903,5 @@ namespace King {
     void from_json(const json& j, FloatPoint2& to);
     void from_json(const json& j, FloatPoint3& to);
     void from_json(const json& j, FloatPoint4& to);
-    void from_json(const json& j, Quaternion & to);
+    void from_json(const json& j, Quaternion& to);
 }
-
