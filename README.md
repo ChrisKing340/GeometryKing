@@ -1,14 +1,11 @@
 # GeometryKing
-C++ Classes for 2D and 3D geometry 
+2D and 3D geometry fundamentals and advanced modeling.  C++ generic Classes with no rendering dependentcies.
 
-Generic code base inteded for 64 Bit Windows 10 and SIMD support from DirectXMath.  Compiled with Visual Studio 2017.
+GeometryKing contains the base SIMD data types class wrappers to seamlessly accelerate your code using the popular DirectXMath library (not dependent on DirectX). From this base, GeometryKing defines geometry types, classes and methods that make the basis of 2D and 3D games, simulators, and engineering applications.  
+
+Compiled with Visual Studio 2019, inteded for 64 Bit Windows 10 but may work just fine on 32 Bit Windows 10 or lesser machine.
+
+This code is a small part of a fully functional DirectX 12 game engine and physics simulator of mine. Typical usage is load, store, manipulate, and interact with geometry constructs and models.  My game engine, not included here, uses DirectX12 to define graphics render classes that inherit from GeometryKing model class, for example, to add methods that copy data into the DirectX 12 GPU buffers ready for rendering, among other functionality.  I hope you enjoy this work which is free to you and covered under the MIT license.
 
 For the latest version of DirectXMath, visit:
 <https://github.com/Microsoft/DirectXMath>
-
-GeometryKing contains the base SIMD data types class wrappers to seamlessly accelerate your code. From this base, GeometryKing defines geometry types and methods that make the basis of 2D and 3D games, simulators, and engineering applications.  
-
-This is a public release of my code and a chance for me to give back to the community that has given so much to my learning.  The code is a small part of a fully functional DirectX 12 game engine and physics simulator of mine.  The classes here are not dependent on any graphics API and intended to be generic without rendering dependencies.  My graphics render classes inherit from my model class, for example, to add that functionality.
-
-I hope you enjoy this work which is free to you and covered under the MIT license for your distribution and use, including in commercial work.  If you do, a citation in the credits would be appreciated but not required :).  Enjoy!
-
