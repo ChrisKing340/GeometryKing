@@ -126,7 +126,7 @@ namespace King {
         Triangle2DF(Triangle2DF &&in) { *this = std::move(in); } // move, involk operator=(&&in)
         Triangle2DF(const FloatPoint2 &pt1In, const FloatPoint2 &pt2In, const FloatPoint2 &pt3In) { Set(pt1In,pt2In,pt3In); }
         // Construction Initializer
-        Triangle2DF(std::initializer_list<FloatPoint3> il) { assert(il.size() < 4); size_t count = 0; for (auto & each : il) { pt[count] = each; ++count; } }
+        Triangle2DF(std::initializer_list<FloatPoint2> il) { assert(il.size() < 4); size_t count = 0; for (auto & each : il) { pt[count] = each; ++count; } }
 
         virtual ~Triangle2DF() = default;
         // Operators 
