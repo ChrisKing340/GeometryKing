@@ -1,5 +1,5 @@
 # GeometryKing
-2D and 3D geometry fundamentals and advanced modeling.  C++ generic Classes with no rendering dependentcies.
+2D and 3D geometry fundamentals and advanced modeling.  C++ generic Classes with no rendering dependencies.
 
 GeometryKing contains the base SIMD data types class wrappers to seamlessly accelerate your code using the popular DirectXMath library (not dependent on DirectX). From this base, GeometryKing defines geometry types, classes and methods that make the basis of 2D and 3D games, simulators, and engineering applications.  
 
