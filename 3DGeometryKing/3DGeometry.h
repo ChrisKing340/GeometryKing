@@ -435,12 +435,10 @@ namespace King {
         static std::unique_ptr<Point>    CreateUnique() { return std::make_unique<Point>(); }
         // Construction/Destruction
         Point() = default;
-        Point(const float &magIn, const FloatPoint3 &dirIn) : Position(magIn,dirIn) { ; }
-        explicit Point(const UnitOfMeasure::Length &l, const FloatPoint3 &dirIn) : Position(l, dirIn) { ; }
+        Point(const FloatPoint3 &locationIn) : Position(locationIn) { ; }
         explicit inline Point(const Distance &distanceIn) : Position(distanceIn) { ; }
         explicit inline Point(const DirectX::XMVECTOR &vIn) : Position(vIn) { ; }
         explicit inline Point(const DirectX::XMVECTORF32 &vIn) : Position(vIn) { ; }
-        inline Point(const FloatPoint3 &ptIn) : Position(ptIn) { ; }
         explicit inline Point(const FloatPoint4 &ptIn) : Position(ptIn) { ; }
         explicit inline Point(const Point &in) { *this = in; } // forward to copy assignment
         explicit inline Point(Point &&in) noexcept { *this = std::move(in); } // forward to move assignment
@@ -448,21 +446,20 @@ namespace King {
         virtual ~Point() = default;
 
         // Conversions
-        inline explicit operator float() const { return _magnitude; }
-        inline explicit operator UnitOfMeasure::Length() const { return _magnitude; }
-        inline explicit operator DirectX::XMVECTOR() const { return GetFloatPoint3().GetVecConst(); }
-        inline explicit operator DirectX::XMVECTOR() { return GetFloatPoint3().GetVec(); }
-        inline operator FloatPoint3() const { return GetFloatPoint3(); } // allow implicit for a default behavior
-        inline explicit operator FloatPoint4() const { return FloatPoint4(GetFloatPoint3(), 1.0f); }
+        inline explicit operator float() const { return King::FloatPoint3::Magnitude(_position); }
+        inline explicit operator UnitOfMeasure::Length() const { return UnitOfMeasure::Length(King::FloatPoint3::Magnitude(_position)); }
+        inline explicit operator DirectX::XMVECTOR() const { return _position.GetVecConst(); }
+        inline operator FloatPoint3() const { return _position; } // allow implicit for a default behavior
+        inline explicit operator FloatPoint4() const { return FloatPoint4(_position, 1.0f); }
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<Point*>(p)); }
         //inline Point & operator= (const XMVECTOR &in) { Position::operator=(in); return *this; } // copy assignment
         //inline Point & operator= (const XMVECTORF32 &in) { Position::operator=(in); return *this; } // copy assignment
-        //inline Point & operator= (const FloatPoint3 &in) { Position::operator=(in); return *this; } // copy assignment
-        //inline Point & operator= (const FloatPoint4 &in) { Position::operator=(in); return *this; } // copy assignment
+        inline Point & operator= (const FloatPoint3 &in) { Position::operator=(in); return *this; } // copy assignment
+        inline Point & operator= (const FloatPoint4 &in) { Position::operator=(in); return *this; } // copy assignment
         inline Point & operator= (const Point &in) { Position::operator=(in); return *this; } // copy assignment
-        inline Point & operator= (Point &&in) { *this = std::move(in); return *this; } // move assignment
+        inline Point & operator= (Point &&in) { Position::operator=(std::move(in)); return *this; } // move assignment
 
         inline Point operator- (const Point &rhs) const { Point ptOut(static_cast<FloatPoint3>(*this) - static_cast<FloatPoint3>(rhs)); return ptOut; }
         inline Point operator+ (const Point &rhs) const { Point ptOut(static_cast<FloatPoint3>(*this) + static_cast<FloatPoint3>(rhs)); return ptOut; }
@@ -632,7 +629,7 @@ namespace King {
         void   operator delete (void *p) { _aligned_free(static_cast<Path*>(p)); }
         inline Path & operator= (const Path &in) = default; // copy assignment
         inline Path & operator= (Path &&in) = default; // move assignment
-        inline Path & operator*= (const DirectX::XMMATRIX &m) { for(Point & pt : *this) pt.Set( DirectX::XMVector4Transform(pt.GetFloatPoint3().GetVecConst(), m) ); return *this; }
+        inline Path & operator*= (const DirectX::XMMATRIX &m) { for(Point & pt : *this) pt.Set( DirectX::XMVector4Transform(pt.GetVecConst(), m) ); return *this; }
         friend Path operator* (Path lhs, const DirectX::XMMATRIX &m) { lhs *= m; return lhs; } // invokes std::move(lhs)
 
         // Functionality

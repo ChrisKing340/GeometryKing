@@ -652,7 +652,7 @@ FloatPoint3 __vectorcall King::Box::FindNearestPointOnBox(const FloatPoint3 & pt
     return npOnBox;
 }
 inline bool King::Box::Collision(Ray const & rayIn) const { float distOut; return Intersects(rayIn, distOut); }
-inline bool King::Box::Collision(Point const & pointIn) const { return DirectX::XMVector3InBounds(pointIn.GetFloatPoint3() - GetCenter(), GetExtents()); }
+inline bool King::Box::Collision(Point const & pointIn) const { return DirectX::XMVector3InBounds((XMVECTOR)pointIn - GetCenter(), GetExtents()); }
 inline bool King::Box::Collision(Line const & lineIn) const { return Intersects(lineIn); }
 inline bool King::Box::Collision(Sphere const & sphereIn) const { return Intersects(sphereIn); }
 inline bool King::Box::Collision(Box const & boxIn) const { return Intersects(boxIn); }
