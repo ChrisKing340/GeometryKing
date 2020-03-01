@@ -13,13 +13,9 @@ For the latest version of DirectXMath, visit:
 For the latest version of json visit:
 <https://github.com/nlohmann/json>
 
-Name Space:
-  King
+Math foundation
 
-Classes:
-
-// Math foundation
-#include "MathSIMD\MathSIMD.h"
+    #include "MathSIMD\MathSIMD.h"
     // unique data types built on Single Instruction Multiple Data, SIMD, DirectXMath library of intrinsics for speed and simple implementation
     class UIntPoint2; // not accelerated
     class IntPoint2; // not accelerated
@@ -35,19 +31,22 @@ Classes:
     typedef FloatPoint2     float2;
     typedef FloatPoint3     float3;
     typedef FloatPoint4     float4;
-    typedef Quaternion      quat;
-    
-// General utilities
-#include "General\MemoryBlock.h"
+    typedef Quaternion      quat; 
+
+General utilities    
+
+    #include "General\MemoryBlock.h"
     class MemoryBlock
-#include "General\TextFileParse.h"
+    #include "General\TextFileParse.h"
     class TextFileParse
     
-// Physics
-#include "Physics\UnitOfMeasure.h"
+Physics
+
 Foundation classes to represent a unit of measure with a scalar.  The classes just keeps one value with internal storage as a SI unit of measure.  String literals implemented to allow definition with the unit of measure desired.  Operator overloading to act as a base type and also supports streams and json from/to;
 Ex: Length(10_m)
 Ex: Length(10_ft)
+
+    #include "Physics\UnitOfMeasure.h"
     namespace UnitOfMeasure;
     class Mass; // scalar
     class Length; // scalar
@@ -63,33 +62,34 @@ Ex: Length(10_ft)
     const Accel gravity;
     const Speed speedOfSoundInAir;
     
-#include "Physics\Force.h"
+    #include "Physics\Force.h"
     class Force ; // keeps a UnitOfMeasure::Strength and a unit direction vector
     
-#include "Physics\Acceleration.h"
+    #include "Physics\Acceleration.h"
     class Acceleration ; // keeps a UnitOfMeasure::Accel and a unit direction vector
     // operator for Acceleration = Force / Mass
     
-#include "Physics\Velocity.h"
+    #include "Physics\Velocity.h"
     class Velocity ; // keeps a UnitOfMeasure::Speed and a unit direction vector
     // operator for Velocity = Acceleration * Time
     
-#include "Physics\Distance.h"
+    #include "Physics\Distance.h"
     class Distance ; // keeps a UnitOfMeasure::Length and a unit direction vector
     // operator for Distance = Velocity * Time
 
-#include "Physics\Position.h"
+    #include "Physics\Position.h"
     class Position ; // keeps 3 floats for x,y,z and operators for arithmetic with Distance
     
-// Geometry
-#include "2DGeometryKing\2DGeometry.h"
+Geometry
+
+    #include "2DGeometryKing\2DGeometry.h"
     class Line2DF; // SIMD
     class Triangle2DF; // SIMD
     class Rectangle2DF; // SIMD
     class Rectangle2D; // not accelerated, replaces Windows RECT class thourgh conversions
     class Circle2DF; // SIMD
-    
-#include "3DGeometryKing\3DGeometry.h"
+
+    #include "3DGeometryKing\3DGeometry.h"
     class Collidable; // pure virtual to create policy of which basic geometry interacts with each other
     class Pose; // SIMD scale, rotation, and translation
     class Point; // SIMD individual point float[4] with w=1 to allow for matrix multiplication to translate
