@@ -9,3 +9,6 @@ This code is a small part of a fully functional DirectX 12 game engine and physi
 
 For the latest version of DirectXMath, visit:
 <https://github.com/Microsoft/DirectXMath>
+
+For the latest version of json visit:
+<https://github.com/nlohmann/json>
