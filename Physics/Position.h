@@ -69,16 +69,14 @@ namespace King {
         /* variables */
     public:
     protected:
-        UnitOfMeasure::Length               _magnitude; // absolute, >= 0
-        float3                              _unit_direction;
+        float3                              _position;
     private:
         /* methods */
     public:
         // Creation/Life cycle
         static std::shared_ptr<Position> Create() { return std::make_shared<Position>(); }
-        Position() : _magnitude(0), _unit_direction(0.f, 0.f, 0.f) { ; }
-        Position(const float &magIn, const FloatPoint3 &dirIn) { _magnitude = abs(magIn); _unit_direction = FloatPoint3::Normal(dirIn); if (_magnitude != magIn) { _unit_direction = -_unit_direction; }; }
-        explicit Position(const UnitOfMeasure::Length &l, const FloatPoint3 &dirIn) { _magnitude = abs(l); _unit_direction = FloatPoint3::Normal(dirIn); if (_magnitude != l) { _unit_direction = -_unit_direction; }; }
+        Position() : _position(0.f, 0.f, 0.f) { ; }
+        Position(const FloatPoint3 &posIn) { _position = FloatPoint3::Normal(posIn); }
         explicit inline Position(const DirectX::XMVECTOR &vIn) { Set(FloatPoint3(vIn)); }
         explicit inline Position(const DirectX::XMVECTORF32 &vIn) { Set(FloatPoint3(vIn)); }
         explicit inline Position(const FloatPoint3 &vectorIn) { Set(vectorIn); }
@@ -142,15 +140,10 @@ namespace King {
         // Init/Start/Stop/Destroy
         // Functionality
         // Accessors
-        const auto &                        Get_magnitude() const { return _magnitude; }
-        const auto &                        Get_unit_direction() const { return _unit_direction; }
-        const FloatPoint3                   GetFloatPoint3() const { return _unit_direction * _magnitude; }
-        FloatPoint3                         GetFloatPoint3() { return _unit_direction * _magnitude; }
-        DirectX::XMVECTOR                   GetVec() { return (_unit_direction * _magnitude).GetVec(); }
-        DirectX::XMVECTOR                   GetVecConst() const { return (_unit_direction * _magnitude).GetVecConst(); }
+        const auto &                        Get_position() const { return _position; }
+        DirectX::XMVECTOR                   GetVec() { return _position.GetVec(); }
+        DirectX::XMVECTOR                   GetVecConst() const { return _position.GetVecConst(); }
         // Assignments
-        void __vectorcall                   Set(const float3 & positionIn) { _magnitude = float3::Magnitude(positionIn); _unit_direction = float3::Normal(positionIn); }
-        void                                Set_magnitude(const float &_magnitude_IN) { _magnitude = _magnitude_IN; }
-        void __vectorcall                   Set_unit_direction(const float3 &_unit_direction_IN) { _unit_direction = _unit_direction_IN; }
+        void __vectorcall                   Set(const float3 & positionIn) { _position = positionIn; }
     };
 }
