@@ -1,7 +1,7 @@
 # GeometryKing
 Generic game engine foundation.  All the basics of 2D and 3D geometry and model IO.  C++ generic Classes with no rendering dependencies.
 
-GeometryKing contains the base SIMD data types class wrappers to seamlessly accelerate your code using the popular DirectXMath library (not dependent on DirectX). From this base, GeometryKing defines geometry types, classes and methods that make the basis of 2D and 3D games, simulators, and engineering applications.  
+GeometryKing contains the base SIMD data types class wrappers to seamlessly accelerate your code using the popular DirectXMath library (not dependent on DirectX). From this base, GeometryKing defines geometry types, classes and methods that make the basis of 2D and 3D games, simulators, and engineering applications.  Start with class SkinnedModel to dive into the high level functionality of the library.
 
 Compiled with Visual Studio 2019, C++17, 64 Bit Windows 10
 
@@ -40,7 +40,7 @@ General utilities
     #include "General\TextFileParse.h"
     class TextFileParse
     
-Physics
+Physics foundation
 
 Foundation classes to represent a unit of measure with a scalar.  The classes just keeps one value with internal storage as a SI unit of measure.  String literals implemented to allow definition with the unit of measure desired.  Operator overloading to act as a base type and also supports streams and json from/to;
 Ex: Length(10_m)
@@ -80,7 +80,7 @@ Ex: Length(10_ft)
     #include "Physics\Position.h"
     class Position ; // keeps 3 floats for x,y,z and operators for arithmetic with Distance
     
-Geometry
+Geometry foundation
 
     #include "2DGeometryKing\2DGeometry.h"
     class Line2DF; // SIMD
@@ -103,6 +103,10 @@ Geometry
     class Box;  // SIMD two points
     class Fustrum; // SIMD six planes and eight points
     
+Geometry
+
+Complex models require more than just simple geometry shapes.  Multible meshes of triangles with different properties for the face and possible each verticies must be stored, read, manipulated for more complex shapes and actions to occur.  Also, for efficiency, indexed buffers allow for removal of duplicate data.  In our system, Models own the data and all others reference into it.  Our MemoryBlock buffers are therefore allocated in Model and then passed by pointer to other objects.  We also allow for wire frame by building line meshes and not just triangle meshes.  SkinnedModel is our high level object class for use in your engine.
+
     // 3D Complex objects, working with vertex buffer references:
     class LineIndexed; // int[2] into a vertex buffer
     class TriangleIndexed; // int[3] into a vertex buffer
