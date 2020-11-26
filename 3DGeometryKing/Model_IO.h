@@ -182,7 +182,7 @@ namespace King {
 			string map_specular				= "map_Ks";
 			string map_specular_strength	= "map_Ns"; // specular highlight component
 			string map_transparency			= "map_d";
-			string map_normal				= "map_Kn";
+			string map_normal				= "map_Bump";
 			string map_displacement			= "map_disp";
 			string map_stencil				= "map_decal";
 			string map_reflection			= "map_refl";
@@ -240,16 +240,16 @@ namespace King {
 		// Functionality
 		void												Destroy() { ; }
 
-		std::vector<shared_ptr<King::Model>>				Load_OBJ(const std::wstring fileNameIN, const VertexFormat *vertexFormatIn = nullptr);
-		bool												Save_OBJ(const std::wstring fileNameIN, const std::vector<shared_ptr<King::Model>> &modelsIN);
+		std::vector<shared_ptr<King::Model>>				Load_OBJ(const std::string fileNameIN, const VertexFormat *vertexFormatIn = nullptr);
+		bool												Save_OBJ(const std::string fileNameIN, const std::vector<shared_ptr<King::Model>> &modelsIN);
 
 		// From the book 
-		//std::vector<shared_ptr<King::SkinnedModel>>		Load_M3D(const std::wstring fileNameIN, const VertexFormat *vertexFormatIn = nullptr);
-		//bool												Save_M3D(const std::wstring fileNameIN, shared_ptr<King::SkinnedModel>& modelIn, std::map<std::string, std::shared_ptr<Material>>& materialsIN);
+		//std::vector<shared_ptr<King::SkinnedModel>>		Load_M3D(const std::string fileNameIN, const VertexFormat *vertexFormatIn = nullptr);
+		//bool												Save_M3D(const std::string fileNameIN, shared_ptr<King::SkinnedModel>& modelIn, std::map<std::string, std::shared_ptr<Material>>& materialsIN);
 
-		std::map<std::string, std::shared_ptr<Material>>	Load_MTL(const std::wstring fileNameIN);
-		bool												Save_MTL(const std::wstring fileNameIN, const std::vector<shared_ptr<King::Model>> &modelsIN);
-		bool 												Save_MTL(const std::wstring fileNameIN, std::map<std::string, std::shared_ptr<Material>> &materialsIN);
+		std::map<std::string, std::shared_ptr<Material>>	Load_MTL(const std::string fileNameIN);
+		bool												Save_MTL(const std::string fileNameIN, const std::vector<shared_ptr<King::Model>> &modelsIN);
+		bool 												Save_MTL(const std::string fileNameIN, std::map<std::string, std::shared_ptr<Material>> &materialsIN);
 		bool												Save_MTL(std::ofstream & of, std::map<std::string, std::shared_ptr<Material>>& materialsIN);
 		// Accessors
 		// Assignments

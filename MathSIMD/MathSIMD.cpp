@@ -13,6 +13,15 @@ std::ostream& King::operator<< (std::ostream& os, const King::FloatPoint2& in) {
 std::ostream& King::operator<< (std::ostream& os, const King::FloatPoint3& in) { return os << "{ " << "x: " << setw(9) << in.f[0] << " y: " << setw(9) << in.f[1] << " z: " << setw(9) << in.f[2] << " }"; }
 std::ostream& King::operator<< (std::ostream& os, const King::FloatPoint4& in) { return os << "{ " << "x: " << setw(9) << in.f[0] << " y: " << setw(9) << in.f[1] << " z: " << setw(9) << in.f[2] << " w: " << setw(9) << in.f[3] << " }"; }
 
+std::ostream& King::operator<<(std::ostream& os, const DirectX::XMMATRIX& in)
+{
+    os << "{{ " << "x1: " << setw(9) << float4(in.r[0]).f[0] << " y1: " << setw(9) << float4(in.r[0]).f[1] << " z1: " << setw(9) << float4(in.r[0]).f[2] << " w1: " << setw(9) << float4(in.r[0]).f[3] << " }\n";
+    os << " { " << "x2: " << setw(9) << float4(in.r[1]).f[0] << " y2: " << setw(9) << float4(in.r[1]).f[1] << " z2: " << setw(9) << float4(in.r[1]).f[2] << " w2: " << setw(9) << float4(in.r[1]).f[3] << " }\n";
+    os << " { " << "x3: " << setw(9) << float4(in.r[2]).f[0] << " y3: " << setw(9) << float4(in.r[2]).f[1] << " z3: " << setw(9) << float4(in.r[2]).f[2] << " w3: " << setw(9) << float4(in.r[2]).f[3] << " }\n";
+    os << " { " << "x4: " << setw(9) << float4(in.r[3]).f[0] << " y4: " << setw(9) << float4(in.r[3]).f[1] << " z4: " << setw(9) << float4(in.r[3]).f[2] << " w4: " << setw(9) << float4(in.r[3]).f[3] << " }}\n";
+    return os;
+}
+
 std::wostream& King::operator<< (std::wostream& os, const King::UIntPoint2& in) { return os << L"{ " << L"x: " << in.GetX() << L" y: " << in.GetY() << L" }"; }
 std::wostream& King::operator<< (std::wostream& os, const King::IntPoint2& in) { return os << L"{ " << L"x: " << in.GetX() << L" y: " << in.GetY() << L" }"; }
 std::wostream& King::operator<< (std::wostream& os, const King::IntPoint3& in) { return os << L"{ " << L"x: " << in.GetX() << L" y: " << in.GetY() << L" z: " << in.GetZ() << L" }"; }
@@ -62,22 +71,23 @@ inline King::IntPoint3::IntPoint3(const FloatPoint3& in)
     i[2] = static_cast<int>(f.z);
 }
 
+inline King::FloatPoint2::FloatPoint2(FloatPoint3 vecIn)
+{
+    v = vecIn;
+    DirectX::XMVectorSetZ(v, 0.f);
+    DirectX::XMVectorSetW(v, 0.f);
+}
+
 inline King::FloatPoint3::FloatPoint3(FloatPoint4 vecIn)
 {
-    v = DirectX::XMVectorSelect(DirectX::g_XMOne.v, vecIn, DirectX::g_XMSelect1110.v);
+    v = vecIn;
+    DirectX::XMVectorSetW(v, 0.f);
 }
 
 // Store the Euler angles in radians, credit to:
 // http://www.gamedev.net/topic/597324-quaternion-to-euler-angles-and-back-why-is-the-rotation-changing/
 DirectX::XMFLOAT3 King::Quaternion::GetEulerAngles() const
 {
-    // early exit test since many rotations in our engine will be zero
-    float3 zero(DirectX::XMVectorZero());
-    if (DirectX::XMVector3Equal(v, zero))
-    {
-        return zero;
-    }
-
     DirectX::XMFLOAT3 pitchYawRoll; // output
 
     float4 sqVec = DirectX::XMVectorMultiply(v, v);
@@ -156,14 +166,18 @@ void King::Quaternion::SetAxisAngle(const float3& vector, const float& angleRadi
 
 void King::Quaternion::Set(const float3 vFrom, const float3 vTo)
 {
-    float3 ave = vFrom + vTo;
+    float3 ave = (vFrom + vTo)/2.f;
     bool success = (float3::Magnitude(ave) > 1.192092896e-7f); // minimum float value
     if (success)
     {
         ave.MakeNormalize();
         *this = vFrom * ave;
-        v = float3::Normal(float3::CrossProduct(vFrom, ave));
-        SetW(-float3::DotProduct(vFrom, ave).GetX()); // not sure about the - sign
+        v = float3::Normal(float3::CrossProduct(vFrom, vTo));
+        SetAxis(v);
+        // Angle
+        auto a = float3::Magnitude(vFrom);
+        auto b = float3::Magnitude(vTo);
+        SetW(sqrt((a*a) * (b*b)) + float3::DotProduct(vFrom, vTo).GetX());
     }
     else
     {
@@ -176,4 +190,33 @@ void King::Quaternion::Set(const float3 vFrom, const float3 vTo)
             SetW(0.f); // 180 degree.
         }
     }
+
+    /*
+    * Quaternion q;
+vector a = crossproduct(v1, v2);
+q.xyz = a;
+q.w = sqrt((v1.Length ^ 2) * (v2.Length ^ 2)) + dotproduct(v1, v2);
+    * 
+            var dot = vec3.dot(a, b);
+        if (dot < -0.999999) {
+            vec3.cross(tmpvec3, xUnitVec3, a);
+            if (vec3.length(tmpvec3) < 0.000001)
+                vec3.cross(tmpvec3, yUnitVec3, a);
+            vec3.normalize(tmpvec3, tmpvec3);
+            quat.setAxisAngle(out, tmpvec3, Math.PI);
+        } else if (dot > 0.999999) {
+            out[0] = 0;
+            out[1] = 0;
+            out[2] = 0;
+            out[3] = 1;
+        } else {
+            vec3.cross(tmpvec3, a, b);
+            out[0] = tmpvec3[0];
+            out[1] = tmpvec3[1];
+            out[2] = tmpvec3[2];
+            out[3] = 1 + dot;
+            return quat.normalize(out, out);
+        }
+    };
+    */
 }

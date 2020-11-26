@@ -1,10 +1,19 @@
 /*******************************************************************
  TextFileParse - tokenizes a text file and stores the tokens
+    (c) Christopher H. King 1997
+
+    Update 2020 - removed #include <strstream> now depreciated
+        with #include <sstream> in move to c++17.  This changed
+        how it gives internal memory versus a copy.  So changed
+        WordParse() as well. Also removed fileName as wstring
+        since I normally only ever use string and always hack
+        in a conversion to wstring to call TexFilePase.  Those hacks
+        now can be removed (breaking change).
 *******************************************************************/
 #pragma once
 
 #include <string>
-#include <sstream>// #include <strstream>
+#include <sstream>
 #include <fstream>
 #include <iomanip>
 
@@ -17,7 +26,7 @@ class TextFileParse
 {
 	/* variables */
 protected:
-	std::wstring				nameOfFile;
+	std::string				    nameOfFile;
 	int							wordCount		= 0; // words[wordCount]
 	int							currentWord		= 0; // index into words[]
 	std::string					commentDes		= "//"; // igorne text on lines after this string found
@@ -25,21 +34,22 @@ protected:
 	std::string					groupStartDes	= "{";
 	std::string					groupStopDes	= "}";
 private:
-	std::ostringstream			storage; // keeps the file contents in memory until WordParse() is performed which then clears it
-	char**						words			= nullptr; // pointer array filled when WordParse() is complete
+	std::ostringstream			storage;// just for loading, discarded in WordParse()
+    std::unique_ptr<char[]>     textBuffer;
+	char**						words			= nullptr; // pointer array into ptextBuffer for each word
 	int							findPosition	= 0; // word token instance to start searching from
 	/* methods */
 public:
 	// life cycle
 	TextFileParse() = default;
-	TextFileParse(std::wstring fileName ) : TextFileParse() { Load( fileName ); }
-	~TextFileParse() { if (words) delete [] words; storage.clear(); }
+	TextFileParse(std::string fileName ) : TextFileParse() { Load( fileName ); }
+	~TextFileParse() { if (words) delete [] words; }
 	// operators
 	explicit operator bool() const { if (words == nullptr) return false; else return true; }
 	bool operator !() const { return !words || !wordCount; }
 	inline std::string operator[] (int indexIn) const { return Word(indexIn); } // accessor
 	// functionality
-	bool						Load(std::wstring fileName );
+	bool						Load(std::string fileName );
 
 	int							Next() { if(currentWord<wordCount-1) currentWord++; return currentWord;}
 	int							Back() { if(currentWord>0) currentWord--; return currentWord;}
@@ -51,9 +61,9 @@ public:
 	// access or assign
 	int							WordIndex(int indexSet = -1) { if (indexSet > -1) currentWord = indexSet; if (currentWord > wordCount - 1) currentWord= wordCount - 1; return currentWord; }
 	// access
-	const std::wstring &		GetFileName() const { return nameOfFile; }
+	const std::string &		    GetFileName() const { return nameOfFile; }
 	const int &					GetWordCount() const { return wordCount; }
-	std::string 				Word(int index = -1) const { if (index < 0) index = currentWord; if (index > wordCount - 1) index = wordCount - 1; if (words) return words[index]; else return ""; }
+    std::string 				Word(int index = -1) const;
 	std::wstring 				WordW(int index = -1) { if (index < 0) index = currentWord; return HelperStringToWString(words[index]); }
 	std::string 				NextWord() { if (currentWord < wordCount - 1) currentWord++; if (words) return words[currentWord]; else return ""; }
 	std::wstring				NextWordW() { if (currentWord < wordCount - 1) currentWord++; if (words) return HelperStringToWString(words[currentWord]); else return L""; }

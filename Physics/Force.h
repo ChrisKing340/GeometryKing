@@ -41,9 +41,13 @@ SOFTWARE.
 #include <vector>
 #include <memory>
 #include <string>
+#include <iomanip>
 // King namespace
 #include "..\MathSIMD\MathSIMD.h"
 #include "..\Physics\UnitOfMeasure.h"
+// 3rdPart namespace
+#include "..\3rdParty\json.hpp"
+using json = nlohmann::json;
 
 /******************************************************************************
 *    Physic Basics
@@ -55,7 +59,6 @@ SOFTWARE.
 ******************************************************************************/
 
 namespace King {
-
     /******************************************************************************
     *    Force
     ******************************************************************************/
@@ -75,30 +78,38 @@ namespace King {
         explicit Force(const UnitOfMeasure::Strength s) : _magnitude(abs(s)) { if (_magnitude != s) { _unit_direction = -_unit_direction; }; }
         explicit Force(const float &magIn, const float3 &dirIn) { _magnitude = abs(magIn); _unit_direction = float3::Normal(dirIn); if (_magnitude != magIn) { _unit_direction = -_unit_direction; }; }
         explicit Force(const UnitOfMeasure::Strength &s, const float3 &dirIn) { _magnitude = abs(s); _unit_direction = float3::Normal(dirIn); if (_magnitude != s) { _unit_direction = -_unit_direction; }; }
-        Force(const float3 &vectorIn) { _magnitude = float3::Magnitude(vectorIn); _unit_direction = float3::Normal(vectorIn); }
+        Force(const float3 &vectorIn) { SetVector(vectorIn); }
         Force(const std::vector<Force> & forcesIn) { float3 vec; for (const auto & e : forcesIn) vec += float3(e); *this = Force(vec); }
         Force(const Force &in) { *this = in; } // forward to copy assignment
-        Force(Force &&in) { *this = std::move(in); } // forward to move assignment
+        Force(Force &&in) noexcept { *this = std::move(in); } // forward to move assignment
 
         virtual ~Force() { ; }
 
         // Conversions
         inline explicit operator float() const { return _magnitude; }
         inline explicit operator UnitOfMeasure::Strength() const { return _magnitude; }
-        inline explicit operator float3() const { return GetVector(); }
+        inline operator float3() const { return GetVector(); }
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<Force*>(p)); }
         inline Force & operator= (const Force &other) { _magnitude = other._magnitude; _unit_direction = other._unit_direction; return *this; } // copy assign
-        inline Force & operator= (Force &&other) { std::swap(_magnitude, other._magnitude); std::swap(_unit_direction, other._unit_direction); return *this; } // move assign
+        inline Force & operator= (Force &&other) noexcept { std::swap(_magnitude, other._magnitude); std::swap(_unit_direction, other._unit_direction); return *this; } // move assign
         explicit operator bool() const { return (bool)_magnitude && (bool)_unit_direction; } // valid
         bool operator !() const { return !(bool)_magnitude || !(bool)_unit_direction; } // invalid
         // Math Operators
         inline Force operator- () const { return Force(-_unit_direction); }
+        inline Force operator+ (const float& in) const { return Force(_magnitude+in, _unit_direction); }
+        inline Force operator- (const float& in) const { return Force(_magnitude-in, _unit_direction); }
+        inline Force operator* (const float& in) const { return Force(_magnitude*in, _unit_direction); }
+        inline Force operator/ (const float& in) const { return Force(_magnitude/in, _unit_direction); }
         inline Force operator+ (const Force & in) const { return Force(GetVector() + in.GetVector()); }
         inline Force operator- (const Force & in) const { return Force(GetVector() - in.GetVector()); }
         inline Force operator* (const Force & in) const { return Force(GetVector() * in.GetVector()); }
         inline Force operator/ (const Force & in) const { return Force(GetVector() / in.GetVector()); }
+        inline Force& operator+= (const float& in) { *this = *this + in; return *this; }
+        inline Force& operator-= (const float& in) { *this = *this - in; return *this; }
+        inline Force& operator*= (const float& in) { *this = *this * in; return *this; }
+        inline Force& operator/= (const float& in) { *this = *this / in; return *this; }
         inline Force & operator+= (const Force & in) { *this = *this + in; return *this; } 
         inline Force & operator-= (const Force & in) { *this = *this - in; return *this; }
         inline Force & operator*= (const Force & in) { *this = *this * in; return *this; }
@@ -107,13 +118,32 @@ namespace King {
         // Functionality
         // Accessors
         const auto &                        Get_magnitude() const { return _magnitude; }
+        auto &                              Get_magnitude() { return _magnitude; }
         const auto &                        Get_unit_direction() const { return _unit_direction; }
+        auto &                              Get_unit_direction() { return _unit_direction; }
         const float3                        GetVector() const { return _unit_direction * _magnitude; }
         float                               GetValueEN() const { return UnitOfMeasure::Ntolbf * _magnitude; }
         float                               GetValueSI() const { return UnitOfMeasure::N * _magnitude; }
         // Assignments
         // Note: set unit direction before magnitude in case sign of magnitude is switched
+        void __vectorcall                   SetVector(const float3& vecotrIN) { _magnitude = float3::Magnitude(vecotrIN); _unit_direction = float3::Normal(vecotrIN); }
         void                                Set_magnitude(const float &_magnitude_IN) { _magnitude = abs(_magnitude_IN); if (_magnitude != _magnitude_IN) { _unit_direction = -_unit_direction; }; }
         void __vectorcall                   Set_unit_direction(const float3 &_unit_direction_IN) { _unit_direction = float3::Normal(_unit_direction_IN); }
+    
+        // Input & Output functions that can have access to protected & private data
+        friend std::ostream& operator<< (std::ostream& os, const Force& in);
+        friend std::istream& operator>> (std::istream& is, Force& out);
+        friend std::wostream& operator<< (std::wostream& os, const Force& in);
+        friend std::wistream& operator>> (std::wistream& is, Force& out);
+        friend void to_json(json& j, const Force& from);
+        friend void from_json(const json& j, Force& to);
     };
+    // Input & Output Function forward declarations
+    std::ostream& operator<< (std::ostream& os, const Force& in);
+    std::istream& operator>> (std::istream& is, Force& out);
+    std::wostream& operator<< (std::wostream& os, const Force& in);
+    std::wistream& operator>> (std::wistream& is, Force& out);
+    void to_json(json& j, const Force& from);
+    void from_json(const json& j, Force& to);
 }
+

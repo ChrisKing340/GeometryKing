@@ -14,12 +14,13 @@ Description:    Multiple data set variable types defined to simply code for
                 code is used to provide the intrinsics.  Note that this math
                 library does not require DirectX and is render system independent.
 
-Usage:          Use the typedef keywords in your applications as a generic
+Usage:          Header only implementation.
+                Use the typedef keywords in your applications as a generic
                 use of the library.  I personally do not like the term vector
                 for the multi-data variables, nor do I like it in std::vector,
                 as vectors are magnitude and direction.  Shader model has it
                 right with float3, etc. and I type define my internals to that
-                throughout my code.
+                throughout my code. Use of tepydef let you change it to your liking.
 
                 This code is intended to be complied for 64 bit operating systems.
 
@@ -65,10 +66,11 @@ SOFTWARE.
 #endif
 
 #define KING_MATH_VERSION_MAJOR 2
-#define KING_MATH_VERSION_MINOR 1
+#define KING_MATH_VERSION_MINOR 2
 #define KING_MATH_VERSION_PATCH 0
 
-#include "..\3rdParty\json.hpp"
+#include "..\..\json\single_include\nlohmann\json.hpp"
+//#include "..\3rdParty\json.hpp"
 using json = nlohmann::json;
 
 #include <windows.h>
@@ -76,24 +78,27 @@ using json = nlohmann::json;
 #include <vector>
 #include <DirectXMath.h>
 #include <emmintrin.h> 
-#include <functional>
+//#include <functional>
 #include <ostream>
 #include <istream>
 #include <iomanip>
 #include <sal.h>
 
 namespace King {
-    // unique data types built on Single Instruction Multiple Data, SIMD, DirectXMath library of intrinsics for speed and simple implementation
+    // Our data types defined:
+    //      Unique data types built on Single Instruction Multiple Data, SIMD, DirectXMath library of intrinsics 
+    //      for speed and simple implementation
     class UIntPoint2; // not accelerated
     class IntPoint2; // not accelerated
     class IntPoint3; // not accelerated
     class FloatPoint2; // SIMD
     class FloatPoint3; // SIMD
     class FloatPoint4; // SIMD
-    class Quaternion; // SIMD
+    class Quaternion; // SIMD // not so simple, but necessary for accurate rotations over large time periods
 
-    // type defines to use in our generic code base and easily change out when moving to different libraries
-    // for example, commonly used Vector3 could be used below.  I prefer the below similar to HLSL.
+
+    // Use of tepydef let you change it to your liking.  If you intend to use my King game engine, my King physics, 
+    // or my Geometry King code then do not change these feel free to add your own typedef
     typedef UIntPoint2      uint2;
     typedef IntPoint2       int2;
     typedef IntPoint3       int3;
@@ -104,6 +109,8 @@ namespace King {
 
     /******************************************************************************
     *   UIntPoint2
+    *       Original class not adapted to DirectX intrinsics for acceleration
+    *       to keep two unsigned ints and treat as one data type
     ******************************************************************************/
     class alignas(16) UIntPoint2
     {
@@ -198,19 +205,21 @@ namespace King {
         inline const unsigned long              GetX() const { return (unsigned long)u[0]; }
         inline const unsigned long              GetY() const { return (unsigned long)u[1]; }
         // Functionality
-        inline void                             Min(const UIntPoint2& in) { u[0] = u[0] < in.u[0] ? u[0] : in.u[1]; u[1] = u[1] < in.u[1] ? u[1] : in.u[1]; }
-        inline void                             Max(const UIntPoint2& in) { u[0] = u[0] > in.u[0] ? u[0] : in.u[1]; u[1] = u[1] > in.u[1] ? u[1] : in.u[1]; }
+        inline void                             Min(const UIntPoint2& in) { u[0] = u[0] < in.u[0] ? u[0] : in.u[0]; u[1] = u[1] < in.u[1] ? u[1] : in.u[1]; }
+        inline void                             Max(const UIntPoint2& in) { u[0] = u[0] > in.u[0] ? u[0] : in.u[0]; u[1] = u[1] > in.u[1] ? u[1] : in.u[1]; }
         //Statics
         static const float                      Magnitude(const UIntPoint2& pIn) { return (float)std::sqrt(pIn.u[0] * pIn.u[0] + pIn.u[1] * pIn.u[1]); }
     };
     /******************************************************************************
     *   IntPoint2
+    *       Original class not adapted to DirectX intrinsics for acceleration
+    *       to keep two signed ints and treat as one data type
     ******************************************************************************/
     class alignas(16) IntPoint2
     {
         /* variables */
     public:
-        int         i[2] = { 0, 0 };
+        signed int          i[2] = { 0, 0 };
     protected:
 
     private:
@@ -315,12 +324,14 @@ namespace King {
     };
     /******************************************************************************
     *   IntPoint3
+    *       Original class not adapted to DirectX intrinsics for acceleration
+    *       to keep three signed ints and treat as one data type
     ******************************************************************************/
     class alignas(16) IntPoint3
     {
         /* variables */
     public:
-        int         i[3] = { 0, 0, 0 };
+        signed int      i[3] = { 0, 0, 0 };
     protected:
 
     private:
@@ -422,6 +433,7 @@ namespace King {
     };
     /******************************************************************************
     *   FloatPoint2
+    *       Converted to use DirectX intrinsics
     ******************************************************************************/
     class alignas(16) FloatPoint2 : public DirectX::XMVECTORF32
     {
@@ -445,11 +457,12 @@ namespace King {
         inline FloatPoint2(const long x, const long y) { Set(x, y); }
         inline FloatPoint2(const unsigned long x, unsigned const long y) { Set(x, y); }
         inline FloatPoint2(const FloatPoint2 & in) { v = in.v; } // copy
+        inline FloatPoint2(FloatPoint3 vecIn);
         inline FloatPoint2(const DirectX::XMFLOAT2 & in) { Set(in); }
         inline FloatPoint2(const DirectX::XMINT2 & in) { Set(in); }
         inline FloatPoint2(const IntPoint2 & in) { Set(in.Get_XMFLOAT2()); }
         inline FloatPoint2(const UIntPoint2 & in) { Set(in.Get_XMFLOAT2()); }
-        inline FloatPoint2(FloatPoint2 && in) { v = std::move(in.v); } // move
+        inline FloatPoint2(FloatPoint2 && in) noexcept { v = std::move(in.v); } // move
         inline FloatPoint2(const DirectX::XMVECTOR & vecIn) { v = vecIn; }
         inline FloatPoint2(const DirectX::XMVECTORF32 & vecIn) { v = vecIn.v; }
         inline FloatPoint2(uint8_t * bytesIn) { auto fp = reinterpret_cast<DirectX::XMFLOAT2*>(bytesIn); v = DirectX::XMLoadFloat2(fp); }
@@ -488,13 +501,15 @@ namespace King {
         inline DirectX::XMVECTOR& operator-= (float s) { return v = DirectX::XMVectorSubtract(v, FloatPoint2(s)); }
         inline DirectX::XMVECTOR& operator*= (float s) { return v = DirectX::XMVectorScale(v, s); }
         inline DirectX::XMVECTOR& operator/= (float s) { return v = DirectX::XMVectorDivide(v, FloatPoint2(s)); }
+        inline FloatPoint2 operator* (const DirectX::XMMATRIX& m) { return DirectX::XMVector2TransformNormal(v, m); } // without translation
+        inline FloatPoint2 operator*= (const DirectX::XMMATRIX& m) { v = DirectX::XMVector2TransformNormal(v, m); return *this; } // without translation
         // Comparators
-        inline bool operator<  (const FloatPoint2 & rhs) { return DirectX::XMVector2Less(v, rhs); }
-        inline bool operator<= (const FloatPoint2 & rhs) { return DirectX::XMVector2LessOrEqual(v, rhs); }
-        inline bool operator>  (const FloatPoint2 & rhs) { return DirectX::XMVector2Greater(v, rhs); }
-        inline bool operator>= (const FloatPoint2 & rhs) { return DirectX::XMVector2GreaterOrEqual(v, rhs); }
-        inline bool operator== (const FloatPoint2 & rhs) { return DirectX::XMVector2Equal(v, rhs); }
-        inline bool operator!= (const FloatPoint2 & rhs) { return DirectX::XMVector2NotEqual(v, rhs); }
+        inline bool operator<  (const FloatPoint2 & rhs) const { return DirectX::XMVector2Less(v, rhs); }
+        inline bool operator<= (const FloatPoint2 & rhs) const { return DirectX::XMVector2LessOrEqual(v, rhs); }
+        inline bool operator>  (const FloatPoint2 & rhs) const { return DirectX::XMVector2Greater(v, rhs); }
+        inline bool operator>= (const FloatPoint2 & rhs) const { return DirectX::XMVector2GreaterOrEqual(v, rhs); }
+        inline bool operator== (const FloatPoint2 & rhs) const { return DirectX::XMVector2Equal(v, rhs); }
+        inline bool operator!= (const FloatPoint2 & rhs) const { return DirectX::XMVector2NotEqual(v, rhs); }
         // Accessors
         float* GetPtr() { return reinterpret_cast<float*>(this); } // returns a float
         inline const DirectX::XMFLOAT2          Get_XMFLOAT2() const { DirectX::XMFLOAT2 rtn; DirectX::XMStoreFloat2(&rtn, v); return rtn; }
@@ -505,7 +520,9 @@ namespace King {
         inline const float                      GetY() const { return (float)DirectX::XMVectorGetY(v); }
         inline DirectX::XMVECTOR& GetVec() { return v; } // modifiable type
         inline const DirectX::XMVECTOR& GetVecConst() const { return v; } // constant type
+        float virtual                           GetMagnitude() { return DirectX::XMVectorGetX(DirectX::XMVector2Length(v)); }
         // Assignments
+        inline void __vectorcall                Set(DirectX::XMVECTOR in) { v = in; }
         inline void                             SetZero(void) { v = DirectX::XMVectorZero(); }
         void                                    SetX(const float x) { v = DirectX::XMVectorSetX(v, x); }
         void                                    SetY(const float y) { v = DirectX::XMVectorSetY(v, y); }
@@ -535,6 +552,7 @@ namespace King {
     };
     /******************************************************************************
     *   FloatPoint3
+    *       Converted to use DirectX intrinsics
     ******************************************************************************/
     class alignas(16) FloatPoint3 : public FloatPoint2
     {
@@ -570,6 +588,7 @@ namespace King {
         inline FloatPoint3& operator= (const DirectX::XMVECTOR & vecIn) { v = vecIn; return *this; }
         inline FloatPoint3& operator= (FloatPoint3 && in) = default; // move assignment
         // Conversions
+        inline operator FloatPoint2() const { return FloatPoint2(v); }
         inline operator DirectX::XMFLOAT3() const { return Get_XMFLOAT3(); }
         inline operator DirectX::XMFLOAT3A() const { return Get_XMFLOAT3A(); }
         // Math Operators
@@ -590,6 +609,8 @@ namespace King {
         inline FloatPoint3& operator-= (const DirectX::XMVECTOR & vecIn) { v = DirectX::XMVectorSubtract(v, vecIn); return *this; }
         inline FloatPoint3& operator*= (const DirectX::XMVECTOR & vecIn) { v = DirectX::XMVectorMultiply(v, vecIn); return *this; }
         inline FloatPoint3& operator/= (const DirectX::XMVECTOR & vecIn) { v = DirectX::XMVectorDivide(v, vecIn); return *this; }
+        inline FloatPoint3 operator* (const DirectX::XMMATRIX& m) { return DirectX::XMVector3TransformNormal(v, m); } // without translation
+        inline FloatPoint3& operator*= (const DirectX::XMMATRIX& m) { v = DirectX::XMVector3TransformNormal(v, m); return *this; } // without translation
         inline FloatPoint3 operator+ (float s) const { DirectX::XMVECTOR sv = _mm_set_ps1(s); return FloatPoint3(DirectX::XMVectorAdd(v, sv)); }
         inline FloatPoint3 operator- (float s) const { DirectX::XMVECTOR sv = _mm_set_ps1(s); return FloatPoint3(DirectX::XMVectorSubtract(v, sv)); }
         inline FloatPoint3 operator* (float s) const { return FloatPoint3(DirectX::XMVectorScale(v, s)); }
@@ -598,19 +619,18 @@ namespace King {
         inline DirectX::XMVECTOR& operator-= (float s) { DirectX::XMVECTOR sv = _mm_set_ps1(s); return v = DirectX::XMVectorSubtract(v, sv); }
         inline DirectX::XMVECTOR& operator*= (float s) { return v = DirectX::XMVectorScale(v, s); }
         inline DirectX::XMVECTOR& operator/= (float s) { DirectX::XMVECTOR sv = _mm_set_ps1(s); return v = DirectX::XMVectorDivide(v, sv); }
-        inline DirectX::XMVECTOR operator* (const DirectX::XMMATRIX & m) { return DirectX::XMVector3Transform(v, m); }
-        inline DirectX::XMVECTOR& operator*= (const DirectX::XMMATRIX & m) { return v = DirectX::XMVector3Transform(v, m); }
         // Comparators
-        inline bool operator<  (const FloatPoint3 & rhs) { return DirectX::XMVector3Less(v, rhs.GetVecConst()); }
-        inline bool operator<= (const FloatPoint3 & rhs) { return DirectX::XMVector3LessOrEqual(v, rhs.GetVecConst()); }
-        inline bool operator>  (const FloatPoint3 & rhs) { return DirectX::XMVector3Greater(v, rhs.GetVecConst()); }
-        inline bool operator>= (const FloatPoint3 & rhs) { return DirectX::XMVector3GreaterOrEqual(v, rhs.GetVecConst()); }
-        inline bool operator== (const FloatPoint3 & rhs) { return DirectX::XMVector3Equal(v, rhs.GetVecConst()); }
-        inline bool operator!= (const FloatPoint3 & rhs) { return DirectX::XMVector3NotEqual(v, rhs.GetVecConst()); }
+        inline bool operator<  (const FloatPoint3 & rhs) const { return DirectX::XMVector3Less(v, rhs.GetVecConst()); }
+        inline bool operator<= (const FloatPoint3 & rhs) const { return DirectX::XMVector3LessOrEqual(v, rhs.GetVecConst()); }
+        inline bool operator>  (const FloatPoint3 & rhs) const { return DirectX::XMVector3Greater(v, rhs.GetVecConst()); }
+        inline bool operator>= (const FloatPoint3 & rhs) const { return DirectX::XMVector3GreaterOrEqual(v, rhs.GetVecConst()); }
+        inline bool operator== (const FloatPoint3 & rhs) const { return DirectX::XMVector3Equal(v, rhs.GetVecConst()); }
+        inline bool operator!= (const FloatPoint3 & rhs) const { return DirectX::XMVector3NotEqual(v, rhs.GetVecConst()); }
         // Accessors
         inline const DirectX::XMFLOAT3          Get_XMFLOAT3() const { DirectX::XMFLOAT3 rtn; DirectX::XMStoreFloat3(&rtn, v); return rtn; }
         inline const DirectX::XMFLOAT3A         Get_XMFLOAT3A() const { DirectX::XMFLOAT3A rtn; DirectX::XMStoreFloat3A(&rtn, v); return rtn; }
         inline const float                      GetZ() const { return (float)DirectX::XMVectorGetZ(v); }
+        float virtual                           GetMagnitude() { return DirectX::XMVectorGetX(DirectX::XMVector3Length(v)); }
         // Assignments
         inline void                             SetZ(const float z) { v = DirectX::XMVectorSetZ(v, z); }
 
@@ -626,20 +646,21 @@ namespace King {
         inline void                             Set(const DirectX::XMINT3 & point) { v = DirectX::XMLoadSInt3(&point); v = DirectX::XMConvertVectorIntToFloat(v, 0); }
         // Functionality
         inline virtual void                     MakeNormalize() { v = DirectX::XMVector3Normalize(v); }
-        float __vectorcall                      DotProduct(const FloatPoint3 & vecIn) { return (float)DirectX::XMVectorGetX(DirectX::XMVector3Dot(v, vecIn)); } // order does not mater A•B = B•A
-        FloatPoint3 __vectorcall                CrossProduct(const FloatPoint3 & vecIn) { return DirectX::XMVector3Cross(v, vecIn); } // order does matter AxB = -(BxA)
+        float __vectorcall                      DotProduct(const FloatPoint3 & vecIn) const { return (float)DirectX::XMVectorGetX(DirectX::XMVector3Dot(v, vecIn)); } // order does not mater A•B = B•A
+        FloatPoint3 __vectorcall                CrossProduct(const FloatPoint3 & vecIn) const { return FloatPoint3(DirectX::XMVector3Cross(v, vecIn)); } // order does matter AxB = -(BxA)
         // Statics
         static FloatPoint3 __vectorcall         Absolute(const FloatPoint3 & point3In) { return FloatPoint3(DirectX::XMVectorAbs(point3In.GetVecConst())); }
         static FloatPoint3 __vectorcall         Normal(const FloatPoint3 & point3In) { return FloatPoint3(DirectX::XMVector3Normalize(point3In.GetVecConst())); }
         static const float __vectorcall         Magnitude(const FloatPoint3 & point3In) { return DirectX::XMVectorGetX(DirectX::XMVector3Length(point3In.GetVecConst())); }
         static FloatPoint3 __vectorcall         DotProduct(const FloatPoint3 & vec1In, const FloatPoint3 & vec2In) { return DirectX::XMVector3Dot(vec1In, vec2In); } // order does not mater A•B = B•A
-        static FloatPoint3 __vectorcall         CrossProduct(const FloatPoint3 & vec1In, const FloatPoint3 & vec2In) { return DirectX::XMVector3Cross(vec1In, vec2In); } // order does mater AxB = -(BxA)
+        static FloatPoint3 __vectorcall         CrossProduct(const FloatPoint3 & vec1In, const FloatPoint3 & vec2In) { return FloatPoint3( DirectX::XMVector3Cross(vec1In, vec2In)); } // order does mater AxB = -(BxA)
         static float __vectorcall               SumComponents(const FloatPoint3 & vec1In) { return DirectX::XMVectorGetX(DirectX::XMVectorSum(vec1In)); }
         static FloatPoint3 __vectorcall         MultiplyAdd(const FloatPoint3 & vec1MulIn, const FloatPoint3 & vec2MulIn, const FloatPoint3 & vec3AddIn) { return DirectX::XMVectorMultiplyAdd(vec1MulIn, vec2MulIn, vec3AddIn); }
         static FloatPoint3                      Average(const std::vector<FloatPoint3> & arrayIn) { assert(arrayIn.size()); FloatPoint3 ave; for (const auto& each : arrayIn) ave += each; ave /= (float)arrayIn.size(); return ave; }
     };
     /******************************************************************************
     *   FloatPoint4
+    *       Converted to use DirectX intrinsics
     ******************************************************************************/
     class alignas(16) FloatPoint4 : public FloatPoint3
     {
@@ -657,6 +678,7 @@ namespace King {
         static std::unique_ptr<FloatPoint4> CreateUnique() { return std::make_unique<FloatPoint4>(); }
         inline FloatPoint4() = default;// { SetZero(); }
         inline FloatPoint4(float xyzw) { Set(xyzw); }
+        inline FloatPoint4(FloatPoint2 in, float z, float w) { Set(in.GetX(), in.GetY(), z, w); }
         inline FloatPoint4(FloatPoint3 in, float w) { Set(in, w); }
         inline FloatPoint4(float x, float y, float z, float w) { Set(x, y, z, w); }
         inline FloatPoint4(const FloatPoint4 & in) { v = in.v; } // copy
@@ -673,6 +695,10 @@ namespace King {
         inline FloatPoint4& operator= (const DirectX::XMVECTOR & vecIn) { v = vecIn; return *this; }
         inline FloatPoint4& operator= (FloatPoint4 && in) = default; // move assignment
         // Conversions
+        inline operator FloatPoint2() const { return FloatPoint2(v); }
+        inline operator FloatPoint3() const { return FloatPoint3(v); }
+        inline operator DirectX::XMFLOAT2() const { return Get_XMFLOAT2(); }
+        inline operator DirectX::XMFLOAT3() const { return Get_XMFLOAT3(); }
         inline operator DirectX::XMFLOAT4() const { return Get_XMFLOAT4(); }
         inline operator DirectX::XMFLOAT4A() const { return Get_XMFLOAT4A(); }
         // Math Operators
@@ -701,19 +727,20 @@ namespace King {
         inline DirectX::XMVECTOR& operator-= (float s) { return v = DirectX::XMVectorSubtract(v, DirectX::XMVectorReplicate(s)); }
         inline DirectX::XMVECTOR& operator*= (float s) { return v = DirectX::XMVectorScale(v, s); }
         inline DirectX::XMVECTOR& operator/= (float s) { return v = DirectX::XMVectorDivide(v, DirectX::XMVectorReplicate(s)); }
-        inline FloatPoint4 operator* (const DirectX::XMMATRIX & m) { return FloatPoint4(DirectX::XMVector3Transform(v, m)); }
-        inline DirectX::XMVECTOR& operator*=  (const DirectX::XMMATRIX & m) { return v = DirectX::XMVector3Transform(v, m); }
+        inline FloatPoint4 operator* (const DirectX::XMMATRIX & m) { return FloatPoint4(DirectX::XMVector4Transform(v, m)); }
+        inline DirectX::XMVECTOR& operator*=  (const DirectX::XMMATRIX & m) { return v = DirectX::XMVector4Transform(v, m); }
         // Comparators
-        inline bool operator<  (const FloatPoint4 & rhs) { return DirectX::XMVector4Less(v, rhs.GetVecConst()); }
-        inline bool operator<= (const FloatPoint4 & rhs) { return DirectX::XMVector4LessOrEqual(v, rhs.GetVecConst()); }
-        inline bool operator>  (const FloatPoint4 & rhs) { return DirectX::XMVector4Greater(v, rhs.GetVecConst()); }
-        inline bool operator>= (const FloatPoint4 & rhs) { return DirectX::XMVector4GreaterOrEqual(v, rhs.GetVecConst()); }
-        inline bool operator== (const FloatPoint4 & rhs) { return DirectX::XMVector4Equal(v, rhs.GetVecConst()); }
-        inline bool operator!= (const FloatPoint4 & rhs) { return DirectX::XMVector4NotEqual(v, rhs.GetVecConst()); }
+        inline bool operator<  (const FloatPoint4 & rhs) const { return DirectX::XMVector4Less(v, rhs.GetVecConst()); }
+        inline bool operator<= (const FloatPoint4 & rhs) const { return DirectX::XMVector4LessOrEqual(v, rhs.GetVecConst()); }
+        inline bool operator>  (const FloatPoint4 & rhs) const { return DirectX::XMVector4Greater(v, rhs.GetVecConst()); }
+        inline bool operator>= (const FloatPoint4 & rhs) const { return DirectX::XMVector4GreaterOrEqual(v, rhs.GetVecConst()); }
+        inline bool operator== (const FloatPoint4 & rhs) const { return DirectX::XMVector4Equal(v, rhs.GetVecConst()); }
+        inline bool operator!= (const FloatPoint4 & rhs) const { return DirectX::XMVector4NotEqual(v, rhs.GetVecConst()); }
         // Accessors
         inline const DirectX::XMFLOAT4          Get_XMFLOAT4() const { DirectX::XMFLOAT4 rtn; DirectX::XMStoreFloat4(&rtn, v); return rtn; }
         inline const DirectX::XMFLOAT4A         Get_XMFLOAT4A() const { DirectX::XMFLOAT4A rtn; DirectX::XMStoreFloat4A(&rtn, v); return rtn; }
         inline const float                      GetW() const { return (float)DirectX::XMVectorGetW(v); }
+        float virtual                           GetMagnitude() { return DirectX::XMVectorGetX(DirectX::XMVector4Length(v)); }
         // Assignments
         inline virtual void                     SetW(const float w) { v = DirectX::XMVectorSetW(v, w); }
 
@@ -753,13 +780,20 @@ namespace King {
     *       2wy=0
     *       2wz=0
     *   geometrically, they are then out of phase by 90 degrees (pi/2 radians)
-    *   w = cos(angle/2)
-    *   x = i * sin(angle/2)
-    *   y = j * sin(angle/2)
-    *   z = k * sin(angle/2)
+    *   encode the float4 with:
+    *       w = cos(angle/2)
+    *       x = i * sin(angle/2)
+    *       y = j * sin(angle/2)
+    *       z = k * sin(angle/2)
     *   where angle is in radians
     *   where i, j, and k are the directions of the unit vector defining the axis
+    *   then, the product Q2*Q1 (a rotation Q1 followed by the rotation Q2)
+    *   w = Q2.w * Q1.w - Q2.x * Q1.x - Q2.y * Q1.y - Q2.z * Q1.z
+    *   x = Q2.w * Q1.x + Q2.x * Q1.w + Q2.y * Q1.z - Q2.z * Q1.y
+    *   y = Q2.w * Q1.y - Q2.x * Q1.z + Q2.y * Q1.w + Q2.z * Q1.x
+    *   z = Q2.w * Q1.z + Q2.x * Q1.y - Q2.y * Q1.x + Q2.z * Q1.w
     *   https://en.wikipedia.org/wiki/Quaternion
+    *       Converted to use DirectX intrinsics
     ******************************************************************************/
     class alignas(16) Quaternion : public FloatPoint4
     {
@@ -801,6 +835,7 @@ namespace King {
         operator float() = delete;
         inline operator DirectX::XMMATRIX() const { return DirectX::XMMatrixRotationQuaternion(v); }
         // Functionality
+        inline virtual void MakeNormalize() { v = DirectX::XMQuaternionNormalize(v); }
         inline Quaternion   Inverse() const { return Quaternion(DirectX::XMQuaternionInverse(v)); }
         DirectX::XMFLOAT3   GetEulerAngles() const;
         DirectX::XMFLOAT3   CalculateAngularVelocity(const Quaternion previousRotation, float deltaTime) const;
@@ -808,7 +843,8 @@ namespace King {
         // Accessors
         inline float3       GetAxis() const { float3 xyz = v; xyz.MakeNormalize(); return xyz; } // since v.xyz = N * sin(angle / 2), we can just re-normalized to retrieve the axis
         inline float        GetAngle() const { auto a = 2.0f * DirectX::XMScalarACos(GetW()); return a; } // radians; if w = 0, angle = pi, w = 1, angle = 0
-        // Assignments
+        inline DirectX::XMMATRIX GetRotationMatrix() const { return DirectX::XMMatrixRotationQuaternion(v); }
+                                                                                                          // Assignments
         void                SetAxisAngle(const float3 & vector, const float& angleRadians);
         inline void         SetAxis(const float3 vector) { SetAxisAngle(vector, GetAngle()); }
         inline void         SetAngle(const float angleRadians) { SetAxisAngle(GetAxis(), angleRadians); }
@@ -828,6 +864,41 @@ namespace King {
     *   Math functions
     *       Easy duplication
     ******************************************************************************/
+    inline float Random()
+    {
+        // Random number in range [-1,1]
+        float r = (float)rand();
+        r /= RAND_MAX;
+        r = 2.0f * r - 1.0f;
+        return r;
+    }
+    inline float Random(float lo, float hi)
+    {
+        float r = (float)rand();
+        r /= RAND_MAX;
+        r = (hi - lo) * r + lo;
+        return r;
+    }
+    inline float2 __vectorcall Random(const float2 min, const float2 max)
+    {
+        float2 res = float2(Random(min.GetX(), max.GetX()),
+            Random(min.GetY(), max.GetY()));
+        return res;
+    }
+    inline float3 __vectorcall Random(const float3 min, const float3 max)
+    {
+        float3 res = float3(Random(min.GetX(), max.GetX()),
+            Random(min.GetY(), max.GetY()),
+            Random(min.GetZ(), max.GetZ()));
+        return res;
+    }
+    inline float Clamp(float v, float min, float max)
+    {
+        float res = v;
+        res = v > max ? max : v;
+        res = v < min ? min : v;
+        return res;
+    };
 #define MAKE_SIMD_FUNCS( Type ) \
     inline Type __vectorcall Sqrt( Type s ) { return Type(XMVectorSqrt(s)); } \
     inline Type __vectorcall Recip( Type s ) { return Type(XMVectorReciprocal(s)); } \
@@ -838,8 +909,8 @@ namespace King {
     inline Type __vectorcall Abs( Type s ) { return Type(XMVectorAbs(s)); } \
     inline Type __vectorcall Exp( Type s ) { return Type(XMVectorExp(s)); } \
     inline Type __vectorcall Pow( Type b, Type e ) { return Type(XMVectorPow(b, e)); } \
-    inline Type __vectorcall Max( Type a, Type b ) { return Type(XMVectorMax(a, b)); } \
-    inline Type __vectorcall Min( Type a, Type b ) { return Type(XMVectorMin(a, b)); } \
+    inline Type __vectorcall Max( const Type &a, const Type &b ) { return Type(XMVectorMax(a, b)); } \
+    inline Type __vectorcall Min( const Type &a, const Type &b ) { return Type(XMVectorMin(a, b)); } \
     inline Type __vectorcall Clamp( Type v, Type a, Type b ) { return XMVectorClamp(v, a, b); } \
     inline Type __vectorcall Lerp( Type a, Type b, Type t ) { return Type(XMVectorLerpV(a, b, t)); }
 
@@ -858,6 +929,18 @@ namespace King {
     inline FloatPoint2 __vectorcall Normalize(const FloatPoint2& vec1In) { return FloatPoint2(DirectX::XMVector2Normalize(vec1In)); }
     inline FloatPoint3 __vectorcall Normalize(const FloatPoint3& vec1In) { return FloatPoint3(DirectX::XMVector3Normalize(vec1In)); }
     inline FloatPoint4 __vectorcall Normalize(const FloatPoint4& vec1In) { return FloatPoint4(DirectX::XMVector4Normalize(vec1In)); }
+
+    inline UIntPoint2 Min(const UIntPoint2& a, const UIntPoint2& b) { return UIntPoint2((a.u[0] < b.u[0]) ? a.u[0] : b.u[0], (a.u[1] < b.u[1]) ? a.u[1] : b.u[1]); }
+    inline UIntPoint2 Max(const UIntPoint2& a, const UIntPoint2& b) { return UIntPoint2((a.u[0] > b.u[0]) ? a.u[0] : b.u[0], (a.u[1] > b.u[1]) ? a.u[1] : b.u[1]); }
+    inline UIntPoint2 Clamp(const UIntPoint2& c, const UIntPoint2& min, const UIntPoint2& max) { return Max(Min(c, min), max); }
+
+    inline IntPoint2 Min(const IntPoint2& a, const IntPoint2& b) { return IntPoint2((a.i[0] < b.i[0]) ? a.i[0] : b.i[0], (a.i[1] < b.i[1]) ? a.i[1] : b.i[1]); }
+    inline IntPoint2 Max(const IntPoint2& a, const IntPoint2& b) { return IntPoint2((a.i[0] > b.i[0]) ? a.i[0] : b.i[0], (a.i[1] > b.i[1]) ? a.i[1] : b.i[1]); }
+    inline IntPoint2 Clamp(const IntPoint2& c, const IntPoint2& min, const IntPoint2& max) { return Max(Min(c, min), max); }
+
+    inline IntPoint3 Min(const IntPoint3& a, const IntPoint3& b) { return IntPoint3((a.i[0] < b.i[0]) ? a.i[0] : b.i[0], (a.i[1] < b.i[1]) ? a.i[1] : b.i[1], (a.i[2] < b.i[2]) ? a.i[2] : b.i[2]); }
+    inline IntPoint3 Max(const IntPoint3& a, const IntPoint3& b) { return IntPoint3((a.i[0] > b.i[0]) ? a.i[0] : b.i[0], (a.i[1] > b.i[1]) ? a.i[1] : b.i[1], (a.i[2] > b.i[2]) ? a.i[2] : b.i[2]); }
+    inline IntPoint3 Clamp(const IntPoint3& c, const IntPoint3& min, const IntPoint3& max) { return Max(Min(c, min), max); }
     /******************************************************************************
     *   Streams
     ******************************************************************************/
@@ -867,6 +950,7 @@ namespace King {
     std::ostream& operator<< (std::ostream& os, const FloatPoint2& in);
     std::ostream& operator<< (std::ostream& os, const FloatPoint3& in);
     std::ostream& operator<< (std::ostream& os, const FloatPoint4& in);
+    std::ostream& operator<< (std::ostream& os, const DirectX::XMMATRIX& in);
 
     std::wostream& operator<< (std::wostream& os, const UIntPoint2& in);
     std::wostream& operator<< (std::wostream& os, const IntPoint2& in);

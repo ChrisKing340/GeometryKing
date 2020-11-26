@@ -57,6 +57,10 @@ SOFTWARE.
 
 #include "..\MathSIMD\MathSIMD.h"
 
+#include "..\..\json\single_include\nlohmann\json.hpp"
+//#include "..\3rdParty\json.hpp"
+using json = nlohmann::json;
+
 namespace King {
     // 2D objects
     class Line2DF; // SIMD
@@ -233,6 +237,8 @@ namespace King {
         inline bool                         Intersects(const float &xIn, const float &yIn) const;
         inline bool                         Intersects(const Circle2DF & circleIn) const;
 
+        inline void                         ClipTo(const Rectangle2DF& rectIn);
+
         inline FloatPoint2                  FindNearestPoint(const FloatPoint2 &pt2In) const;
         // Accessors
         inline FloatPoint2                  GetSize() const { FloatPoint2 a(rb - lt); a.MakeAbsolute(); return a; } // width & height
@@ -293,7 +299,7 @@ namespace King {
 
         Rectangle2D() = default;
         Rectangle2D(const Rectangle2D &in) { *this = in; } // copy, involk operator=(&int)
-        Rectangle2D(Rectangle2D &&in) { *this = std::move(in); } // move, involk operator=(&&in)
+        Rectangle2D(Rectangle2D &&in) noexcept { *this = std::move(in); } // move, involk operator=(&&in)
         Rectangle2D(const RECT &rIn) { Set(rIn); } // copy
         Rectangle2D(const IntPoint2 &ptIn) : lt(0l, 0l), rb(ptIn) { ; }
         Rectangle2D(const IntPoint2 &ltIn, const IntPoint2 &rbIn) : lt(ltIn), rb(rbIn) { ; }
@@ -335,12 +341,16 @@ namespace King {
         inline void                         MoveTo(const IntPoint2 &pt2In) { auto wh = GetSize(); lt = pt2In; rb = lt + wh; }
         inline bool                         MoveTo(const long &xIn, const long &yIn) { MoveTo(IntPoint2(xIn, yIn)); }
 
-        inline void __vectorcall            Grow(const FloatPoint2 &scale3In) { auto s = scale3In * GetSize(); SetWH(s); }
+        inline void __vectorcall            Grow(const FloatPoint2 scale3In) { auto s = scale3In * GetSize(); SetWH(s); }
 
         inline bool                         Intersects(const Rectangle2D &rectIn) const { return (rectIn.lt.GetX() < rb.GetX()) && (lt.GetX() < rectIn.rb.GetX()) && (rectIn.lt.GetY() < rb.GetY()) && (lt.GetY() < rectIn.rb.GetY()); }
         inline bool                         Intersects(const RECT &rectIn) const { return (rectIn.left < rb.GetX()) && (lt.GetX() < rectIn.right) && (rectIn.top < rb.GetY()) && (lt.GetY() < rectIn.bottom); }
         inline bool                         Contains(const IntPoint2 pt2In) const { return (lt.GetX() <= pt2In.GetX()) && (pt2In.GetX() < rb.GetX()) && (lt.GetY() <= pt2In.GetY()) && (pt2In.GetY() < rb.GetY()); }
         inline bool                         Contains(const long &xIn, const long &yIn) const { return (lt.GetX() <= xIn) && (xIn < rb.GetX()) && (lt.GetY() <= yIn) && (yIn < rb.GetY()); }
+        
+        inline void                         ClipTo(const Rectangle2D& rectIn) { SetLT(Max(GetLT(), rectIn.GetLT())); SetRB(Min(GetRB(), rectIn.GetRB()));}
+
+        inline IntPoint2                    FindNearestPoint(const IntPoint2& pt2In) const;
         // Accessors
         inline IntPoint2                    GetSize() const { IntPoint2 a(rb - lt); a.MakeAbsolute(); return a; } // width & height
         inline IntPoint2                    GetCenter() const { return IntPoint2(lt + (rb - lt) / 2l); }
@@ -352,8 +362,8 @@ namespace King {
         inline long                         GetBottom() const { return rb.GetY(); }
         inline const IntPoint2 &            GetLT() const { return lt; }
         inline const IntPoint2 &            GetRB() const { return rb; }
-        inline const IntPoint2              GetLB() const { return IntPoint2(lt.GetX(), rb.GetY()); }
-        inline const IntPoint2              GetRT() const { return IntPoint2(rb.GetX(), lt.GetY()); }
+        inline IntPoint2                    GetLB() const { return IntPoint2(lt.GetX(), rb.GetY()); }
+        inline IntPoint2                    GetRT() const { return IntPoint2(rb.GetX(), lt.GetY()); }
         inline RECT                         Get_RECT() const { RECT r; r.left = GetLeft(); r.top = GetTop(); r.right = GetRight(); r.bottom = GetBottom(); return r; }
         inline Rectangle2DF                 Get_Rectangle2DF() const { return Rectangle2DF(Get_RECT()); }
         // Assignments

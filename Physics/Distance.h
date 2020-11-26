@@ -40,11 +40,15 @@ SOFTWARE.
 #include <vector>
 #include <memory>
 #include <string>
+#include <iomanip>
 // King namespace
 #include "..\MathSIMD\MathSIMD.h"
 #include "..\Physics\UnitOfMeasure.h"
 #include "..\Physics\Acceleration.h"
 #include "..\Physics\Velocity.h"
+// 3rdPart namespace
+#include "..\3rdParty\json.hpp"
+using json = nlohmann::json;
 
 /******************************************************************************
 *    Kinematics
@@ -63,6 +67,8 @@ namespace King {
     class Distance;
     Distance operator*(const UnitOfMeasure::Time &t, const Velocity & velIn); // d = t * v
     Distance operator*(const Velocity & velIn, const UnitOfMeasure::Time &t); // d = v * t 
+    UnitOfMeasure::Energy operator*(const Force& fIn, const Distance& dIn);
+    UnitOfMeasure::Energy operator*(const Distance& dIn, const Force& fIn);
 
     class alignas(16) Distance
     {
@@ -83,43 +89,59 @@ namespace King {
         explicit Distance(const Acceleration & accIn, const UnitOfMeasure::Time &t) { _magnitude = UnitOfMeasure::Length(static_cast<float>(accIn.Get_magnitude()) * 0.5f * (float)t * (float)t); _unit_direction = accIn.Get_unit_direction(); }
         explicit Distance(const Velocity & velIn, const UnitOfMeasure::Time &t) { _magnitude = UnitOfMeasure::Length(static_cast<float>(velIn.Get_magnitude()) * t); _unit_direction = velIn.Get_unit_direction(); }
         Distance(const Distance &in) { *this = in; } // forward to copy assignment
-        Distance(Distance &&in) { *this = std::move(in); } // forward to move assignment
+        Distance(Distance &&in) noexcept { *this = std::move(in); } // forward to move assignment
 
         virtual ~Distance() { ; }
 
         // Conversions
         inline explicit operator float() const { return _magnitude; }
         inline explicit operator UnitOfMeasure::Length() const { return _magnitude; }
-        inline operator float3() const { return GetVector() * _magnitude; }  // allow implicit for a default behavior
+        inline operator float3() const { return GetVector(); }  // allow implicit for a default behavior
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<Distance*>(p)); }
         inline Distance & operator= (const Distance &other) { _magnitude = other._magnitude; _unit_direction = other._unit_direction; return *this; } // copy assign
-        inline Distance & operator= (Distance &&other) { std::swap(_magnitude, other._magnitude); std::swap(_unit_direction, other._unit_direction); return *this; } // move assign
+        inline Distance & operator= (Distance &&other) noexcept { std::swap(_magnitude, other._magnitude); std::swap(_unit_direction, other._unit_direction); return *this; } // move assign
         explicit operator bool() const { return (bool)_magnitude && (bool)_unit_direction; } // valid
         bool operator !() const { return !(bool)_magnitude || !(bool)_unit_direction; } // invalid
         // Math Operators
-        inline Distance operator- () const { return Distance(-_unit_direction); }
+        inline Distance operator- () const { return Distance(_magnitude, -_unit_direction); }
         inline Distance operator+ (const Distance & in) const { return Distance(GetVector() + in.GetVector()); }
         inline Distance operator- (const Distance & in) const { return Distance(GetVector() - in.GetVector()); }
         inline Distance operator* (const Distance & in) const { return Distance(GetVector() * in.GetVector()); }
         inline Distance operator/ (const Distance & in) const { return Distance(GetVector() / in.GetVector()); }
         inline Distance & operator+= (const Distance & in) { *this = *this + in; return *this; }
         inline Distance & operator-= (const Distance & in) { *this = *this - in; return *this; }
-        inline Distance & operator*= (const Distance & in) { *this = *this * in; return *this; }
+        inline Distance & operator*= (const Distance & in) { *this = *this * in; return *this; } // Distance squared; we added an operator 4/18 to return Area, so delete the * operator here?
         inline Distance & operator/= (const Distance & in) { *this = *this / in; return *this; }
         inline Distance operator* (const float & in) const { return Distance(_magnitude * in, _unit_direction); }
         // Init/Start/Stop/Destroy
         // Functionality
         // Accessors
-        const auto &                        Get_magnitude() const { return _magnitude; }
-        const auto &                        Get_unit_direction() const { return _unit_direction; }
+        const auto&                         Get_magnitude() const { return _magnitude; }
+        auto&                               Get_magnitude() { return _magnitude; }
+        const auto&                         Get_unit_direction() const { return _unit_direction; }
+        auto&                               Get_unit_direction() { return _unit_direction; }
         const float3                        GetVector() const { return _unit_direction * _magnitude; }
         float                               GetValueEN() const { return UnitOfMeasure::mToft * _magnitude; }
         float                               GetValueSI() const { return UnitOfMeasure::m * _magnitude; }
         // Assignments
         // Note: set unit direction before magnitude in case sign of magnitude is switched
         void                                Set_magnitude(const float &_magnitude_IN_m) { _magnitude = abs(_magnitude_IN_m); if (_magnitude != _magnitude_IN_m) { _unit_direction = -_unit_direction; }; }
-        void __vectorcall                    Set_unit_direction(const float3 &_unit_direction_IN) { _unit_direction = float3::Normal(_unit_direction_IN); }
+        void __vectorcall                   Set_unit_direction(const float3 &_unit_direction_IN) { _unit_direction = float3::Normal(_unit_direction_IN); }
+        // Input & Output functions that can have access to protected & private data
+        friend std::ostream& operator<< (std::ostream& os, const Distance& in);
+        friend std::istream& operator>> (std::istream& is, Distance& out);
+        friend std::wostream& operator<< (std::wostream& os, const Distance& in);
+        friend std::wistream& operator>> (std::wistream& is, Distance& out);
+        friend void to_json(json& j, const Distance& from);
+        friend void from_json(const json& j, Distance& to);
     };
+    // Input & Output Function forward declarations
+    std::ostream& operator<< (std::ostream& os, const Distance& in);
+    std::istream& operator>> (std::istream& is, Distance& out);
+    std::wostream& operator<< (std::wostream& os, const Distance& in);
+    std::wistream& operator>> (std::wistream& is, Distance& out);
+    void to_json(json& j, const Distance& from);
+    void from_json(const json& j, Distance& to);
 }

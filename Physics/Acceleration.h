@@ -41,10 +41,14 @@ SOFTWARE.
 #include <vector>
 #include <memory>
 #include <string>
+#include <iomanip>
 // King namespace
 #include "..\MathSIMD\MathSIMD.h"
 #include "..\Physics\UnitOfMeasure.h"
 #include "..\Physics\Force.h"
+// 3rdPart namespace
+#include "..\3rdParty\json.hpp"
+using json = nlohmann::json;
 
 /******************************************************************************
 *    Physic Basics
@@ -84,6 +88,7 @@ namespace King {
         explicit Acceleration(const UnitOfMeasure::Accel &a, const float3 &dirIn) { _magnitude = a; _unit_direction = float3::Normal(dirIn); }
         explicit Acceleration(const UnitOfMeasure::Mass &m, const Force & forceIn) { *this = forceIn / m; }
         explicit Acceleration(const UnitOfMeasure::Mass &m, const std::vector<Force> & forcesIn) { float3 sum; for (const auto & e : forcesIn) sum += float3(e); *this = Force(sum) / m; }
+        explicit Acceleration(const float& x, const float& y, const float& z) : Acceleration(float3(x, y, z)) { ; }
         Acceleration(const Acceleration &in) { *this = in; } // forward to copy assignment
         Acceleration(Acceleration &&in) noexcept { *this = std::move(in); } // forward to move assignment
 
@@ -111,11 +116,15 @@ namespace King {
         inline Acceleration & operator*= (const Acceleration & in) { *this = *this * in; return *this; }
         inline Acceleration & operator/= (const Acceleration & in) { *this = *this / in; return *this; }
         inline Acceleration operator* (const float & in) const { return Acceleration(_magnitude * in, _unit_direction); }
+        inline Acceleration operator/ (const float& in) const { return Acceleration(_magnitude / in, _unit_direction); }
+
         // Init/Start/Stop/Destroy
         // Functionality
         // Accessors
-        const auto &                        Get_magnitude() const { return _magnitude; }
-        const auto &                        Get_unit_direction() const { return _unit_direction; }
+        const auto&                         Get_magnitude() const { return _magnitude; }
+        auto&                               Get_magnitude() { return _magnitude; }
+        const auto&                         Get_unit_direction() const { return _unit_direction; }
+        auto&                               Get_unit_direction() { return _unit_direction; }
         const float3                        GetVector() const { return _unit_direction * _magnitude; }
         float                               GetValueEN() const { return UnitOfMeasure::mPerSecSqToftPerSecSq * _magnitude; }
         float                               GetValueSI() const { return UnitOfMeasure::mPerSecSq * _magnitude; }
@@ -123,5 +132,19 @@ namespace King {
         // Note: set unit direction before magnitude in case sign of magnitude is switched
         void                                Set_magnitude(const float &_magnitude_IN) { _magnitude = abs(_magnitude_IN); if (_magnitude != _magnitude_IN) { _unit_direction = -_unit_direction; }; }
         void __vectorcall                   Set_unit_direction(const float3 &_unit_direction_IN) { _unit_direction = float3::Normal(_unit_direction_IN); }
+        // Input & Output functions that can have access to protected & private data
+        friend std::ostream& operator<< (std::ostream& os, const Acceleration& in);
+        friend std::istream& operator>> (std::istream& is, Acceleration& out);
+        friend std::wostream& operator<< (std::wostream& os, const Acceleration& in);
+        friend std::wistream& operator>> (std::wistream& is, Acceleration& out);
+        friend void to_json(json& j, const Acceleration& from);
+        friend void from_json(const json& j, Acceleration& to);
     };
+    // Input & Output Function forward declarations
+    std::ostream& operator<< (std::ostream& os, const Acceleration& in);
+    std::istream& operator>> (std::istream& is, Acceleration& out);
+    std::wostream& operator<< (std::wostream& os, const Acceleration& in);
+    std::wistream& operator>> (std::wistream& is, Acceleration& out);
+    void to_json(json& j, const Acceleration& from);
+    void from_json(const json& j, Acceleration& to);
 }

@@ -241,13 +241,24 @@ inline bool King::Rectangle2DF::Intersects(const RECT & rectIn) const { return (
 
 inline bool King::Rectangle2DF::Intersects(const float & xIn, const float & yIn) const { return (lt.GetX() <= xIn) && (xIn < rb.GetX()) && (lt.GetY() <= yIn) && (yIn < rb.GetY()); }
 
-inline bool King::Rectangle2DF::Intersects(const Circle2DF & circleIn) const
+inline bool King::Rectangle2DF::Intersects(const King::Circle2DF & circleIn) const
 {
     auto rectPointNearest = FindNearestPoint(circleIn.GetCenter());
     return circleIn.Intersects(rectPointNearest);
 }
 
-inline FloatPoint2 King::Rectangle2DF::FindNearestPoint(const FloatPoint2 & pt2In) const
+inline void King::Rectangle2DF::ClipTo(const King::Rectangle2DF& rectIn)
+{
+    SetLT( Max(GetLT(), rectIn.GetLT()) );
+    SetRB( Min(GetRB(), rectIn.GetRB()) );
+}
+
+inline King::FloatPoint2 King::Rectangle2DF::FindNearestPoint(const King::FloatPoint2 & pt2In) const
+{
+    return Max(lt, Min(pt2In, rb));
+}
+
+inline King::IntPoint2 King::Rectangle2D::FindNearestPoint(const King::IntPoint2& pt2In) const
 {
     return Max(lt, Min(pt2In, rb));
 }

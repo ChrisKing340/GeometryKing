@@ -13,9 +13,6 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
-    <Filter Include="3rdParty">
-      <UniqueIdentifier>{5c4d6eb1-0b62-43b3-9667-f02f29bc09b0}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="targetver.h">
@@ -51,24 +48,30 @@
     <ClInclude Include="..\General\TextFileParse.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\3rdParty\json.hpp">
-      <Filter>3rdParty</Filter>
+    <ClInclude Include="..\Physics\AngularAcceleration.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Physics\AngularVelocity.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Physics\PhysicsMaterial.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Physics\PhysicsRigidBody.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Physics\PhysicsState.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Physics\Rotation.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\MathSIMD\MathSIMD.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\Physics\Acceleration.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\Physics\Distance.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\Physics\UnitOfMeasure.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\Physics\Velocity.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\3DGeometryKing\3DGeometry.cpp">
@@ -81,6 +84,15 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\3DGeometryKing\Model_IO.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Physics\Physics.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\3DGeometryKing\CK_CubeCollision.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\3DGeometryKing\CK_Cube.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

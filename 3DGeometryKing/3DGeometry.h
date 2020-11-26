@@ -1,18 +1,18 @@
 /*%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-Title:           3DGeometryKing
+Title:          3DGeometryKing
 
-Description:     CPU side 3D geometry utilizing our SIMD math library.
+Description:    3D Geometry with accelerated SIMD math
 
-Usage:           3D Software development
+Usage:          3D Software development
 
 References:     
-                 Book Title: Game Programming Gems II
-                 Chapter Title: Fast, Robust Intersection of 3D Line Segments
-                 Author: Graham Rhodes
-                 Revisions: 05-Apr-2001 - GSR. Original.
+                1) Book Title: Game Programming Gems II
+                Chapter Title: Fast, Robust Intersection of 3D Line Segments
+                Author: Graham Rhodes
+                Revisions: 05-Apr-2001 - GSR. Original.
  
-                 Möller, Tomas; Trumbore, Ben (1997). "Fast, Minimum Storage Ray-Triangle Intersection". Journal of Graphics Tools. 2: 21–28.
-                 https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
+                2) Möller, Tomas; Trumbore, Ben (1997). "Fast, Minimum Storage Ray-Triangle Intersection". Journal of Graphics Tools. 2: 21–28.
+                https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
 
 
 Contact:        https://chrisking340.github.io/GeometryKing/
@@ -61,7 +61,6 @@ SOFTWARE.
 #include <map>
 #include <filesystem>
 #include <time.h>
-//#include <ctime>
 
 #include "..\3rdParty\json.hpp"
 using json = nlohmann::json;
@@ -69,11 +68,13 @@ using json = nlohmann::json;
 #include "..\MathSIMD\MathSIMD.h"
 #include "..\General\MemoryBlock.h"
 #include "..\Physics\UnitOfMeasure.h"
-#include "..\Physics\Force.h"
-#include "..\Physics\Acceleration.h"
-#include "..\Physics\Velocity.h"
-#include "..\Physics\Distance.h"
 #include "..\Physics\Position.h"
+#include "..\Physics\Distance.h"
+
+#include "CK_Cube.h"
+#include "CK_CubeCollision.h"
+
+// Compile with code files 3DGeometry.cpp and CK_CubeCollision.cpp
 
 using namespace std;
 using namespace DirectX;
@@ -90,7 +91,7 @@ namespace King {
     class Triangle; // SIMD three points;
     class Quad; // SIMD four points
     class Sphere; // SIMD float[4]
-    class Box;  // SIMD two points
+    class Box;  // SIMD two points; AABB and as a OBB by passing in a Quaternion to methods
     class Fustrum; // SIMD six planes and eight points
     // 3D Complex objects, working with vertex buffer references:
     class LineIndexed; // int[2] into a vertex buffer
@@ -110,6 +111,12 @@ namespace King {
     class VertexFormat;
     //enum IndexFormat;
 
+    // Functions
+    class Contact;
+    std::vector<Contact>    SAT_OBBonOBB(const Box& A, const King::Quaternion& qA, const Box& B, const King::Quaternion& qB);
+    Contact                 SAT_ContactDepthAndDirectionFromOBBonOBBIntersection(const std::vector<float3>& cornersA, const std::vector<float3>& cornersB, const float3& nonSeparatingAxis);
+
+    // Classes
     /******************************************************************************
     *    VertexAttrib
     ******************************************************************************/
@@ -152,7 +159,7 @@ namespace King {
             formats
         };
         uint16_t    _offset = 0; // bytes
-        enumFormat    _format = format_none; // data format
+        enumFormat  _format = format_none; // data format
         enumDesc    _desc = types; // data descriptor
 
     public:
@@ -160,7 +167,7 @@ namespace King {
         VertexAttrib(const VertexAttrib & in) : _offset(in._offset), _format(in._format), _desc(in._desc) {} // copy assign
 
         const auto &                        GetDescription() const { return _desc; }
-        std::string                            GetDescriptionString() const { return description[_desc]; }
+        std::string                         GetDescriptionString() const { return description[_desc]; }
         const auto &                        GetFormat() const { return _format; }
         const auto &                        GetOffset() const { return _offset; }
 
@@ -273,15 +280,15 @@ namespace King {
         /* variables */
     public:
     protected:
-        float3                                _scale = g_XMOne3;
+        float3                              _scale = g_XMOne3;
         quat                                _rotation; // defaults to unit quaternion
-        float3                                _translation; // defaults to zero components
+        float3                              _translation; // defaults to zero components
         /* methods */
     public:
         // Creation/Life cycle
         Pose() = default;
         Pose(const Pose &M) { *this = M; } // involke copy assignment operator
-        Pose(Pose &&M) { *this = std::move(M); } // involke move assignment operator
+        Pose(Pose &&M) noexcept { *this = std::move(M); } // involke move assignment operator
         explicit Pose(const DirectX::XMMATRIX &M4x4); // involke conversion copy assignment operator
         explicit Pose(const DirectX::XMFLOAT4X4 &F4x4); // involke conversion copy assignment operator
         explicit Pose(const quat &rotation, const float3 &scale, const float3 &translation) { Set(rotation, scale, translation); }
@@ -368,25 +375,25 @@ namespace King {
         // Functionality
         Pose                                Interpolate(const Pose &in, const float fractionIn) const;
         // Accessors
-        inline auto &                        GetRotation() { return _rotation; }
-        inline auto &                        GetScale() { return _scale; }
-        inline auto &                        GetTranslation() { return _translation; }
+        inline auto&                        GetRotation() { return _rotation; }
+        inline auto&                        GetScale() { return _scale; }
+        inline auto&                        GetTranslation() { return _translation; }
         // constant
-        inline auto &                        GetRotation() const { return _rotation; }
-        inline auto &                        GetScale() const { return _scale; }
-        inline auto &                        GetTranslation() const { return _translation; }
+        inline auto&                        GetRotation() const { return _rotation; }
+        inline auto&                        GetScale() const { return _scale; }
+        inline auto&                        GetTranslation() const { return _translation; }
 
         inline DirectX::XMMATRIX            Get_XMMATRIX() const { auto rtn = DirectX::XMMatrixAffineTransformation(_scale, float3(), _rotation, _translation); assert(!XMMatrixIsNaN(rtn)); return rtn; }
         inline DirectX::XMFLOAT4X4          Get_XMFLOAT4X4() const { DirectX::XMFLOAT4X4 rtn; DirectX::XMStoreFloat4x4(&rtn, DirectX::XMMatrixAffineTransformation(_scale, float3(), _rotation, _translation)); return rtn; }
         // Assignments
-        inline void _vectorcall                Set(const quat &rotation, const float3 &scale, const float3 &translation) { _rotation = rotation; _scale = scale; _translation = translation; }
-        inline void _vectorcall                SetRotation(const quat &rotation) { _rotation = rotation; _rotation.Validate(); }
-        inline void _vectorcall                SetRotationAboutXYZAxis(const float &radiansX, const float &radiansY, const float &radiansZ) { _rotation = DirectX::XMQuaternionRotationRollPitchYaw(radiansX, radiansY, radiansZ); }
-        inline void _vectorcall                SetRotationAboutXAxis(const float &radians) { _rotation = DirectX::XMQuaternionRotationRollPitchYaw(radians, 0.0f, 0.0f); }
-        inline void _vectorcall                SetRotationAboutYAxis(const float &radians) { _rotation = DirectX::XMQuaternionRotationRollPitchYaw(0.0f, radians, 0.0f); }
-        inline void _vectorcall                SetRotationAboutZAxis(const float &radians) { _rotation = DirectX::XMQuaternionRotationRollPitchYaw(0.0f, 0.0f, radians); }
-        inline void _vectorcall                SetScale(const float3 &scale) { _scale = scale; }
-        inline void _vectorcall                SetTranslation(const float3 &translation) { _translation = translation; }
+        inline void _vectorcall             Set(const quat &rotation, const float3 &scale, const float3 &translation) { _rotation = rotation; _scale = scale; _translation = translation; }
+        inline void _vectorcall             SetRotation(const quat &rotation) { _rotation = rotation; _rotation.Validate(); }
+        inline void _vectorcall             SetRotationAboutXYZAxis(const float &radiansX, const float &radiansY, const float &radiansZ) { _rotation = DirectX::XMQuaternionRotationRollPitchYaw(radiansX, radiansY, radiansZ); }
+        inline void _vectorcall             SetRotationAboutXAxis(const float &radians) { _rotation = DirectX::XMQuaternionRotationRollPitchYaw(radians, 0.0f, 0.0f); }
+        inline void _vectorcall             SetRotationAboutYAxis(const float &radians) { _rotation = DirectX::XMQuaternionRotationRollPitchYaw(0.0f, radians, 0.0f); }
+        inline void _vectorcall             SetRotationAboutZAxis(const float &radians) { _rotation = DirectX::XMQuaternionRotationRollPitchYaw(0.0f, 0.0f, radians); }
+        inline void _vectorcall             SetScale(const float3 &scale) { _scale = scale; }
+        inline void _vectorcall             SetTranslation(const float3 &translation) { _translation = translation; }
         // Input & Output
         friend std::ostream& operator<< (std::ostream &os, const Pose &in);
         friend std::istream& operator>> (std::istream &is, Pose &out);
@@ -405,10 +412,11 @@ namespace King {
     /******************************************************************************
     *    Collidable - Describes which 3D objects may interact.  Detection
     *    is implemented in each object class.  By making this pure virtual,
-    *   we are enforcing a policy of which basic geometry will be supported by
-    *   all classes.
+    *    we are enforcing a policy of which basic geometry will be supported by
+    *    all classes.
     ******************************************************************************/
-    class Collidable {
+    class Collidable
+    {
     public:
         virtual bool Collision(Collidable const& in) const = 0;
 
@@ -417,6 +425,9 @@ namespace King {
         virtual bool Collision(Line const& lineIn) const = 0;
         virtual bool Collision(Sphere const& sphereIn) const = 0;
         virtual bool Collision(Box const& boxIn) const = 0;
+        // TO DO 
+        //virtual bool Collision(Plane const& planeIn) const = 0;
+        //virtual bool Collision(Frustum const& frustumIn) const = 0;
     };
     /******************************************************************************
     *    Point - Combines our position data type
@@ -454,7 +465,7 @@ namespace King {
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<Point*>(p)); }
-        //inline Point & operator= (const XMVECTOR &in) { Position::operator=(in); return *this; } // copy assignment
+        inline Point & operator= (const XMVECTOR &in) { Position::operator=(in); return *this; } // copy assignment
         //inline Point & operator= (const XMVECTORF32 &in) { Position::operator=(in); return *this; } // copy assignment
         inline Point & operator= (const FloatPoint3 &in) { Position::operator=(in); return *this; } // copy assignment
         inline Point & operator= (const FloatPoint4 &in) { Position::operator=(in); return *this; } // copy assignment
@@ -502,8 +513,24 @@ namespace King {
         virtual bool                        Collision(Line const& lineIn) const override;
         virtual bool                        Collision(Sphere const& sphereIn) const override;
         virtual bool                        Collision(Box const& boxIn) const override;
+        // *** TO DO  ***
+        //virtual bool                        Collision(Plane const& planeIn) const override;
+        //virtual bool                        Collision(Frustum const& frustumIn) const override;
         // Assignments
+        // I/O
+        friend std::ostream& operator<< (std::ostream& os, const Point& in);
+        friend std::istream& operator>> (std::istream& is, Point& out);
+        friend std::wostream& operator<< (std::wostream& os, const Point& in);
+        friend std::wistream& operator>> (std::wistream& is, Point& out);
+        friend void to_json(json& j, const Point& from);
+        friend void from_json(const json& j, Point& to);
     };
+    //std::ostream& operator<< (std::ostream& os, const King::Point& in);
+    //std::istream& operator>> (std::istream& is, King::Point& out);
+    //std::wostream& operator<< (std::wostream& os, const King::Point& in);
+    //std::wistream& operator>> (std::wistream& is, King::Point& out);
+    //void to_json(json& j, const Point& from);
+    //void from_json(const json& j, Point& to);
     /******************************************************************************
     *    Line - A single 3D line segment
     *    pt1 ------- pt2
@@ -536,22 +563,26 @@ namespace King {
         friend Line operator* (Line lhs, const DirectX::XMMATRIX &m) { lhs *= m; return lhs; } // invokes std::move(lhs)
 
         // Functionality
-        inline bool    __vectorcall            Intersects(const Point &pointIn) const;
-        inline bool    __vectorcall            Intersects(const Line &lineIn, FloatPoint3 *intersectionOut = nullptr) const;
+        inline bool __vectorcall            Intersects(const Point &pointIn) const;
+        inline bool __vectorcall            Intersects(const Line &lineIn, FloatPoint3 *intersectionOut = nullptr) const;
         FloatPoint3 __vectorcall            FindNearestPointOnLineSegment(const FloatPoint3 &pointIn) const;
         // Accessors
         const auto &                        GetVertex(const uint32_t vertexIndexIn) const { return pt[vertexIndexIn]; }
-        auto                                GetLength() { return pt[1] - pt[0]; }
+        FloatPoint3                         GetLength() { return FloatPoint3::Absolute(pt[1] - pt[0]); }
+        FloatPoint3                         GetMidPoint() { return (pt[0] + pt[1]) * 0.5f; }
         // Assignments
         inline void __vectorcall            Set(const Line &in) { pt[0] = in.pt[0]; pt[1] = in.pt[1]; }
         inline void __vectorcall            SetVertex(const uint32_t vertexIndexIn, const FloatPoint3 &in) { pt[vertexIndexIn] = in; }
 
         virtual bool                        Collision(Collidable const& in) const override { return in.Collision(*this); } // double dispatch
         virtual bool                        Collision(Point const& pointIn) const override;
-        virtual bool                        Collision(Ray const& pointIn) const override { return false; }
+        virtual bool                        Collision(Ray const& pointIn) const override { return false; } // *** TO DO  ***
         virtual bool                        Collision(Line const& lineIn) const override;
         virtual bool                        Collision(Sphere const& sphereIn) const override;
         virtual bool                        Collision(Box const& boxIn) const override;
+        // *** TO DO  ***
+//virtual bool                        Collision(Plane const& planeIn) const override;
+//virtual bool                        Collision(Frustum const& frustumIn) const override;
     };
     /******************************************************************************
     *    LineIndexed - Vertex indicies representing a connected line segment
@@ -588,11 +619,11 @@ namespace King {
         inline LineIndexed & operator= (LineIndexed &&in) = default; // move assignment
 
         // Functionality
-        inline bool    __vectorcall            Intersects(Line &lineIn, FloatPoint3 *intersectionOut = nullptr) { assert(vb != nullptr); Line(float3(GetVertex(0)),float3(GetVertex(1))).Intersects(lineIn, intersectionOut); }
+        inline bool    __vectorcall         Intersects(Line &lineIn, FloatPoint3 *intersectionOut = nullptr) { assert(vb != nullptr); Line(float3(GetVertex(0)),float3(GetVertex(1))).Intersects(lineIn, intersectionOut); }
         FloatPoint3 __vectorcall            FindNearestPointOnLineSegment(const FloatPoint3 &pointIn) { assert(vb != nullptr); return Line(float3(GetVertex(0)), float3(GetVertex(1))).FindNearestPointOnLineSegment(pointIn); }
         // Accessors
-        uint8_t *                             GetVertex(const uint32_t indexIn) const { return vb + pt[indexIn] * vertexFormat.GetByteSize(); } // byte pointer to start of vertex data
-        FloatPoint3                             GetVertexPosition(const uint32_t indexIn) const;
+        uint8_t *                           GetVertex(const uint32_t indexIn) const { return vb + pt[indexIn] * vertexFormat.GetByteSize(); } // byte pointer to start of vertex data
+        FloatPoint3                         GetVertexPosition(const uint32_t indexIn) const;
         // Assignments
         inline void __vectorcall            Set(const LineIndexed &in) { pt[0] = in.pt[0]; pt[1] = in.pt[1]; }
         inline void                         SetVertex(const uint32_t vertexIndexIn, const uint32_t &in) { assert(vertexIndexIn <2); pt[vertexIndexIn] = in; }
@@ -603,9 +634,9 @@ namespace King {
         void                                SetIndex(const uint32_t &pt1In, const uint32_t &pt2In) { pt[0] = pt1In; pt[1] = pt2In; }
     };
     /******************************************************************************
-    *    Path - A 3D path made up of points
+    *   Path - A 3D path made up of points
     *   Can transform all the points at once with a matrix
-    *    front ------- pt2------- back
+    *   front ------- pt2------- back
     ******************************************************************************/
     class alignas(16) Path : public std::list<Point>
     {
@@ -644,7 +675,7 @@ namespace King {
     {
         /* variables */
     public:
-        Point origin;
+        FloatPoint3 origin;
         FloatPoint3 direction; // normalized on input
 
         /* methods */
@@ -656,7 +687,7 @@ namespace King {
         Ray() = default;
         Ray(const Ray &in) { *this = in; } // forward to copy assignment
         Ray(Ray &&in) { *this = std::move(in); } // forward to move assignment
-        Ray(const Point &originIn, const FloatPoint3 &directionIn) { origin = originIn; direction = directionIn; direction.MakeNormalize(); }
+        Ray(const FloatPoint3 &originIn, const FloatPoint3 &directionIn) { origin = originIn; direction = directionIn; direction.MakeNormalize(); }
         virtual ~Ray() = default;
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
@@ -667,18 +698,35 @@ namespace King {
         friend Ray operator* (Ray lhs, const DirectX::XMMATRIX &m) { lhs *= m; return lhs; } // invokes std::move(lhs)
         // Functionality
         virtual bool                        Collision(Collidable const& in) const override { return in.Collision(*this); } // double dispatch
-        virtual bool                        Collision(Point const& pointIn) const override { return false; }
-        virtual bool                        Collision(Ray const& pointIn) const override { return false; }
-        virtual bool                        Collision(Line const& lineIn) const override { return false; }
+        virtual bool                        Collision(Point const& pointIn) const override { return false; } // *** TO DO  ***
+        virtual bool                        Collision(Ray const& pointIn) const override { return false; } // *** TO DO  ***
+        virtual bool                        Collision(Line const& lineIn) const override { return false; } // *** TO DO  ***
         virtual bool                        Collision(Sphere const& sphereIn) const override;
         virtual bool                        Collision(Box const& boxIn) const override;
+        // *** TO DO  ***
+        //virtual bool                        Collision(Plane const& planeIn) const override;
+        //virtual bool                        Collision(Frustum const& frustumIn) const override;
         // Accessors
-        FloatPoint3 const &                    GetDirection() const { return direction; }
-        Point const &                        GetOrigin() const { return origin; }
+        FloatPoint3 const &                 GetDirection() const { return direction; }
+        FloatPoint3 const &                 GetOrigin() const { return origin; }
         // Assignments
         void                                SetDirection(const FloatPoint3 & directionIn) { direction = directionIn; direction.MakeNormalize(); }
-        void                                SetOrigin(const Point & originIn) { origin = originIn; }
+        void                                SetOrigin(const FloatPoint3& originIn) { origin = originIn; }
+        // I/O
+        friend std::ostream& operator<< (std::ostream& os, const Ray& in);
+        friend std::istream& operator>> (std::istream& is, Ray& out);
+        friend std::wostream& operator<< (std::wostream& os, const Ray& in);
+        friend std::wistream& operator>> (std::wistream& is, Ray& out);
+        friend void to_json(json& j, const Ray& from);
+        friend void from_json(const json& j, Ray& to);
     };
+    //std::ostream& operator<< (std::ostream& os, const King::Ray& in);
+    //std::istream& operator>> (std::istream& is, King::Ray& out);
+    //std::wostream& operator<< (std::wostream& os, const King::Ray& in);
+    //std::wistream& operator>> (std::wistream& is, King::Ray& out);
+    //void to_json(json& j, const Ray& from);
+    //void from_json(const json& j, Ray& to);
+
     /******************************************************************************
     *    Plane
     *      \---------\
@@ -714,14 +762,16 @@ namespace King {
         inline bool operator==  (const Plane &rhs) { return DirectX::XMVector4Equal(v, rhs.v); }
         inline bool operator!=  (const Plane &rhs) { return DirectX::XMVector4NotEqual(v, rhs.v); }
         // Functionality
-        inline bool    __vectorcall            Intersects(const Point &pointIn) const;
-        inline bool    __vectorcall            Intersects(const Sphere &sphereIn) const;
+        inline bool __vectorcall            Intersects(const Point &pointIn) const;
+        inline bool __vectorcall            Intersects(const Sphere &sphereIn) const;
+        inline bool __vectorcall            Intersects(const Triangle& triangleIn) const;
+        inline bool __vectorcall            Intersects(const Box& boxIn) const;
         FloatPoint3 __vectorcall            FindNearestPointOnPlane(const FloatPoint3 & pointIn) const;
         // Accessors
-        FloatPoint3 GetNormal(void) const { return DirectX::XMPlaneNormalize(v); }
-        FloatPoint3 GetOrigin(void) const { return -GetNormal() * GetW(); } // w keeps the scalar to translate unit vector to origin
-        float DistanceFromPoint(FloatPoint3 point) const { return Dot(point, GetNormal()) + GetW(); } // projects the point onto the plane and adds the perpendicular distance of the origin
-        float DistanceFromPoint(Point point) const { return Dot(static_cast<FloatPoint4>(point), v); } // homogeneous (ax,ay,az,a) if a=1
+        FloatPoint3                         GetNormal(void) const { return DirectX::XMPlaneNormalize(v); }
+        FloatPoint3                         GetOrigin(void) const { return -GetNormal() * GetW(); } // w keeps the scalar to translate unit vector to origin
+        float                               DistanceFromPoint(FloatPoint3 point) const { return Dot(point, GetNormal()) + GetW(); } // projects the point onto the plane and adds the perpendicular distance of the origin
+        float                               DistanceFromPoint(Point point) const { return Dot(static_cast<FloatPoint4>(point), v); } // homogeneous (ax,ay,az,a) if a=1
     };
     /******************************************************************************
     *    TriangleIndexed
@@ -761,18 +811,18 @@ namespace King {
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<TriangleIndexed*>(p)); }
         inline TriangleIndexed & operator= (const TriangleIndexed &in) = default; // copy assignment
-        inline TriangleIndexed & operator= (TriangleIndexed &&in) { *this = in; } // copy assign instead as we do not own the buffer
+        inline TriangleIndexed& operator= (TriangleIndexed&& in) noexcept { *this = in; return *this; } // copy assign instead as we do not own the buffer
         // Functionality
-        bool __vectorcall                    Intersects(const Ray &rayIn, FloatPoint3 *intersectPointOut) { return Intersects(rayIn.origin,rayIn.direction, intersectPointOut); }
-        bool __vectorcall                    Intersects(const FloatPoint3 &rayOriginIn, const FloatPoint3 &rayDirectionIn, FloatPoint3 *intersectPointOut);
+        bool __vectorcall                   Intersects(const Ray &rayIn, FloatPoint3 *intersectPointOut) { return Intersects(rayIn.origin,rayIn.direction, intersectPointOut); }
+        bool __vectorcall                   Intersects(const FloatPoint3 &rayOriginIn, const FloatPoint3 &rayDirectionIn, FloatPoint3 *intersectPointOut);
         // Accessors
-        FloatPoint3                            GetFaceNormal() { assert(vb != nullptr); return FloatPoint3::CrossProduct(GetEdge1(), GetEdge2()); }
-        FloatPoint3                            GetEdge1() { assert(vb != nullptr); return GetVertexPosition(1) - GetVertexPosition(0); }
-        FloatPoint3                            GetEdge2() { assert(vb != nullptr); return GetVertexPosition(2) - GetVertexPosition(0); }
-        FloatPoint3                            GetEdge3() { assert(vb != nullptr); return GetVertexPosition(2) - GetVertexPosition(1); }
+        FloatPoint3                         GetFaceNormal() { assert(vb != nullptr); return FloatPoint3::CrossProduct(GetEdge1(), GetEdge2()); }
+        FloatPoint3                         GetEdge1() { assert(vb != nullptr); return GetVertexPosition(1) - GetVertexPosition(0); }
+        FloatPoint3                         GetEdge2() { assert(vb != nullptr); return GetVertexPosition(2) - GetVertexPosition(0); }
+        FloatPoint3                         GetEdge3() { assert(vb != nullptr); return GetVertexPosition(2) - GetVertexPosition(1); }
         
-        uint8_t *                             GetVertex(const uint32_t indexIn) const { return vb + pt[indexIn] * vertexFormat.GetByteSize(); } // byte pointer to start of vertex data
-        FloatPoint3                             GetVertexPosition(const uint32_t indexIn) const;
+        uint8_t *                           GetVertex(const uint32_t indexIn) const { return vb + pt[indexIn] * vertexFormat.GetByteSize(); } // byte pointer to start of vertex data
+        FloatPoint3                         GetVertexPosition(const uint32_t indexIn) const;
         // Assignments
         void                                Set(uint8_t *vbIn, const VertexFormat &vertexFormatIn, const uint32_t &pt1In, const uint32_t &pt2In, const uint32_t &pt3In) { vb = vbIn; vertexFormat = vertexFormatIn; pt[0] = pt1In; pt[1] = pt2In; pt[2] = pt3In; }
         void                                SetVB(uint8_t *vbIn) { vb = vbIn; }
@@ -803,7 +853,7 @@ namespace King {
         // Construction/Destruction
         Triangle() = default;
         Triangle(const Triangle &in) { *this = in; } // forward to copy assignment
-        Triangle(Triangle &&in) { *this = std::move(in); } // forward to move assignment
+        Triangle(Triangle &&in) noexcept { *this = std::move(in); } // forward to move assignment
         Triangle(TriangleIndexed &in) { pt[0] = in.GetVertex(0); pt[1] = in.GetVertex(1); pt[2] = in.GetVertex(2); }
         explicit Triangle(const FloatPoint3 &pt1In, const FloatPoint3 &pt2In, const FloatPoint3 &pt3In) { pt[0] = pt1In; pt[1] = pt2In; pt[2] = pt3In; }
         // Construction Initializer
@@ -817,15 +867,15 @@ namespace King {
         inline Triangle & operator= (const Triangle &in) = default; // copy assignment
         inline Triangle & operator= (Triangle &&in) = default; // move assignment
         // Functionality
-        bool __vectorcall                    Intersects(const Ray &rayIn, FloatPoint3 *intersectPointOut) { Intersects(rayIn.origin, rayIn.direction, intersectPointOut); }
-        bool __vectorcall                    Intersects(const FloatPoint3 &rayOriginIn, const FloatPoint3 &rayDirectionIn, FloatPoint3 *intersectPointOut);
+        bool __vectorcall                   Intersects(const Ray &rayIn, FloatPoint3 *intersectPointOut) { Intersects(rayIn.origin, rayIn.direction, intersectPointOut); }
+        bool __vectorcall                   Intersects(const FloatPoint3 &rayOriginIn, const FloatPoint3 &rayDirectionIn, FloatPoint3 *intersectPointOut);
         // Accessors
-        FloatPoint3                            GetFaceNormal() { return FloatPoint3::CrossProduct(GetEdge1(), GetEdge2()); }
-        FloatPoint3                            GetEdge1() const { return pt[1] - pt[0]; }
-        FloatPoint3                            GetEdge2() const { return pt[2] - pt[0]; }
-        FloatPoint3                            GetEdge3() const { return pt[2] - pt[1]; }
+        FloatPoint3                         GetFaceNormal() { return FloatPoint3::CrossProduct(GetEdge1(), GetEdge2()); }
+        FloatPoint3                         GetEdge1() const { return pt[1] - pt[0]; }
+        FloatPoint3                         GetEdge2() const { return pt[2] - pt[0]; }
+        FloatPoint3                         GetEdge3() const { return pt[2] - pt[1]; }
 
-        auto &                                GetVertex(const int vertNumber_0_1_2) const { return pt[vertNumber_0_1_2]; }
+        auto &                              GetVertex(const int vertNumber_0_1_2) const { return pt[vertNumber_0_1_2]; }
         // Assignments
     };
     /******************************************************************************
@@ -833,7 +883,7 @@ namespace King {
     *            edge4                   Alternate Triangles (Alt1, Alt2)
     *       pt0 -------- pt3              --------
     *           | T1 / |                  | \ T2 |
-    *     edge1 |  /   | edge3          |   \  |
+    *     edge1 |  /   | edge3            |   \  |
     *           |/  T2 |                  | T1  \|
     *       pt1 -------- pt2              --------
     *             edge2
@@ -867,18 +917,19 @@ namespace King {
         inline Quad & operator= (const Quad &in) = default; // copy assignment
         inline Quad & operator= (Quad &&in) = default; // move assignment
         // Functionality
+        bool                                Intersects(const Ray& ray, FloatPoint3* intersectPointOut = nullptr);
         bool                                Intersects(const FloatPoint3 &rayOriginIn, const FloatPoint3 &rayDirectionIn, FloatPoint3 *intersectPointOut);
         void                                MoveBy(const FloatPoint3 deltaIn) { for(int i=0;i<4;++i) pt[i]+=deltaIn; }
-        void                                SubDivide(std::vector<Quad> *quadsOut);
+        std::vector<Quad>                   SubDivide();
         void                                Scale(const float scaleIn) { for (int i = 0; i<4; ++i) pt[i] *= scaleIn; }
         void                                Scale(const FloatPoint3 scaleIn) { for (int i = 0; i<4; ++i) pt[i] *= scaleIn; }
         // Accessors
-        FloatPoint3                            GetCenter() const { FloatPoint3 r = GetSeam(); r *= 0.5f; return r + pt[1]; }
-        FloatPoint3                            GetEdge1() const { return pt[1] - pt[0]; }
-        FloatPoint3                            GetEdge2() const { return pt[2] - pt[1]; }
-        FloatPoint3                            GetEdge3() const { return pt[3] - pt[2]; }
-        FloatPoint3                            GetEdge4() const { return pt[0] - pt[3]; }
-        FloatPoint3                            GetSeam() const { return pt[3] - pt[1]; }
+        FloatPoint3                         GetCenter() const { FloatPoint3 r = GetSeam(); r *= 0.5f; return r + pt[1]; }
+        FloatPoint3                         GetEdge1() const { return pt[1] - pt[0]; }
+        FloatPoint3                         GetEdge2() const { return pt[2] - pt[1]; }
+        FloatPoint3                         GetEdge3() const { return pt[3] - pt[2]; }
+        FloatPoint3                         GetEdge4() const { return pt[0] - pt[3]; }
+        FloatPoint3                         GetSeam() const { return pt[3] - pt[1]; }
         auto                                GetTriangle1() const { return Triangle(pt[0], pt[1], pt[3]); }
         auto                                GetTriangle2() const { return Triangle(pt[1], pt[2], pt[3]); }
         auto                                GetTriangleAlt1() const { return Triangle(pt[0], pt[1], pt[2]); }
@@ -894,14 +945,14 @@ namespace King {
     {
     public:
         // Construction/Destruction
-        inline explicit Sphere() { v = DirectX::XMVectorZero(); }
-        inline explicit Sphere(const FloatPoint3 center, const float radius) { v = FloatPoint4(center, radius); }
-        Sphere(const float x, const float y, const float z, const float radius) { v = FloatPoint4(x, y, z, radius); }
+        inline Sphere() { v = DirectX::XMVectorZero(); }
+        inline Sphere(const FloatPoint3 center, const float radius) { FloatPoint4::Set(center, radius); }
+        Sphere(const float x, const float y, const float z, const float radius) { FloatPoint4::Set(x, y, z, radius); }
 
         inline explicit Sphere(const DirectX::XMVECTOR &vec) { v = vec; }
         inline explicit Sphere(const FloatPoint4 in) { v = in; }
         inline Sphere(const Sphere &in) { v = in; } // copy 
-        inline Sphere(Sphere &&in) { v = std::move(in); } // move
+        inline Sphere(Sphere &&in) noexcept { v = std::move(in); } // move
         virtual ~Sphere() = default;
         // Operators 
         inline Sphere & operator= (const Sphere &in) = default; // copy assignment
@@ -924,25 +975,38 @@ namespace King {
         virtual bool                        Collision(Line const& lineIn) const override;
         virtual bool                        Collision(Sphere const& sphereIn) const override;
         virtual bool                        Collision(Box const& boxIn) const override;
+        // *** TO DO  ***
+        //virtual bool                        Collision(Plane const& planeIn) const override;
+        //virtual bool                        Collision(Frustum const& frustumIn) const override;
         // Accessors
-        FloatPoint3                            GetCenter() const { return FloatPoint3(v); }
-        float                                GetRadius() const { return GetW(); }
+        FloatPoint3                         GetCenter() const { return FloatPoint3(v); }
+        float                               GetRadius() const { return GetW(); }
         // Assignments
-        void __vectorcall                    SetCenter(const FloatPoint3 centerIn) { float r = GetRadius(); v = FloatPoint4(centerIn, r); }
+        void __vectorcall                   SetCenter(const FloatPoint3 centerIn) { float r = GetRadius(); v = FloatPoint4(centerIn, r); }
         void                                SetCetner(const float x, const float y, const float z) { float r = GetRadius(); v = DirectX::XMVectorSet(x, y, z, r); }
         void                                SetRadius(const float radiusIn) { SetW(radiusIn); }
+        // I/O
+        friend std::ostream& operator<< (std::ostream& os, const King::Sphere& in);
+        friend std::istream& operator>> (std::istream& is, Sphere& out);
+        friend void to_json(json& j, const Sphere& from);
+        friend void from_json(const json& j, Sphere& to);
     };
+    std::ostream& operator<< (std::ostream& os, const King::Sphere& in);
+    std::istream& operator>> (std::istream& is, King::Sphere& out);
+    std::wostream& operator<<(std::wostream& os, const King::Sphere& in);
+    void to_json(json& j, const Sphere& from);
+    void from_json(const json& j, Sphere& to);
     /******************************************************************************
     *    Box
-    *        An axis-aligned box with transforms for access to non-algined box.
+    *        An axis-aligned box with transforms for non-algined box.
     *        Must pass in transforms and returns orientated points out.
-    *        Defaults to a unit box center on (0,0,0) with extents (1,1,1)
+    *        Defaults to a unit box center on (0,0,0) with WHD (1,1,1)
     *
-    *          4------7        x=width
-    *          /       /|        y=height        +y
-    *         /      /.6 rtf    z=depth            ^   ^ (-z RHS)
-    *       5------| | pt_max                 |  /
-    *   lbb | 0.  | /3                        | /
+    *          4------7       x=width
+    *         /      /|       y=height      +y
+    *        /      /6 rtf    z=depth        ^   ^ (-z RHS)
+    *       5------|.pt_max                  |  /
+    *   lbb | 0.   | /3                      | /
     *pt_min |      |/                        |/
     *       1-------2                        ---------> +x
     *    Note: offsets are (x+,y+,z+) from lbb (min) to rtf (max) in RHS
@@ -953,8 +1017,8 @@ namespace King {
     public:
         FloatPoint3        pt_min = { -0.5f, -0.5f, -0.5f }; // left, back, bottom (min in RHS)
         FloatPoint3        pt_max = { +0.5f, +0.5f, +0.5f }; // right, top, front (max in RHS)
-
-        enum CornerDescription { lbb = 0, lbf, rbf, rbb, ltb, ltf, rtf, rtb };
+        
+        enum CornerDescription { lbb = 0, lbf, rbf, rbb, ltb, ltf, rtf, rtb, INVALID };
     protected:
 
     private:
@@ -966,9 +1030,11 @@ namespace King {
         static std::unique_ptr<Box>    CreateUnique() { return std::make_unique<Box>(); }
         // Construction/Destruction
         Box() = default;
+        Box(const float3& pt) : pt_min(pt), pt_max(pt) { ; }
+        Box(const float3& p1, const float3& p2) : pt_min(Min(p1, p2)), pt_max(Max(p1, p2)) { ; }
+        Box(const Box& b1, const Box& b2) : pt_min(Min(b1.pt_min, b2.pt_min)), pt_max(Max(b1.pt_max, b2.pt_max)) { ; }
         Box(const Box &in) { *this = in; } // forward to copy assignment
-        Box(Box &&in) { *this = std::move(in); } // forward to move assignment
-        Box(const FloatPoint3 &pt_minIn, const FloatPoint3 &pt_maxIn) : pt_min(pt_minIn), pt_max(pt_maxIn) { ; }
+        Box(Box &&in) noexcept { *this = std::move(in); } // forward to move assignment
         Box(const DirectX::BoundingBox &in) { Set(in); }
 
         virtual ~Box() = default;
@@ -980,13 +1046,11 @@ namespace King {
         inline Box & operator= (Box &&in) = default; // move assignment
         inline Box & operator*= (const DirectX::XMMATRIX &m) { pt_min = DirectX::XMVector4Transform(FloatPoint4(pt_min, 1.0f), m); pt_max = DirectX::XMVector4Transform(FloatPoint4(pt_max, 1.0f), m); return *this; } // does not support scaling since non-uniformed
         friend Box operator* (Box lhs, const DirectX::XMMATRIX &m) { lhs *= m; return lhs; } // invokes std::move(lhs)
+        inline Box& operator+= (const float3& d) { MoveBy(d); return *this; }
+        inline Box& operator-= (const float3& d) { MoveBy(-d); return *this; }
+        inline Box& operator*= (const float3& s) { Grow(s); return *this; }
         // Functionality
-        virtual bool                        Collision(Collidable const& in) const override { return in.Collision(*this); } // double dispatch
-
-        void                                Merge(const Box & bIn); // grow the box to match the min and max extents of each box
-        inline void    __vectorcall            Merge(const FloatPoint3 & ptIn); // grow the box to contain the point
-
-        bool                                 Intersects(const Ray &rayIn, float &distOut) const;
+        bool                                Intersects(const Ray &rayIn, float &distOut) const;
         bool                                Intersects(const Line &lineIn) const;
         bool                                Intersects(const Box &boxIn) const;
         bool                                Intersects(const Sphere &sphereIn) const;
@@ -996,66 +1060,88 @@ namespace King {
         FloatPoint3 __vectorcall            FindNearestPointOnBox(const FloatPoint3 &pt3In) const;
         FloatPoint3 __vectorcall            FindNearestPointOnBox(const FloatPoint3 &pt3In, const DirectX::FXMMATRIX &M) const;
 
-        virtual bool                        Collision(Ray const& rayIn) const override;
+        virtual bool                        Collision(Collidable const& in) const override { return in.Collision(*this); } // double dispatch
         virtual bool                        Collision(Point const& pointIn) const override;
+        virtual bool                        Collision(Ray const& rayIn) const override;
         virtual bool                        Collision(Line const& lineIn) const override;
         virtual bool                        Collision(Sphere const& sphereIn) const override;
         virtual bool                        Collision(Box const& boxIn) const override;
+        // *** TO DO  ***
+        //virtual bool                        Collision(Plane const& planeIn) const override;
+        //virtual bool                        Collision(Frustum const& frustumIn) const override;
 
-        inline void                            MoveTo(const FloatPoint3 &pt2In) { FloatPoint3 offset(pt_max - pt_min); pt_min = pt2In; pt_max = pt_min + offset; }
-        inline bool                            MoveTo(const float &xIn, const float &yIn, const float &zIn) { MoveTo(FloatPoint3(xIn, yIn, zIn)); }
-        inline void                            MoveBy(const FloatPoint3 &deltaIn) { pt_min += deltaIn; pt_max += deltaIn; }
-        inline void                            MoveBy(const float &dxIn, const float &dyIn, const float &dzIn) { FloatPoint3 delta(dxIn, dyIn, dzIn); MoveBy(delta); }
-        inline void                            MoveByX(const float &dxIn) { pt_min.SetX(pt_min.GetX() + dxIn); pt_max.SetX(pt_max.GetX() + dxIn); }
-        inline void                            MoveByY(const float &dyIn) { pt_min.SetY(pt_min.GetY() + dyIn); pt_max.SetY(pt_max.GetY() + dyIn); }
-        inline void                            MoveByZ(const float &dzIn) { pt_min.SetZ(pt_min.GetZ() + dzIn); pt_max.SetZ(pt_max.GetZ() + dzIn); }
+        Box                                 CollisionVolume(const Box& boxIn); // over lapping volume with boxIn
 
-        inline void                            Grow(const FloatPoint3 &scale3In) { auto s = scale3In * GetSize(); SetWHD(s); }
+        DirectX::XMMATRIX                   MomentsOfInertia(const float& densityIn = 700.0f);
+        DirectX::XMMATRIX                   MomentsOfInertiaRotated(const DirectX::XMMATRIX& Iin, const DirectX::XMMATRIX& rotationIn);
+
+        inline void                         MoveTo(const FloatPoint3 &pt2In) { FloatPoint3 offset(pt_max - pt_min); pt_min = pt2In; pt_max = pt_min + offset; }
+        inline bool                         MoveTo(const float &xIn, const float &yIn, const float &zIn) { MoveTo(FloatPoint3(xIn, yIn, zIn)); }
+        inline void                         MoveBy(const FloatPoint3 &deltaIn) { pt_min += deltaIn; pt_max += deltaIn; }
+        inline void                         MoveBy(const Distance& deltaIn) { MoveBy(FloatPoint3(deltaIn)); }
+        inline void                         MoveBy(const float &dxIn, const float &dyIn, const float &dzIn) { FloatPoint3 delta(dxIn, dyIn, dzIn); MoveBy(delta); }
+        inline void                         MoveByX(const float &dxIn) { pt_min.SetX(pt_min.GetX() + dxIn); pt_max.SetX(pt_max.GetX() + dxIn); }
+        inline void                         MoveByY(const float &dyIn) { pt_min.SetY(pt_min.GetY() + dyIn); pt_max.SetY(pt_max.GetY() + dyIn); }
+        inline void                         MoveByZ(const float &dzIn) { pt_min.SetZ(pt_min.GetZ() + dzIn); pt_max.SetZ(pt_max.GetZ() + dzIn); }
+
+        inline void                         Merge(const Box& bIn); // grow the box to match the min and max extents of each box
+        inline void __vectorcall            Merge(const FloatPoint3 ptIn); // grow the box to contain the point
+        inline void __vectorcall            Grow(const FloatPoint3 scale3In) { auto s = scale3In * GetSize(); SetWHD(s); }
         // Accessors
-        inline FloatPoint3                     GetSize() const { return Abs(pt_max - pt_min); } // width, height & depth
-        inline FloatPoint3                    GetExtents() const { return (pt_max - pt_min) * 0.5f; }
-        inline FloatPoint3                    GetCenter() const { return (pt_max + pt_min) * 0.5f; }
+        inline FloatPoint3                  GetSize() const { return Abs(pt_max - pt_min); } // width, height & depth
+        inline FloatPoint3                  GetExtents() const { return (pt_max - pt_min) * 0.5f; }
+        inline FloatPoint3                  GetCenter() const { return (pt_max + pt_min) * 0.5f; }
 
-        inline const FloatPoint3 &            GetMin() const { return pt_min; }
-        inline const FloatPoint3 &            GetMax() const { return pt_max; }
+        inline const FloatPoint3 &          GetMin() const { return pt_min; }
+        inline const FloatPoint3 &          GetMax() const { return pt_max; }
         inline float                        GetWidth() const { return std::abs(pt_max.GetX() - pt_min.GetX()); }
         inline float                        GetHeight() const { return std::abs(pt_max.GetY() - pt_min.GetY()); }
         inline float                        GetDepth() const { return std::abs(pt_max.GetZ() - pt_min.GetZ()); }
+        inline float3                       GetDiagonal() const { return pt_max - pt_min; }
+        inline float3                       GetSurfaceArea() const { auto d = GetDiagonal(); return 2.f * (d.f[0] * d.f[1] + d.f[0] * d.f[2] + d.f[1] * d.f[2]); }
+        inline float3                       GetVolume() const { auto d = GetDiagonal(); return 2.f * (d.f[0] * d.f[1] * d.f[2]); }
 
-        std::vector<FloatPoint3> __vectorcall    GetCorners8Transformed(const DirectX::FXMMATRIX &M); // scaled, rotate and translate a "unit" Box to a model bounding box
+        vector<pair<FloatPoint3, CornerDescription>> IdentifyCorners(const vector<FloatPoint3>& pointsIn, const Quaternion* quaternionIn = nullptr) const;
+        std::vector<FloatPoint3>            GetCorners8Transformed(const DirectX::FXMMATRIX& M); // scaled, rotate and translate a "unit" Box to a model bounding box
+        std::vector<FloatPoint3>            GetCorners8(const Quaternion * quaternionIn = nullptr) const; // return all 8 corners with enum CornerDescription indexing
+        std::vector<FloatPoint3>            GetCornersTop4(const Quaternion * quaternionIn = nullptr); 
+        std::vector<FloatPoint3>            GetCornersBottom4(const Quaternion * quaternionIn = nullptr);
+        std::vector<FloatPoint3>            GetCornersLowest4(const Quaternion * quaternionIn = nullptr);
+        void                                GetCorners8(DirectX::XMFLOAT3* pArrayInOut, const Quaternion* quaternionIn = nullptr) const; // array size passed in is [8], axis aligned
+        void                                GetCornersTop4(DirectX::XMFLOAT3* pArrayInOut, const Quaternion* quaternionIn = nullptr); // array size passed in is [4]
+        void                                GetCornersBottom4(DirectX::XMFLOAT3* pArrayInOut, const Quaternion* quaternionIn = nullptr); // array size passed in is [4]
+        void                                GetCornersLowest4(DirectX::XMFLOAT3* pArrayInOut, const Quaternion* quaternionIn = nullptr); // array size passed in is [4]
 
-        void                                GetCorners8(DirectX::XMFLOAT3 *pArrayInOut, const Quaternion * quaternionIn = nullptr); // array size passed in is [8], axis aligned
-        void                                 GetCornersTop4(DirectX::XMFLOAT3 *pArrayInOut, const Quaternion * quaternionIn = nullptr); // array size passed in is [4]
-        void                                 GetCornersBottom4(DirectX::XMFLOAT3 *pArrayInOut, const Quaternion * quaternionIn = nullptr); // array size passed in is [4]
-        void                                 GetCornersLowest4(DirectX::XMFLOAT3 *pArrayInOut, const Quaternion * quaternionIn = nullptr); // array size passed in is [4]
-        
-        std::vector<FloatPoint3> __vectorcall    GetCorners8(const Quaternion * quaternionIn = nullptr); // return all 8 corners with enum CornerDescription indexing
-        std::vector<FloatPoint3> __vectorcall    GetCornersTop4(const Quaternion * quaternionIn = nullptr); 
-        std::vector<FloatPoint3> __vectorcall    GetCornersBottom4(const Quaternion * quaternionIn = nullptr);
-        std::vector<FloatPoint3> __vectorcall    GetCornersLowest4(const Quaternion * quaternionIn = nullptr);
-        
-        inline Quad                            GetQuadFront(const Quaternion * quaternionIn = nullptr) { DirectX::XMFLOAT3 a[8]; GetCorners8(a, quaternionIn); return Quad(a[ltf], a[lbf], a[rbf], a[rtf] ); }
-        inline Quad                            GetQuadRight(const Quaternion * quaternionIn = nullptr) { DirectX::XMFLOAT3 a[8]; GetCorners8(a, quaternionIn); return Quad(a[rtf], a[rbf], a[rbb], a[rtb]); }
-        inline Quad                            GetQuadBack(const Quaternion * quaternionIn = nullptr) { DirectX::XMFLOAT3 a[8]; GetCorners8(a, quaternionIn); return Quad(a[rtb], a[rbb], a[lbb], a[ltb]); }
-        inline Quad                            GetQuadLeft(const Quaternion * quaternionIn = nullptr) { DirectX::XMFLOAT3 a[8]; GetCorners8(a, quaternionIn); return Quad(a[ltb], a[lbb], a[lbf], a[ltf]); }
-        inline Quad                            GetQuadTop(const Quaternion * quaternionIn = nullptr) { DirectX::XMFLOAT3 a[4]; GetCornersTop4(a, quaternionIn); return Quad(a); }
-        inline Quad                            GetQuadBottom(const Quaternion * quaternionIn = nullptr) { DirectX::XMFLOAT3 a[4]; GetCornersBottom4(a, quaternionIn); return Quad(a); }
-        // Assignments
-        inline void                            SetZero() { pt_min.SetZero(); pt_max.SetZero(); }
-        inline void    __vectorcall            Set(const FloatPoint3 &pt_minIn, const FloatPoint3 &pt_maxIn) { pt_min = pt_minIn; pt_max = pt_maxIn; } // defines the box with min (pt_min) and max (pt_max) points in RHS
-        inline void                            Set(const DirectX::BoundingBox &in) { auto c = DirectX::XMLoadFloat3(&in.Center); auto e = DirectX::XMLoadFloat3(&in.Extents); pt_min = c - e; pt_max = c + e; }
-        inline void    __vectorcall            SetCenterAndExtents(const FloatPoint3 &cIn, const FloatPoint3 &eIn) { pt_min = cIn - eIn; pt_max = cIn + eIn; } // defines the box with min (pt_min) and max (pt_max) points in RHS
-        inline void    __vectorcall            Setpt_min(const FloatPoint3 &pt_minIn) { pt_min = pt_minIn; }
-        inline void    __vectorcall            Setpt_max(const FloatPoint3 &pt_maxIn) { pt_max = pt_maxIn; }
-        inline void    __vectorcall            SetWHD(const FloatPoint3 &whdIn) { FloatPoint3 offset = Abs(whdIn) * 0.5f; FloatPoint3 c = GetCenter(); pt_min = c - offset; pt_max = c + offset; }
-        inline void    __vectorcall            SetCenter(const FloatPoint3 &centerIn) { FloatPoint3 delta = centerIn - GetCenter(); MoveBy(delta); }
-        void __vectorcall                    SetAABBfromThisTransformedBox(FXMMATRIX M);
-        // Input
+        inline Quad                         GetQuadFront(const Quaternion * quaternionIn = nullptr) { DirectX::XMFLOAT3 a[8]; GetCorners8(a, quaternionIn); return Quad(a[ltf], a[lbf], a[rbf], a[rtf] ); }
+        inline Quad                         GetQuadRight(const Quaternion * quaternionIn = nullptr) { DirectX::XMFLOAT3 a[8]; GetCorners8(a, quaternionIn); return Quad(a[rtf], a[rbf], a[rbb], a[rtb]); }
+        inline Quad                         GetQuadBack(const Quaternion * quaternionIn = nullptr) { DirectX::XMFLOAT3 a[8]; GetCorners8(a, quaternionIn); return Quad(a[rtb], a[rbb], a[lbb], a[ltb]); }
+        inline Quad                         GetQuadLeft(const Quaternion * quaternionIn = nullptr) { DirectX::XMFLOAT3 a[8]; GetCorners8(a, quaternionIn); return Quad(a[ltb], a[lbb], a[lbf], a[ltf]); }
+        inline Quad                         GetQuadTop(const Quaternion * quaternionIn = nullptr) { DirectX::XMFLOAT3 a[4]; GetCornersTop4(a, quaternionIn); return Quad(a); }
+        inline Quad                         GetQuadBottom(const Quaternion * quaternionIn = nullptr) { DirectX::XMFLOAT3 a[4]; GetCornersBottom4(a, quaternionIn); return Quad(a); }
+        // Assignments                      
+        inline void                         SetZero() { pt_min.SetZero(); pt_max.SetZero(); }
+        inline void    __vectorcall         Set(const FloatPoint3 &pt_minIn, const FloatPoint3 &pt_maxIn) { pt_min = pt_minIn; pt_max = pt_maxIn; } // defines the box with min (pt_min) and max (pt_max) points in RHS
+        inline void                         Set(const DirectX::BoundingBox &in) { auto c = DirectX::XMLoadFloat3(&in.Center); auto e = DirectX::XMLoadFloat3(&in.Extents); pt_min = c - e; pt_max = c + e; }
+        inline void    __vectorcall         SetCenterAndExtents(const FloatPoint3 &cIn, const FloatPoint3 &eIn) { pt_min = cIn - eIn; pt_max = cIn + eIn; } // defines the box with min (pt_min) and max (pt_max) points in RHS
+        inline void    __vectorcall         Setpt_min(const FloatPoint3 &pt_minIn) { pt_min = pt_minIn; }
+        inline void    __vectorcall         Setpt_max(const FloatPoint3 &pt_maxIn) { pt_max = pt_maxIn; }
+        inline void    __vectorcall         SetWHD(const FloatPoint3 &whdIn) { FloatPoint3 offset = Abs(whdIn) * 0.5f; FloatPoint3 c = GetCenter(); pt_min = c - offset; pt_max = c + offset; }
+        inline void    __vectorcall         SetCenter(const FloatPoint3 &centerIn) { FloatPoint3 delta = centerIn - GetCenter(); MoveBy(delta); }
+        void __vectorcall                   SetAABBfromThisTransformedBox(FXMMATRIX M);
+        // I/O
         friend std::ostream& operator<< (std::ostream &os, const King::Box &in);
         friend std::istream& operator>> (std::istream &is, Box &out);
+        friend std::wostream& operator<< (std::wostream& os, const King::Box& in);
+        friend std::wistream& operator>> (std::wistream& is, King::Box& out);
+        friend void to_json(json& j, const Box& from);
+        friend void from_json(const json& j, Box& to);
     };
     std::ostream& operator<< (std::ostream &os, const King::Box &in);
     std::istream& operator>> (std::istream &is, King::Box &out);
+    std::wostream& operator<<(std::wostream& os, const King::Box& in);
+    std::wistream& operator>>(std::wistream& is, King::Box& out);
+    void to_json(json& j, const Box& from);
+    void from_json(const json& j, Box& to);
     /******************************************************************************
     *    Fustrum
     *
@@ -1065,16 +1151,18 @@ namespace King {
     {
         /* variables */
     public:
-        enum CornerID { lbb, lbf, rbf, rbb, ltb, ltf, rtf, rtb };
-        enum PlaneID { kNearPlane, kFarPlane, kLeftPlane, kRightPlane, kTopPlane, kBottomPlane };
+        enum CornerID { lbb = 0, lbf, rbf, rbb, ltb, ltf, rtf, rtb, INVALID };
+        enum PlaneID { kNearPlane = 0, kFarPlane, kLeftPlane, kRightPlane, kTopPlane, kBottomPlane, kINVALID };
     protected:
-        FloatPoint3                            _FrustumCorners[8];
-        Plane                                _FrustumPlanes[6];
+        FloatPoint3                         _FrustumCorners[8];
+        Plane                               _FrustumPlanes[6];
         /* methods */
     public:
         // Construction/Destruction
         Frustum() { ; }
         Frustum(const DirectX::XMMATRIX &projectionMatrixIn);
+        Frustum(const Box& in, const quat* rQIn = nullptr) { ConstructOrthographicFrustum(in, rQIn); }
+
         Frustum(const Frustum &in) { *this = in; } // copy 
         Frustum(Frustum &&in) { *this = std::move(in); } // move
         virtual ~Frustum() = default;
@@ -1086,14 +1174,80 @@ namespace King {
         inline Frustum & operator*= (const DirectX::XMMATRIX &m);
         friend Frustum operator* (Frustum lhs, const DirectX::XMMATRIX &m) { lhs *= m; return lhs; } // invokes std::move(lhs)
         // Functionality
-        bool __vectorcall                    Intersect(const Box &boxIn) const;
-        bool __vectorcall                    Intersect(const Sphere &sphereIn) const;
+        bool __vectorcall                   Intersect(const Box &boxIn) const;
+        bool __vectorcall                   Intersect(const Sphere &sphereIn) const;
         // Accessors
-        FloatPoint3                            GetFrustumCorner(CornerID id) const { return _FrustumCorners[id]; }
-        Plane                                GetFrustumPlane(PlaneID id) const { return _FrustumPlanes[id]; }
+        inline FloatPoint3&                 GetFrustumCorner(Frustum::CornerID id) { assert(id < Frustum::CornerID::INVALID); return _FrustumCorners[id]; }
+        inline Plane&                       GetFrustumPlane(Frustum::PlaneID id) { assert(id < Frustum::PlaneID::kINVALID); return _FrustumPlanes[id]; }
     private:
         void                                ConstructPerspectiveFrustum(float HTan, float VTan, float NearClip, float FarClip); // Perspective frustum constructor (for pyramid-shaped frusta)
         void                                ConstructOrthographicFrustum(float Left, float Right, float Top, float Bottom, float NearClip, float FarClip); // Orthographic frustum constructor (for box-shaped frusta)
+        void                                ConstructOrthographicFrustum(const Box& in, const quat *rQIn = nullptr); // Frustrum that is orthographic and rotated by an arbitrary axis
+        // I/O
+        friend std::ostream& operator<< (std::ostream& os, const King::Frustum& in);
+        friend std::istream& operator>> (std::istream& is, Frustum& out);
+        friend void to_json(json& j, const Frustum& from);
+        friend void from_json(const json& j, Frustum& to);
+    };
+    std::ostream& operator<< (std::ostream& os, const King::Frustum& in);
+    std::istream& operator>> (std::istream& is, King::Frustum& out);
+    void to_json(json& j, const Frustum& from);
+    void from_json(const json& j, Frustum& to);
+    /******************************************************************************
+    *    Contact
+    *        Location of a contact point between two objects
+    ******************************************************************************/
+    class alignas(16) Contact
+    {
+        /* variables */
+    public:
+        std::vector<float3>                 _contactVerts;
+        float3                              _Obj1Pt;
+        float3                              _Obj2Pt;
+    protected:
+        bool                                _staticContact = false; // has not changed since last update *** TO DO ***
+        Distance                            _directionContactObj1_to_ContactObj2; // normal & mag in world space
+        float                               _momentumChangeFromPenetration = 0.0f; // *** TO DO ***
+
+    private:
+        /* methods */
+    public:
+        // Creation/Life cycle
+        static std::shared_ptr<Contact> Create() { return std::make_shared<Contact>(); }
+        Contact() = default;
+        Contact(const Contact& in) { *this = in; } // forward to copy assignment
+        Contact(Contact&& in) noexcept { *this = std::move(in); } // forward to move assignment
+
+        virtual ~Contact() { ; }
+
+        // Conversions
+        // Operators 
+        void* operator new (size_t size) { return _aligned_malloc(size, 16); }
+        void   operator delete (void* p) { _aligned_free(static_cast<Contact*>(p)); }
+        inline Contact& operator= (const Contact& other) = default; // copy assign
+        inline Contact& operator= (Contact&& other) = default; // move assign
+        explicit operator bool() const { return (bool)GetHasContact(); } // valid
+        bool operator !() const { return !(bool)GetHasContact(); } // invalid
+        // Math Operators
+        // Init/Start/Stop/Destroy
+        // Functionality
+        // Accessors
+        const size_t                        GetHasContact() const { return _contactVerts.size(); }
+        bool                                GetHasPenetration() const;
+        auto&                               GetPenetration() const { return _directionContactObj1_to_ContactObj2; }
+        bool                                GetPenetrationDepth() const { return _directionContactObj1_to_ContactObj2.Get_magnitude(); }
+        bool                                GetPenetrationDirection() const { return _directionContactObj1_to_ContactObj2.Get_unit_direction(); }
+        // Assignments
+        void                                SetContactPenetration(const Distance& Obj1_to_Obj2) { _directionContactObj1_to_ContactObj2 = Obj1_to_Obj2; _staticContact = false; }
+        void                                SetObjects(const float3& obj1Pt, const float3& obj2Pt) { _Obj1Pt = obj1Pt; _Obj2Pt = obj2Pt; }
+        inline void                         SetNoContact() { _contactVerts.clear(); }
+
+        bool                                SAT_ContactPointsFromOBBonOBBIntersection(const Box& A, const Quaternion qA, const Box& B, const Quaternion qB, const std::vector<float3>& cornersA, const std::vector<float3>& cornersB);
+    protected:
+        inline std::vector<float3>          GetContactVerts(const std::vector<float3>& corners, const Distance& dist);
+        inline std::vector<float3>          ClosestPointsToFaces(std::vector<float3>* contactVertsA, std::vector<float3>* contactVertsB);
+        inline float3                       ClosestPointEdgeEdge(const std::vector<float3>& contactVertsA, const std::vector<float3>& contactVertsB);
+        inline bool                         VertInsideFace(const std::vector<float3>& contactVerts, const float3& p0, const float& planeErr = 0.0f);
     };
     /******************************************************************************
     *    LineMesh
@@ -1105,15 +1259,15 @@ namespace King {
     {
         /* variables */
     private:
-        std::string                            _name;
+        std::string                         _name;
         VertexFormat                        _vertexFormat;
-        uint8_t *                            _vb = nullptr; // reference, do not free
-        uint32_t *                            _ib = nullptr; // reference, do not free
+        uint8_t *                           _vb = nullptr; // reference, do not free
+        uint32_t *                          _ib = nullptr; // reference, do not free
         uint32_t                            _vbStart = 0; // vertex buffer start offset (starting vertex #) to add to address
         uint32_t                            _ibStart = 0; // index buffer start offset (starting index #) to add to address
         uint32_t                            _numLines = 0; // assumes ib is a line list with 2 index per triangle
 
-        Box                                    _boundingBox; // calculate and store after data definitions
+        Box                                 _boundingBox; // calculate and store after data definitions
         /* methods */
     public:
         // Creation/Life cycle
@@ -1136,23 +1290,23 @@ namespace King {
         inline LineIndexed operator[] (uint32_t indexIn) const { return GetLineIndexed(indexIn); } // accessor
         // Functionality
         virtual void                        Initialize(uint32_t numLinesIn, const VertexFormat &vfIn, uint32_t vbStartIn, uint32_t ibStartIn, uint8_t *vbIn, uint32_t *ibIn) { _numLines = numLinesIn; _vertexFormat = vfIn; _vbStart = vbStartIn; _ibStart = ibStartIn; _vb = vbIn; _ib = ibIn; }
-        virtual Box                            CalculateBoundingBox(); // call after loading or changing position data
+        virtual Box                         CalculateBoundingBox(); // call after loading or changing position data
         // Accessors
-        Box                                    GetBoundingBox() const { return _boundingBox; }
+        Box                                 GetBoundingBox() const { return _boundingBox; }
         const auto &                        Get_name() const { return _name; }
         auto                                GetIB() const { return _ib + _ibStart; }
-        auto                                GetVB() const { return _vb + _vbStart * _vertexFormat.GetByteSize(); }
+        auto                                GetVB() const { return _vb + (uint32_t)_vbStart * (uint32_t)_vertexFormat.GetByteSize(); }
         const auto &                        GetIBStart() const { return _ibStart; } // # of index to skip for the start of buffer
         const auto &                        GetVBStart() const { return _vbStart; } // # of vertex to skip for the start of buffer
         const VertexFormat &                GetVertexFormat() const { return _vertexFormat; }
         const auto &                        GetNumLines() const { return _numLines; }
-        auto                                 GetNumIndicies() const { return _numLines * 2; }
+        auto                                GetNumIndicies() const { return _numLines * 2; }
         auto                                GetNumVerticies(); // calculates based on max index buffer value
 
-        LineIndexed                            GetLineIndexed(const uint32_t &lineIndexIn) const { auto o = (GetIB() + lineIndexIn * 2); return LineIndexed(GetVB(), _vertexFormat, *o, *(o + 1)); }
+        LineIndexed                         GetLineIndexed(const uint32_t &lineIndexIn) const { auto o = (GetIB() + lineIndexIn * 2); return LineIndexed(GetVB(), _vertexFormat, *o, *(o + 1)); }
 
-        auto                                 GetVertexAddr(const uint32_t indexIn) const { assert(indexIn < GetNumIndicies()); return GetVB() + *(GetIB() + indexIn) * _vertexFormat.GetByteSize(); } // byte pointer to start of vertex data
-        FloatPoint3                             GetVertexPosition(const uint32_t indexIn) const;
+        auto                                GetVertexAddr(const uint32_t indexIn) const { assert(indexIn < GetNumIndicies()); return GetVB() + *(GetIB() + indexIn) * _vertexFormat.GetByteSize(); } // byte pointer to start of vertex data
+        FloatPoint3                         GetVertexPosition(const uint32_t indexIn) const;
         // Assignments
         void                                Set_name(const string _name_IN) { _name = _name_IN; }
         void                                SetIB(uint32_t *ibIn) { _ib = ibIn; }
@@ -1174,16 +1328,16 @@ namespace King {
     {
         /* variables */
     private:
-        std::string                            _name;
-        std::string                            _materialName = "default";
+        std::string                         _name;
+        std::string                         _materialName = "default";
         VertexFormat                        _vertexFormat;
-        uint8_t *                            _vb = nullptr; // reference, do not free
-        uint32_t *                            _ib = nullptr; // reference, do not free
+        uint8_t *                           _vb = nullptr; // reference, do not free
+        uint32_t *                          _ib = nullptr; // reference, do not free
         uint32_t                            _vbStart = 0; // vertex buffer start offset (starting vertex #) to add to address
         uint32_t                            _ibStart = 0; // index buffer start offset (starting index #) to add to address
         uint32_t                            _numTriangles = 0; // assumes ib is a triangle list with 3 index per triangle
         
-        Box                                    _boundingBox; // calculate and store after data definitions
+        Box                                 _boundingBox; // calculate and store after data definitions
         /* methods */
     public:
         // Creation/Life cycle
@@ -1205,24 +1359,24 @@ namespace King {
         inline TriangleIndexed operator[] (uint32_t indexIn) const { return GetTriangleIndexed(indexIn); } // accessor
         // Functionality
         virtual void                        Initialize(uint32_t numTrianglesIn, VertexFormat vfIn, uint32_t vbStartIn, uint32_t ibStartIn, uint8_t *vbIn, uint32_t *ibIn) { _numTriangles = numTrianglesIn; _vertexFormat = vfIn; _vbStart = vbStartIn; _ibStart = ibStartIn; _vb = vbIn; _ib = ibIn; }
-        virtual Box                            CalculateBoundingBox(); // call after loading or changing position data
+        virtual Box                         CalculateBoundingBox(); // call after loading or changing position data
         // Accessors
-        Box                                    GetBoundingBox() const { return _boundingBox; }
+        Box                                 GetBoundingBox() const { return _boundingBox; }
         const auto &                        Get_name() const { return _name; }
         const auto &                        Get_materialName() const { return _materialName; }
-        uint32_t *                            GetIB() const { return _ib + _ibStart; }
-        uint8_t *                            GetVB() const { return _vb + _vbStart * _vertexFormat.GetByteSize(); }
+        uint32_t *                          GetIB() const { return _ib + _ibStart; }
+        uint8_t *                           GetVB() const { return _vb + (uint32_t)_vbStart * (uint32_t)_vertexFormat.GetByteSize(); }
         const auto &                        GetIBStart() const { return _ibStart; } // # of index to skip for the start of buffer
         const auto &                        GetVBStart() const { return _vbStart; } // # of vertex to skip for the start of buffer
         const VertexFormat &                GetVertexFormat() const { return _vertexFormat; }
         const auto &                        GetNumTriangles() const { return _numTriangles; }
-        auto                                 GetNumIndicies() const { return _numTriangles * 3; }
+        auto                                GetNumIndicies() const { return _numTriangles * 3; }
         uint32_t                            GetNumVerticies() const; // calculates based on max index buffer value
 
-        TriangleIndexed                        GetTriangleIndexed(const uint32_t &triangleIndexIn) const { auto o = (GetIB() + triangleIndexIn * 3); return TriangleIndexed(GetVB(), _vertexFormat, *o, *(o + 1), *(o + 2)); }
+        TriangleIndexed                     GetTriangleIndexed(const uint32_t &triangleIndexIn) const { auto o = (GetIB() + (uint32_t)triangleIndexIn * 3); return TriangleIndexed(GetVB(), _vertexFormat, *o, *(o + 1), *(o + 2)); }
         
-        auto                                 GetVertexAddr(const uint32_t indexIn) const { assert(indexIn < GetNumIndicies()); return GetVB() + *(GetIB() + indexIn) * _vertexFormat.GetByteSize(); } // byte pointer to start of vertex data
-        FloatPoint3                             GetVertexPosition(const uint32_t indexIn) const;
+        auto                                GetVertexAddr(const uint32_t indexIn) const { assert(indexIn < GetNumIndicies()); return GetVB() + *(GetIB() + indexIn) * (uint32_t)_vertexFormat.GetByteSize(); } // byte pointer to start of vertex data
+        FloatPoint3                         GetVertexPosition(const uint32_t indexIn) const;
         // Assignments
         void                                Set_name(const string _name_IN) { _name = _name_IN; }
         void                                Set_materialName(std::string materialNameIn) { _materialName = materialNameIn; }
@@ -1242,9 +1396,9 @@ namespace King {
     {
         /* variables */
     public:
-        MemoryBlock<float>                    _gridMem;
+        MemoryBlock<float>                   _gridMem;
         IntPoint2                            _xzSize;
-        Box                                    _boundingBox;
+        Box                                  _boundingBox;
 
         /* methods */
     public:
@@ -1265,12 +1419,15 @@ namespace King {
         inline HeightGrid & operator= (const HeightGrid &in) = default; // copy assignment
         inline HeightGrid & operator= (HeightGrid &&in) = default; // move assignment
         // Functionality
-        IntPoint2                            InitializeXZ(const TriangleMesh & triMeshIn, long xIn=0l, long zIn=0l); // return IntPoint2(X,Z) size of height grid allocated
-        float                                Height(const float2 & xzWorldIn);
+        IntPoint2                           InitializeXZ(const TriangleMesh & triMeshIn, long xIn=0l, long zIn=0l); // return IntPoint2(X,Z) size of height grid allocated
+        float                               Height(const float2 & xzWorldIn);
         bool                                Intersects(const float3 & xzWorldIn, float *heightOut = nullptr); // ignores y component, returns true if intersects bounding box and heightOut containing the height at that position
         // Accessors
         // Assignments
         void                                SetXZSize(const IntPoint2 & in) { _xzSize.Set(in); }
+        // IO
+        bool                                Load(const string & nameIn);
+        void                                Save(const string & nameIn);
     };
     /******************************************************************************
     *    Material - not geometry, but very important to its physical properties
@@ -1316,10 +1473,10 @@ namespace King {
         };
         /* variables */
     private:
-        std::string                            _name;
-        Properties                            _properties;
-        FileNames                            _fileNames;
-        uint8_t                                _shaderMethod = 0;
+        std::string                         _name;
+        Properties                          _properties;
+        FileNames                           _fileNames;
+        uint8_t                             _shaderMethod = 0;
 
         /* methods */
     public:
@@ -1359,15 +1516,15 @@ namespace King {
     {
          /* variables */
     protected:
-        std::string                            _modelName;
+        std::string                         _modelName;
 
         MemoryBlock<uint8_t>                _vertexBufferMaster; // set stride to data size after vertexFormat is initialized
-        MemoryBlock<uint32_t>                _indexBufferMaster; // 4,294,967,295 maximum verticies with 32 bit indexing
+        MemoryBlock<uint32_t>               _indexBufferMaster; // 4,294,967,295 maximum verticies with 32 bit indexing
 
         VertexFormat                        _vertexFormat;
-        IndexFormat                            _indexFormat = IndexFormat::uint32;
+        IndexFormat                         _indexFormat = IndexFormat::uint32;
 
-        Box                                    _boundingBox;
+        Box                                 _boundingBox;
         /* methods */
     public:
         // Creation/Life cycle
@@ -1377,7 +1534,7 @@ namespace King {
         ModelScaffold(const ModelScaffold &in) { *this = in; } // forward to copy assignment
         ModelScaffold(ModelScaffold &&in) { *this = std::move(in); } // forward to move assignment
 
-        virtual ~ModelScaffold() = default;
+        virtual ~ModelScaffold() { Destroy(); }
 
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
@@ -1385,14 +1542,14 @@ namespace King {
         inline ModelScaffold & operator= (const ModelScaffold &in) = default; // copy assignment
         inline ModelScaffold & operator= (ModelScaffold &&in) = default; // move assignment
         // Functionality
-        virtual void                        Initalize(const VertexFormat &vertexFormatIn, size_t verticiesIn, size_t indiciesIn) { _vertexFormat = vertexFormatIn; _vertexBufferMaster.Initialize(verticiesIn * _vertexFormat.GetByteSize()); _indexBufferMaster.Initialize(indiciesIn * _vertexFormat.GetByteSize()); }
+        virtual void                        Initalize(const VertexFormat &vertexFormatIn, size_t verticiesIn, size_t indiciesIn) { _vertexFormat = vertexFormatIn; _vertexBufferMaster.Initialize(verticiesIn * _vertexFormat.GetByteSize()); _indexBufferMaster.Initialize(indiciesIn); }
         void                                Destroy() { _indexBufferMaster.Destroy(); _vertexBufferMaster.Destroy(); _boundingBox.SetZero(); }
 
-        virtual bool                        Load(std::wstring fileNameIN) { return false; }
-        virtual bool                        Save(std::wstring fileNameIN) { return false; }
+        virtual bool                        Load(std::string fileNameIN) { return false; }
+        virtual bool                        Save(std::string fileNameIN) { return false; }
 
                                             // define in derived class
-        virtual Box                            CalculateBoundingBox() { Box rtn; rtn.SetZero(); return rtn; } 
+        virtual Box                         CalculateBoundingBox() { Box rtn; rtn.SetZero(); return rtn; } 
         // Confirmations
         bool                                HasPositions() const { return _vertexFormat.Has(King::VertexAttrib::enumDesc::position); }
         bool                                HasColors() const { return _vertexFormat.Has(King::VertexAttrib::enumDesc::color); }
@@ -1408,13 +1565,13 @@ namespace King {
 
         uint8_t*                            GetVertexAddr(const uint32_t indexIn, uint32_t vbStartIn = 0, uint32_t ibStartIn = 0); // byte pointer to start of vertex data
         uint32_t                            GetVertexCount() const { return (uint32_t)(_vertexBufferMaster.GetLength() / _vertexFormat.GetByteSize()); }
-        auto &                                GetVertexFormat() const { return _vertexFormat; }
+        auto &                              GetVertexFormat() const { return _vertexFormat; }
         auto                                GetVertexStride() const { return _vertexFormat.GetByteSize(); }
-        auto &                                GetVertexBufferMaster() { return _vertexBufferMaster; }
+        auto &                              GetVertexBufferMaster() { return _vertexBufferMaster; }
 
-        auto &                                GetIndexCount() const { return _indexBufferMaster.GetLength(); }
-        uint32_t                            GetIndexStride() const { return IndexFormat::uint32 ? 4 : 2; } // in bytes
-        auto &                                GetIndexBufferMaster() { return _indexBufferMaster; }
+        auto &                              GetIndexCount() const { return _indexBufferMaster.GetLength(); }
+        uint32_t                            GetIndexStride() const { return IndexFormat::uint32 ? 4 : 2;} // in bytes
+        auto &                              GetIndexBufferMaster() { return _indexBufferMaster; }
 
         vector<vector<float>>               GetPositions() { return GetDataAttribute(VertexAttrib::enumDesc::position); }
         vector<vector<float>>               GetColors() { return GetDataAttribute(VertexAttrib::enumDesc::color); }
@@ -1430,7 +1587,11 @@ namespace King {
         void                                AddVertexAttribute(const VertexAttrib::enumDesc & propertyIn, const VertexAttrib::enumFormat & formatIn);
 
         void                                SetModelName(const std::string modelNameIN) { _modelName = modelNameIN; }
-        void                                SetVertex(const size_t & vertexIndexIn, uint8_t * dataIn);
+        void                                SetIndex(const size_t& indexIn, const uint32_t& value);
+        void                                SetVertex(const size_t& vertexIndexIn, uint8_t * dataIn);
+        void                                SetVertexStream(const size_t& vertexIndexIn, uint8_t* dataIn, size_t numVertex);
+        void                                SetIndexStream(const size_t& startIndexIn, uint8_t* dataIn, size_t numIndicies);
+        void                                SetIndexStream(const size_t& startIndexIn, uint32_t* dataIn, size_t numIndicies);
         void                                SetVertexElement(const size_t & vertexIndexIn, const VertexAttrib::enumDesc & propertyIn, uint8_t * dataIn);
         void                                SetVertexFormat(const VertexFormat & vfIn) { _vertexFormat = vfIn; _vertexBufferMaster.SetStride(_vertexFormat.GetByteSize()); }
     private:
@@ -1456,7 +1617,7 @@ namespace King {
         // Construction/Destruction
         LineModel() { ; }
         LineModel(const LineModel &in) { *this = in; } // forward to copy assignment
-        LineModel(LineModel &&in) { *this = std::move(in); } // forward to move assignment
+        LineModel(LineModel &&in) noexcept { *this = std::move(in); } // forward to move assignment
 
         virtual ~LineModel() { Destroy(); }
 
@@ -1468,12 +1629,20 @@ namespace King {
         // Functionality
         void                                Destroy() { _meshes.clear(); King::ModelScaffold::Destroy(); }
 
-        virtual Box                            CalculateBoundingBox() override;
+        virtual Box                         CalculateBoundingBox() override;
         // Accessors
         const size_t                        GetNumMeshes() const { return _meshes.size(); }
-        std::shared_ptr<LineMesh>            GetMesh(size_t index) { assert(index < _meshes.size()); return _meshes[index]; }
+        std::shared_ptr<LineMesh>           GetMesh(size_t index) { assert(index < _meshes.size()); return _meshes[index]; }
         // Assignments
         void                                AddMesh(std::shared_ptr<LineMesh> meshIn) { _meshes.push_back(meshIn); }
+        std::shared_ptr<LineMesh>           CreateMesh(uint32_t numLinesIn, uint32_t vbStartIn=0, uint32_t ibStartIn=0)
+        {
+           assert((bool)GetVertexBufferMaster);
+           assert((bool)GetIndexBufferMaster);
+           auto ptr = LineMesh::Create(numLinesIn, GetVertexFormat(), vbStartIn, ibStartIn, &GetVertexBufferMaster().GetData(), &GetIndexBufferMaster().GetData());
+           _meshes.push_back(ptr);
+           return _meshes.back();
+        }
     };
     /******************************************************************************
     *    Model
@@ -1484,13 +1653,13 @@ namespace King {
 
         /* variables */
     protected:
-        std::vector<TriangleMesh>            _meshes;
+        std::vector<TriangleMesh>           _meshes;
         std::map<std::string, std::shared_ptr<Material>> _materials;
 
         /* methods */
     public:
         // Creation/Life cycle
-        static std::shared_ptr<Model>        Create() { return std::make_shared<Model>(); }
+        static std::shared_ptr<Model>       Create() { return std::make_shared<Model>(); }
         // Construction/Destruction
         Model() { _vertexFormat.SetNext(VertexAttrib::enumDesc::position, VertexAttrib::enumFormat::format_float32x3); _vertexBufferMaster.SetStride(_vertexFormat.GetByteSize()); }
         Model(const Model &in) { *this = in; } // forward to copy assignment
@@ -1507,10 +1676,10 @@ namespace King {
         // Functionality
         void                                Destroy() { _meshes.clear(); King::ModelScaffold::Destroy(); }
         
-        virtual bool                        Load(std::wstring fileNameIN) override;
-        virtual bool                        Save(std::wstring fileNameIN) override;
+        virtual bool                        Load(std::string fileNameIN) override;
+        virtual bool                        Save(std::string fileNameIN) override;
         
-        virtual Box                            CalculateBoundingBox() override;
+        virtual Box                         CalculateBoundingBox() override;
         void                                CalculateTangentsAndBiTangents();
 
         void                                OptimizeVertexBuffer() { for (auto & m : _meshes) { OptimizeMeshVertexBuffer(m); } }
@@ -1518,14 +1687,15 @@ namespace King {
 
         void                                LogReport(const std::wstring fileNameIn);
         // Accessors
-        const auto                            GetNumMeshes() const { return _meshes.size(); }
-        TriangleMesh &                        GetMesh(size_t index) { assert(index < _meshes.size()); return _meshes[index]; }
+        const auto                          GetNumMeshes() const { return _meshes.size(); }
+        TriangleMesh &                      GetMesh(size_t index) { assert(index < _meshes.size()); return _meshes[index]; }
+        std::vector<TriangleMesh> &         GetMeshes() { return _meshes; }
 
-        const auto                            GetNumMaterials() const { return _materials.size(); }
-        auto &                                GetMaterial(string name) { assert(_materials.count(name)); return _materials[name]; }
-        auto &                                GetMaterials() { return _materials; }
+        const auto                          GetNumMaterials() const { return _materials.size(); }
+        std::shared_ptr<Material>           GetMaterial(string name) { assert(_materials.count(name)); return _materials[name]; }
+        auto &                              GetMaterials() { return _materials; }
 
-        virtual std::size_t                    GetBoneCount() const { return 0; } // base class has no bones
+        virtual std::size_t                 GetBoneCount() const { return 0; } // base class has no bones
         // Assignments
         void                                AddMesh(const TriangleMesh &meshIn) { _meshes.push_back(meshIn); }
         void                                AddMaterial(std::shared_ptr<Material> mtl_IN);
@@ -1540,26 +1710,26 @@ namespace King {
         /* structures */
         struct Bone
         {
-            std::string                            _name; // unique so we can build the skelton hiearchy after saves and loads
-            DirectX::XMFLOAT4X4                    _transform; // defines the bone orientation
+            std::string                     _name; // unique so we can build the skelton hiearchy after saves and loads
+            DirectX::XMFLOAT4X4             _transform; // defines the bone orientation
         };
         struct Skeleton
         {
-            std::vector<Bone>                    _bones; // sorted such that a child bone never comes before a parent bone
-            std::vector<DirectX::XMFLOAT4X4>    _toParentTransform; // size of bones, contains the hiearchy of the bone structure
+            std::vector<Bone>                _bones; // sorted such that a child bone never comes before a parent bone
+            std::vector<DirectX::XMFLOAT4X4> _toParentTransform; // size of bones, contains the hiearchy of the bone structure
             // also note that toParentTransform[0] is alway identity as the top most node of the structure
         };
         /* variables */
     public:
-        Skeleton                                _skeleton;
-        std::vector<uint8_t>                    _boneInfluenceCount; // size is equal to # of verticies in mesh and contains the number of bones influencing each vertex
-        std::vector<uint8_t>                    _boneIndex; // size is sum of boneInfluenceCount values, indexies into skeleton.bones and is ordered in vertex order
-        std::vector<float>                        _boneWeight; // size matches boneIndex and gives the weight of each
+        Skeleton                            _skeleton;
+        std::vector<uint8_t>                _boneInfluenceCount; // size is equal to # of verticies in mesh and contains the number of bones influencing each vertex
+        std::vector<uint8_t>                _boneIndex; // size is sum of boneInfluenceCount values, indexies into skeleton.bones and is ordered in vertex order
+        std::vector<float>                  _boneWeight; // size matches boneIndex and gives the weight of each
 
         /* methods */
     public:
         // Creation/Life cycle
-        static std::shared_ptr<BoneHierarchy>    Create() { return std::make_shared<BoneHierarchy>(); }
+        static std::shared_ptr<BoneHierarchy>   Create() { return std::make_shared<BoneHierarchy>(); }
         BoneHierarchy() { ; }
         BoneHierarchy(const BoneHierarchy &in) { *this = in; } // forward to copy assignment
         BoneHierarchy(BoneHierarchy &&in) { *this = std::move(in); } // forward to move assignment
@@ -1572,7 +1742,7 @@ namespace King {
         // Conversions
         // Functionality
         // Accessors
-        auto                                    GetBoneCount() const { return _skeleton._bones.size(); }
+        auto                                GetBoneCount() const { return _skeleton._bones.size(); }
         // Assignments
     };
 
@@ -1585,7 +1755,7 @@ namespace King {
 
         /* variables */
     public:
-        std::unique_ptr<BoneHierarchy>        _boneHierarchy;
+        std::unique_ptr<BoneHierarchy>      _boneHierarchy;
         /* methods */
     public:
         // Creation/Life cycle
@@ -1605,9 +1775,9 @@ namespace King {
         // Functionality
         virtual void                        Destroy() { delete _boneHierarchy.release(); Model::Destroy(); }
     
-        std::vector<float3>                    CalculateVertexSkinPositions(size_t meshIndex = 0);
+        std::vector<float3>                 CalculateVertexSkinPositions(size_t meshIndex = 0);
         // Accessors
-        virtual std::size_t                    GetBoneCount() const { if (_boneHierarchy) return _boneHierarchy->GetBoneCount(); else return 0; }
+        virtual std::size_t                 GetBoneCount() const { if (_boneHierarchy) return _boneHierarchy->GetBoneCount(); else return 0; }
         // Assignments
     };
 }

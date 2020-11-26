@@ -61,15 +61,9 @@ SOFTWARE.
 #include "General\MemoryBlock.h"
 #include "General\TextFileParse.h"
 // Physics
-#include "Physics\UnitOfMeasure.h"
-#include "Physics\Force.h"
-#include "Physics\Acceleration.h"
-#include "Physics\Velocity.h"
-#include "Physics\Distance.h"
-#include "Physics\Position.h"
+#include "Physics\Physics.h"
 // Geometry
 #include "2DGeometryKing\2DGeometry.h"
 #include "3DGeometryKing\3DGeometry.h"
 // Input/Output
-#include "3rdParty\json.hpp"
 #include "3DGeometryKing\Model_IO.h"

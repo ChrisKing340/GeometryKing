@@ -5,7 +5,7 @@ using namespace std;
 /*******************************************************************
 * Load the file into a string stream while ignoring comments
 *******************************************************************/
-bool King::TextFileParse::Load(wstring fileName)
+bool King::TextFileParse::Load(string fileName)
 {
     string   inBuffer;
     ifstream dataFile; // file input stream
@@ -15,7 +15,7 @@ bool King::TextFileParse::Load(wstring fileName)
     dataFile.open( fileName );
     if( ! dataFile ) 
     {
-        wstring str = L"\nFile " + fileName + L" could not be opened.";
+        string str = "\nFile " + fileName + " could not be opened.";
         return false;
     }
 
@@ -39,7 +39,7 @@ bool King::TextFileParse::Load(wstring fileName)
     dataFile.close();
     if( ! wordCount )
     {
-        wstring str = fileName + L" is empty.";
+        string str = fileName + " is empty.";
         return false;
     }
     WordParse();
@@ -52,44 +52,58 @@ bool King::TextFileParse::Load(wstring fileName)
 *******************************************************************/
 void King::TextFileParse::WordParse()
 {
-    string str = storage.str();
-    char *textBuffer = str.data();
-
-    int i;
+    auto str = storage.str();
+    char* psource = str.data();
     std::streamsize characters;
     characters = str.size();
+    textBuffer = make_unique<char[]>(characters);
+    auto ptextBuffer = textBuffer.get();
+    memcpy(ptextBuffer, psource, characters);
 
     // parse out separators into separate lines
-    for(i=0;i<characters;i++)
+    for(int i=0;i<characters;i++)
     {
-        if( textBuffer[i] == ',' || textBuffer[i] == '\t' || textBuffer[i] == ' ' || textBuffer[i] == '\n' || textBuffer[i] == customSeparator )
-            textBuffer[i] = '\0';
+        if( ptextBuffer[i] == ',' || ptextBuffer[i] == '\t' || ptextBuffer[i] == ' ' || ptextBuffer[i] == '\n' || ptextBuffer[i] == customSeparator )
+            ptextBuffer[i] = '\0';
     }
 
     // count the number of lines in the string which are now words since separators are removed
     wordCount = 0;
-    for(i=0;i<characters;i++)
-        if( textBuffer[i] == '\0' )
+    for(int i=0;i<characters;i++)
+        if( ptextBuffer[i] == '\0' )
             wordCount++;
 
     // create an array of pointers to the inputTextStream buffer for each parsed word
     if( words ) delete words;
     words = new char *[wordCount];
-    // fill the words pointer array
+    memset(words, 0, wordCount);
+    // fill the words pointer array and remove empty words
     int wordsRemoved = 0;
     for(int i=0;i<wordCount;i++)
     {
-        if( strlen(textBuffer) == 0 )
+        if( strlen(ptextBuffer) == 0 ) // length to '\0'
         {
             wordsRemoved++;
         }
-        else words[i-wordsRemoved] = textBuffer;
+        else words[i-wordsRemoved] = ptextBuffer; // store the pointer to the word
 
-        textBuffer += strlen(textBuffer)+1;
+        ptextBuffer += strlen(ptextBuffer)+1;
     }
     wordCount -= wordsRemoved;
 
-    storage.clear();
+    storage.str(""); // remove the contents
+}
+/*******************************************************************
+* return the word at index location
+*******************************************************************/
+inline std::string King::TextFileParse::Word(int index) const
+{
+    if (index < 0) index = currentWord;
+    else if (index > wordCount - 1) index = wordCount - 1;
+    if (words)
+        return words[index];
+    else
+        return "";
 }
 /*******************************************************************
 * count the total number of words that are equal to the input txt
@@ -102,7 +116,8 @@ int King::TextFileParse::CountString( const string &txt )
 
     while( !IsLast() )
     {
-        if( Word() == txt ) count++;
+        auto w = Word();
+        if( w == txt ) count++;
         Next();
     }
     currentWord = currentWordHolder; // restore the position

@@ -75,27 +75,28 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>E:\Programming\Gits\DirectXMath\Inc\;$(ProjectDir)..\..\;$(ProjectDir)..\..\inc\;$(IncludePath)</IncludePath>
-    <OutDir>$(SolutionDir)\Bin $(Platform)$(Configuration)\</OutDir>
-    <IntDir>..\..\Bin\$(ProjectName)\$(Platform)\$(Configuration)\</IntDir>
+    <IncludePath>$(ProjectDir)..\..\;$(ProjectDir)..\..\inc\;$(IncludePath)</IncludePath>
+    <OutDir>$(ProjectDir)\Bin\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)..\Build_VS16\$(Platform)\$(Configuration)\Intermediate\$(ProjectName)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>E:\Programming\Gits\DirectXMath\Inc\;$(ProjectDir)..\..\;$(ProjectDir)..\..\inc\;$(IncludePath)</IncludePath>
-    <OutDir>$(SolutionDir)\Bin $(Platform)$(Configuration)\</OutDir>
-    <IntDir>..\..\Bin\$(ProjectName)\$(Platform)\$(Configuration)\</IntDir>
+    <IncludePath>$(ProjectDir)..\..\;$(ProjectDir)..\..\inc\;$(IncludePath)</IncludePath>
+    <OutDir>$(ProjectDir)\Bin\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)..\Build_VS16\$(Platform)\$(Configuration)\Intermediate\$(ProjectName)\</IntDir>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
-      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -111,15 +112,19 @@
       <PreprocessorDefinitions>_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>true</LinkLibraryDependencies>
+    </ProjectReference>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
-      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
@@ -127,6 +132,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -146,6 +152,7 @@
       <PreprocessorDefinitions>NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -153,17 +160,25 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>true</LinkLibraryDependencies>
+    </ProjectReference>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\3DGeometryKing\3DGeometry.h" />
-    <ClInclude Include="..\3rdParty\json.hpp" />
     <ClInclude Include="..\General\MemoryBlock.h" />
     <ClInclude Include="..\General\TextFileParse.h" />
     <ClInclude Include="..\MathSIMD\MathSIMD.h" />
     <ClInclude Include="..\Physics\Acceleration.h" />
+    <ClInclude Include="..\Physics\AngularAcceleration.h" />
+    <ClInclude Include="..\Physics\AngularVelocity.h" />
     <ClInclude Include="..\Physics\Distance.h" />
     <ClInclude Include="..\Physics\Force.h" />
+    <ClInclude Include="..\Physics\PhysicsMaterial.h" />
+    <ClInclude Include="..\Physics\PhysicsRigidBody.h" />
+    <ClInclude Include="..\Physics\PhysicsState.h" />
     <ClInclude Include="..\Physics\Position.h" />
+    <ClInclude Include="..\Physics\Rotation.h" />
     <ClInclude Include="..\Physics\UnitOfMeasure.h" />
     <ClInclude Include="..\Physics\Velocity.h" />
     <ClInclude Include="targetver.h" />
@@ -171,13 +186,13 @@
   <ItemGroup>
     <ClCompile Include="..\2DGeometryKing\2DGeometry.cpp" />
     <ClCompile Include="..\3DGeometryKing\3DGeometry.cpp" />
+    <ClCompile Include="..\3DGeometryKing\CK_Cube.cpp" />
+    <ClCompile Include="..\3DGeometryKing\CK_CubeCollision.cpp" />
     <ClCompile Include="..\3DGeometryKing\Model_IO.cpp" />
     <ClCompile Include="..\General\TextFileParse.cpp" />
     <ClCompile Include="..\MathSIMD\MathSIMD.cpp" />
-    <ClCompile Include="..\Physics\Acceleration.cpp" />
-    <ClCompile Include="..\Physics\Distance.cpp" />
+    <ClCompile Include="..\Physics\Physics.cpp" />
     <ClCompile Include="..\Physics\UnitOfMeasure.cpp" />
-    <ClCompile Include="..\Physics\Velocity.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
