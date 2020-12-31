@@ -22,7 +22,7 @@ For the latest version of json visit:
     class Rectangle2D; // not accelerated, replaces Windows RECT class thourgh conversions
     class Circle2DF; // SIMD
 
-    #include "3DGeometryKing\3DGeometry.h"
+    #include "3DGeometryKing\3DGeometry.h" 
     class Collidable; // pure virtual to create policy of which basic geometry interacts with each other
     class Pose; // SIMD scale, rotation, and translation
     class Point; // SIMD individual point float[4] with w=1 to allow for matrix multiplication to translate
@@ -33,8 +33,9 @@ For the latest version of json visit:
     class Triangle; // SIMD three points;
     class Quad; // SIMD four points
     class Sphere; // SIMD float[4]
-    class Box;  // SIMD two points
-    class Fustrum; // SIMD six planes and eight points
+    class Capsule; // SIMD two points & a float
+    class Box;  // SIMD two points; AABB and as a OBB by passing in a Quaternion to methods
+    class Frustum; // SIMD six planes and eight points
     
 ## Geometry Mesh and Models
 
