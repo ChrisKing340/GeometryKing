@@ -311,7 +311,7 @@ inline FloatPoint3 King::TriangleMesh::GetVertexPosition(const uint32_t indexIn)
     return FloatPoint3(reinterpret_cast<float*>(GetVertexAddr(indexIn) + offset));
 }
 
-inline bool __vectorcall King::Point::Intersects(const FloatPoint3 &pointIn) const
+inline bool King::Point::Intersects(const FloatPoint3 &pointIn) const
 {
     FloatPoint3 diff = pointIn - static_cast<FloatPoint3>(*this);
     diff.MakeAbsolute();
@@ -329,11 +329,169 @@ inline bool King::Point::Intersects(const Point & pointIn) const
 
 inline bool King::Point::Collision(Point const & pointIn) const { return Intersects(pointIn); }
 
+inline bool King::Point::Collision(Ray const& rayIn) const { return rayIn.Collision(*this); }
+
 inline bool King::Point::Collision(Line const & lineIn) const { return lineIn.Intersects(*this); }
 
 inline bool King::Point::Collision(Sphere const & sphereIn) const { return sphereIn.Contains(*this); }
 
 inline bool King::Point::Collision(Box const & boxIn) const { return boxIn.Contains(*this); }
+
+inline bool King::Point::Collision(Plane const& planeIn) const { return planeIn.Collision(*this); }
+
+inline bool King::Point::Collision(Capsule const& capsuleIn) const { return capsuleIn.Collision(*this); }
+
+
+// double dispatch
+
+inline bool King::Ray::Collision(Point const& pointIn) const { return Intersects(pointIn); }
+
+inline bool King::Ray::Collision(Ray const& rayIn) const { Position ptOut; return Intersects(rayIn, &ptOut); }
+
+bool King::Ray::Collision(Line const& lineIn) const { Position ptOut; return Intersects(lineIn, &ptOut); }
+
+inline bool King::Ray::Collision(Plane const& planeIn) const { Point ptOut; return planeIn.Intersects(*this, &ptOut); }
+
+inline bool King::Ray::Collision(Sphere const& sphereIn) const { return sphereIn.Collision(*this); }
+
+inline bool King::Ray::Collision(Capsule const& capsuleIn) const { return capsuleIn.Collision(*this); }
+
+inline bool King::Ray::Collision(Box const& boxIn) const { return boxIn.Collision(*this); }
+
+bool King::Ray::Intersects(const Point& pointIn) const
+{
+    auto pt = FindNearestPoint(pointIn);
+    FloatPoint3 diff(pointIn - pt);
+    diff.MakeAbsolute();
+
+    return FloatPoint3::SumComponents(diff) < FLT_EPSILON ? true : false;
+}
+
+bool King::Ray::Intersects(const Ray& rayIn, Position* intersectionOut) const
+{
+    const float epsilon_squared = FLT_EPSILON * FLT_EPSILON;
+    const FloatPoint3& rayA = GetDirection();
+    const FloatPoint3& rayB = rayIn.GetDirection();
+
+    FloatPoint3 pointOnSegA, pointOnSegB;
+
+    // this is the same as Dot(rayA,rayA) and Dot(rayB,rayB)
+    float testL11 = Dot(rayA, rayA);
+    float L11 = DirectX::XMVectorGetX(DirectX::XMVectorSum(DirectX::XMVectorPow(rayA, FloatPoint3(2.f, 2.f, 2.f))));
+    assert(testL11 == L11);
+    float L22 = DirectX::XMVectorGetX(DirectX::XMVectorSum(DirectX::XMVectorPow(rayB, FloatPoint3(2.f, 2.f, 2.f))));
+    float testL22 = Dot(rayB, rayB);
+    assert(testL22 == L22);
+    cout << testL11 << '\n';
+    cout << testL22 << '\n';
+
+    FloatPoint3 AB = rayIn.GetOrigin() - GetOrigin();
+    // - dot product of A and B
+    float L12 = -FloatPoint3::SumComponents(rayA * rayB);
+    float DetL = L11 * L22 - L12 * L12;
+
+    // Lines/Segments A and B are parallel
+    if (fabsf(DetL) < FLT_EPSILON)
+    {
+        return false;
+    }
+    else
+    {
+        float ra = FloatPoint3::SumComponents(rayA * AB);
+        float rb = -FloatPoint3::SumComponents(rayB * AB);
+
+        float t = (L11 * rb - ra * L12) / DetL;
+        float s = (ra - L12 * t) / L11;
+
+        pointOnSegA = s * rayA + GetOrigin();
+        pointOnSegB = t * rayB + rayIn.GetOrigin();
+    }
+
+    // point of intersection is the midpoint of the two
+    *intersectionOut = (pointOnSegA + pointOnSegB) * 0.5f;
+
+    FloatPoint3 nearestVector = pointOnSegB - pointOnSegA;
+    nearestVector.MakeAbsolute();
+
+    return FloatPoint3::SumComponents(nearestVector) < FLT_EPSILON ? true : false;
+}
+
+bool King::Ray::Intersects(const Line& lineIn, Position* intersectionOut) const
+{
+    const float epsilon_squared = FLT_EPSILON * FLT_EPSILON;
+    const FloatPoint3& rayA = GetDirection();
+    FloatPoint3 rayB = lineIn.pt[1] - lineIn.pt[0];
+
+    FloatPoint3 pointOnSegA, pointOnSegB;
+
+    // line segment is degenerate (distance between end points is near zero)
+    // this is the same as Dot(rayA,rayA) and Dot(rayB,rayB)
+    float L11 = DirectX::XMVectorGetX(DirectX::XMVectorSum(DirectX::XMVectorPow(rayA, FloatPoint3(2.f, 2.f, 2.f))));
+    float L22 = DirectX::XMVectorGetX(DirectX::XMVectorSum(DirectX::XMVectorPow(rayB, FloatPoint3(2.f, 2.f, 2.f))));
+
+    if (L22 < epsilon_squared)
+    {
+        pointOnSegA = FindNearestPoint(lineIn.pt[0]);
+    }
+    else
+    {
+        FloatPoint3 AB = lineIn.pt[0] - GetOrigin();
+        // - dot product of A and B
+        float L12 = -FloatPoint3::SumComponents(rayA * rayB);
+        float DetL = L11 * L22 - L12 * L12;
+
+        // Lines/Segments A and B are parallel
+        if (fabsf(DetL) < FLT_EPSILON)
+        {
+            return false;
+        }
+        // The general case
+        else
+        {
+            // AB is the distance between the origin of the ray and line
+            float ra = FloatPoint3::SumComponents(rayA * AB);
+            float rb = -FloatPoint3::SumComponents(rayB * AB);
+
+            float t = (L11 * rb - ra * L12) / DetL;
+            float s = (ra - L12 * t) / L11;
+
+            pointOnSegA = s * rayA + GetOrigin();
+            pointOnSegB = t * rayB + lineIn.pt[0];
+        }
+
+    }
+    // point of intersection is the midpoint of the two
+    if (intersectionOut != nullptr)
+        *intersectionOut = (pointOnSegA + pointOnSegB) * 0.5f;
+
+    FloatPoint3 nearestVector = pointOnSegB - pointOnSegA;
+    nearestVector.MakeAbsolute();
+
+    return FloatPoint3::SumComponents(nearestVector) < FLT_EPSILON ? true : false;
+}
+
+/******************************************************************************
+*    Line::FindNearestPoint
+*        Desc:       Given a ray and a point in 3-dimensional space,
+*                    find the point on the ray that is closest to the
+*                    point.
+*        Input:      a point in 3-dimensional space
+*        Output:     nearest point on ray to input point
+*        Returns:    none
+*        Remarks:    
+******************************************************************************/
+King::FloatPoint3 King::Ray::FindNearestPoint(const Point& ptIn) const
+{
+    const FloatPoint3& dir = GetDirection();
+    const FloatPoint3& origin = GetOrigin();
+
+    FloatPoint3 l(ptIn - GetOrigin());
+
+    // project l onto our ray, direction must be normalized
+    FloatPoint3 projection = Dot(l, dir) * dir;
+
+    return projection;
+}
 
 inline bool __vectorcall King::Line::Intersects(const Point & pointIn) const
 { 
@@ -367,6 +525,7 @@ inline bool __vectorcall King::Line::Intersects(const Line & lineIn, FloatPoint3
     FloatPoint3 pointOnSegA, pointOnSegB;
 
     // line segment is degenerate (distance between end points is near zero)
+    // this is the same as Dot(rayA,rayA) and Dot(rayB,rayB)
     float L11 = DirectX::XMVectorGetX(DirectX::XMVectorSum(DirectX::XMVectorPow(rayA, FloatPoint3( 2.f, 2.f ,2.f ))));
     float L22 = DirectX::XMVectorGetX(DirectX::XMVectorSum(DirectX::XMVectorPow(rayB, FloatPoint3( 2.f, 2.f, 2.f ))));
 
@@ -381,6 +540,7 @@ inline bool __vectorcall King::Line::Intersects(const Line & lineIn, FloatPoint3
     else
     {
         FloatPoint3 AB = lineIn.pt[0] - pt[0];
+        // - dot product of A and B
         float L12 = -FloatPoint3::SumComponents(rayA * rayB);
         float DetL = L11 * L22 - L12 * L12;
 
@@ -414,17 +574,17 @@ inline bool __vectorcall King::Line::Intersects(const Line & lineIn, FloatPoint3
 }
 /******************************************************************************
 *    Line::FindNearestPointOnLineSegment
-*        Desc:        Given a line (segment) and a point in 3-dimensional space,
+*        Desc:       Given a line (segment) and a point in 3-dimensional space,
 *                    find the point on the line (segment) that is closest to the
 *                    point.
-*        Input:        a point in 3-dimensional space
-*        Output:        nearest point on line to input point
+*        Input:      a point in 3-dimensional space
+*        Output:     nearest point on line to input point
 *        Returns:    none
 *        Remarks:    Adapted from:
-|                         Book Title: Game Programming Gems II
-|                         Chapter Title: Fast, Robust Intersection of 3D Line Segments
-|                         Author: Graham Rhodes
-|                         Revisions: 05-Apr-2001 - GSR. Original.
+*                         Book Title: Game Programming Gems II
+*                         Chapter Title: Fast, Robust Intersection of 3D Line Segments
+*                         Author: Graham Rhodes
+*                         Revisions: 05-Apr-2001 - GSR. Original.
 ******************************************************************************/
 King::FloatPoint3 King::Line::FindNearestPointOnLineSegment(const FloatPoint3 & pointIn) const
 {
@@ -447,9 +607,12 @@ King::FloatPoint3 King::Line::FindNearestPointOnLineSegment(const FloatPoint3 & 
     return nearestPoint;
 }
 inline bool King::Line::Collision(Point const & pointIn) const { return Intersects(pointIn); }
+inline bool King::Line::Collision(Ray const& rayIn) const { return rayIn.Collision(*this); }
 inline bool King::Line::Collision(Line const & lineIn) const { return Intersects(lineIn); }
 inline bool King::Line::Collision(Sphere const & sphereIn) const { return sphereIn.Intersects(*this); }
 inline bool King::Line::Collision(Box const & boxIn) const { return boxIn.Intersects(*this); }
+inline bool King::Line::Collision(Plane const& planeIn) const { return planeIn.Collision(*this); }
+inline bool King::Line::Collision(Capsule const& capsuleIn) const { return capsuleIn.Collision(*this); }
 /******************************************************************************
 *    Method:    Intersects
 ******************************************************************************/
@@ -518,7 +681,7 @@ std::vector<Quad> King::Quad::SubDivide()
 ******************************************************************************/
 bool King::Sphere::Contains(const Point & ptIn) const
 {
-    auto d = GetCenter() - static_cast<FloatPoint3>(*this);
+    float3 d = ptIn - GetCenter();
     auto dsq = d * d;
 
     float r = GetRadius();
@@ -537,7 +700,7 @@ bool King::Sphere::Contains(const Point & ptIn) const
 *      \----/
 *   Reference: DirectXCollision.inl
 ******************************************************************************/
-inline bool King::Sphere::Intersects(const Ray & ray, float & distOut) const
+inline bool King::Sphere::Intersects(const Ray & ray, float3 *ptOut) const
 {
     float3 r(GetRadius());
     float3 r2 = DirectX::XMVectorMultiply(r, r);
@@ -567,10 +730,9 @@ inline bool King::Sphere::Intersects(const Ray & ray, float & distOut) const
 
         XMVECTOR OriginInside = DirectX::XMVectorLessOrEqual(l2, r2);
         XMVECTOR t = DirectX::XMVectorSelect(t1, t2, OriginInside);
-        XMStoreFloat(&distOut, t);
+        *ptOut = t;
         return true;
     }
-    distOut = 0.f;
     return false;
 }
 /******************************************************************************
@@ -584,6 +746,12 @@ inline bool King::Sphere::Intersects(const Line & lineIn) const
         return true;
     else
         return false;
+}
+bool King::Sphere::Intersects(const Plane& planeIn) const
+{
+    auto nPt = planeIn.FindNearestPointOnPlane(GetCenter());
+
+    return Contains(nPt);
 }
 /******************************************************************************
 *    Method:    Intersects Sphere
@@ -605,9 +773,11 @@ bool King::Sphere::Intersects(const Sphere & rhs) const
 }
 
 bool King::Sphere::Collision(Point const & pointIn) const { return Contains(pointIn); }
-bool King::Sphere::Collision(Ray const & rayIn) const { float distOut; return Intersects(rayIn, distOut); }
+bool King::Sphere::Collision(Ray const & rayIn) const { float3 ptOut; return Intersects(rayIn, &ptOut); }
 bool King::Sphere::Collision(Line const & lineIn) const { return Intersects(lineIn); }
+inline bool King::Sphere::Collision(Plane const& planeIn) const { return Intersects(planeIn); }
 bool King::Sphere::Collision(Sphere const & sphereIn) const { return Intersects(sphereIn); }
+inline bool King::Sphere::Collision(Capsule const& capsuleIn) const { return capsuleIn.Collision(*this); }
 bool King::Sphere::Collision(Box const & boxIn) const { return boxIn.Intersects(*this); }
 /******************************************************************************
 *    Method:    Merge Box
@@ -686,15 +856,18 @@ bool King::Box::Intersects(const Ray &rayIn, float &distOut) const
 }
 inline bool King::Box::Intersects(const Line & lineIn) const 
 { 
-    Point pt1(lineIn.GetVertex(0));
-    Point pt2(lineIn.GetVertex(1));
-    Ray r1(pt1, pt2 - pt1); // pt1 *--->   * pt2
-    Ray r2(pt2, pt1 - pt2); // pt1 *   <---* pt2
-    float distOut;
-    if (Intersects(r1, distOut) && Intersects(r2, distOut))
-        return true;
-    else
-        return false;
+    const float3& c = GetCenter();
+    auto l_nearest = lineIn.FindNearestPointOnLineSegment(c);
+
+    return DirectX::XMVector3InBounds(l_nearest - c, GetExtents());
+
+}
+inline bool King::Box::Intersects(const Plane& planeIn) const 
+{ 
+    const float3& c = GetCenter();
+    auto p_nearest = planeIn.FindNearestPointOnPlane(c);
+
+    return DirectX::XMVector3InBounds(p_nearest - c, GetExtents());
 }
 /******************************************************************************
 *    Method:    Intersects Box
@@ -775,7 +948,9 @@ FloatPoint3 __vectorcall King::Box::FindNearestPointOnBox(const FloatPoint3 & pt
 inline bool King::Box::Collision(Ray const & rayIn) const { float distOut; return Intersects(rayIn, distOut); }
 inline bool King::Box::Collision(Point const & pointIn) const { return DirectX::XMVector3InBounds((XMVECTOR)pointIn - GetCenter(), GetExtents()); }
 inline bool King::Box::Collision(Line const & lineIn) const { return Intersects(lineIn); }
+inline bool King::Box::Collision(Plane const& planeIn) const { return Intersects(planeIn); }
 inline bool King::Box::Collision(Sphere const & sphereIn) const { return Intersects(sphereIn); }
+inline bool King::Box::Collision(Capsule const& capsuleIn) const { return capsuleIn.Intersects(*this); }
 inline bool King::Box::Collision(Box const & boxIn) const { return Intersects(boxIn); }
 /******************************************************************************
 *    Method:    CollisionVolume
@@ -1117,7 +1292,7 @@ void King::Box::GetCornersLowest4(DirectX::XMFLOAT3 * pArrayOut, const Quaternio
 /******************************************************************************
 *    Method:    operator= ; copy assignment
 ******************************************************************************/
-inline King::LineModel & King::LineModel::operator= (const King::LineModel &in)
+King::LineModel & King::LineModel::operator= (const King::LineModel &in)
 {
     _modelName = in._modelName;
     _vertexFormat = in._vertexFormat;
@@ -2330,9 +2505,20 @@ vector<vector<float>> King::ModelScaffold::GetDataAttribute(VertexAttrib::enumDe
     return v;
 }
 
-inline bool King::Ray::Collision(Sphere const & sphereIn) const { return sphereIn.Collision(*this); }
 
-inline bool King::Ray::Collision(Box const & boxIn) const { return boxIn.Collision(*this); }
+// double dispatch
+
+inline bool King::Plane::Collision(Point const& pointIn) const { return Intersects(pointIn); }
+
+inline bool King::Plane::Collision(Line const& lineIn) const { Point ptOut; return Intersects(lineIn, &ptOut); }
+
+inline bool King::Plane::Collision(Ray const& rayIn) const { Point ptOut; return Intersects(rayIn, &ptOut); }
+
+inline bool King::Plane::Collision(Plane const& planeIn) const { Line lineOut; return Intersects(planeIn, &lineOut); }
+
+inline bool King::Plane::Collision(Sphere const& sphereIn) const { return Intersects((Sphere)sphereIn); }
+
+inline bool King::Plane::Collision(Box const& boxIn) const { return Intersects(boxIn); }
 
 inline bool __vectorcall King::Plane::Intersects(const Point & pointIn) const
 {
@@ -2340,6 +2526,110 @@ inline bool __vectorcall King::Plane::Intersects(const Point & pointIn) const
     if(dist < 5.e-5f)
         return true;
     else 
+        return false;
+}
+
+bool __vectorcall King::Plane::Intersects(const Plane& planeIn, Line *lineOut) const
+{
+    //XMVECTOR* pLinePoint1,
+    //    XMVECTOR* pLinePoint2,
+    //    FXMVECTOR  P1,
+    //    FXMVECTOR  P2
+    auto n = GetNormal();
+    auto u = planeIn.GetNormal();
+    // parallel test
+    if (Dot(n, u) == 0.f)
+    {
+        if (float4(*this) == float4(planeIn))
+        {
+            // there is no line of intersection (it is the whole plane)
+            (*lineOut).Set(Line(GetOrigin(), planeIn.GetOrigin()));
+            return true;
+        }
+        return false;
+    }
+
+    XMVECTOR V1 = float3::CrossProduct(planeIn, *this);
+
+    XMVECTOR LengthSq = DirectX::XMVector3LengthSq(V1);
+
+    XMVECTOR V2 = float3::CrossProduct(planeIn, V1);
+
+    XMVECTOR P1W = DirectX::XMVectorSplatW(*this);
+    XMVECTOR pt = DirectX::XMVectorMultiply(V2, P1W);
+
+    XMVECTOR V3 = float3::CrossProduct(V1, *this);
+
+    XMVECTOR P2W = DirectX::XMVectorSplatW(planeIn);
+    pt = DirectX::XMVectorMultiplyAdd(V3, P2W, pt);
+
+    XMVECTOR LinePoint1 = DirectX::XMVectorDivide(pt, LengthSq);
+    XMVECTOR LinePoint2 = DirectX::XMVectorAdd(LinePoint1, V1);
+    (*lineOut).SetVertex(0, LinePoint1);
+    (*lineOut).SetVertex(1, LinePoint2);
+
+    return true;
+}
+
+inline bool __vectorcall King::Plane::Intersects(const Line& lineIn, Point* ptOut) const
+{
+    // reference http://geomalgorithms.com/a05-_intersect-1.html
+    auto P0 = lineIn.GetVertex(0);
+    auto P1 = lineIn.GetVertex(1);
+    auto V0 = GetOrigin();
+    auto n = GetNormal();
+    auto u = lineIn.GetLengthVector();
+    // parallel test
+    if (Dot(n, u) == 0.f)
+    {
+        if (Dot(n, P0 - V0) == 0)
+        {
+            // P0 is on the plane and the line is parallel to the plane
+            // so all points intersects, return the mid point of the line
+            *ptOut = lineIn.GetMidPoint();
+            return true;
+        }
+        return false;
+    }
+    auto s = Dot(n, V0 - P0) / Dot(n, P1 - P0);
+    // If the line L is a finite segment from P0 to P1, then one just has to 
+    // check that 0 <= s <= 1 to verify that there is an intersection 
+    // between the segment and the plane.
+    // For a positive ray, there is an intersection with the plane when s >= 0.
+    if (s >= 0.f && s <= 1.f)
+        return true;
+    else
+        return false;
+}
+
+inline bool __vectorcall King::Plane::Intersects(const Ray& rayIn, Point* ptOut) const
+{
+    // reference http://geomalgorithms.com/a05-_intersect-1.html
+    auto P0 = rayIn.GetOrigin();
+    auto V0 = GetOrigin();
+    auto n = GetNormal();
+    auto u = rayIn.GetDirection();
+    auto w = P0 - V0;
+    // parallel test
+    if (Dot(n, u) == 0.f)
+    {
+        if (Dot(n, w) == 0)
+        {
+            // P0 is on the plane and the line is parallel to the plane
+            // so all points intersects, return the mid point of the line
+            *ptOut = rayIn.GetOrigin();
+            return true;
+        }
+        return false;
+    }
+    auto s = Dot(n, -w) / Dot(n, u);
+    // For a positive ray, there is an intersection with the plane when s >= 0.
+    if (s >= 0.f)
+    {
+        *ptOut = s * u + P0;
+        return true;
+    }
+    else
         return false;
 }
 
@@ -2422,15 +2712,6 @@ inline bool __vectorcall King::Plane::Intersects(const Box& boxIn) const
     // intersecting plane
     return true;
 }
-
-inline FloatPoint3 __vectorcall King::Plane::FindNearestPointOnPlane(const FloatPoint3 & pointIn) const
-{ 
-    float dist = DistanceFromPoint(pointIn);
-    FloatPoint3 pt( -GetNormal() * dist );
-
-    return pt;
-}
-
 
 /******************************************************************************
 *   Class Contact
@@ -3004,3 +3285,300 @@ inline bool King::Contact::VertInsideFace(const vector<float3>& contactVerts, co
 
     return true;
 }
+
+
+// Functionality
+/* To test collision against a capsule, you must find the closest point to it's line segment to whatever it is you are testing, then construct a spehre at that point. Then it becomes a whatever / sphere test.*/
+
+inline bool King::Capsule::Intersects(const Point& ptIn) const { auto c = segment.FindNearestPointOnLineSegment(ptIn); return Sphere(c, radius).Contains(ptIn); }
+
+bool King::Capsule::Intersects(const Ray& rayIn, Ray *intersectAndNormal1Out, Ray* intersectAndNormal2Out) const
+{
+    // Credits to https://gist.github.com/jdryg/ecde24d34aa0ce2d4d87 for method
+
+    // Substituting equ. (1) - (6) to equ. (I) and solving for t' gives:
+    //
+    // t' = (t * dot(AB, d) + dot(AB, AO)) / dot(AB, AB); (7) or
+    // t' = t * m + n where 
+    // m = dot(AB, d) / dot(AB, AB) and 
+    // n = dot(AB, AO) / dot(AB, AB)
+    //
+    const Line& capSeg = GetSegment();
+    const float& capRadius = GetRadius();
+
+    float3 AB = capSeg.GetVertex(1) - capSeg.GetVertex(0);
+    float3 AO = rayIn.GetOrigin() - capSeg.GetVertex(0);
+
+    float AB_dot_d = AB.DotProduct(rayIn.GetDirection());
+    float AB_dot_AO = AB.DotProduct(AO);
+    float AB_dot_AB = AB.DotProduct(AB);
+
+    float m = AB_dot_d / AB_dot_AB;
+    float n = AB_dot_AO / AB_dot_AB;
+
+    // Substituting (7) into (II) and solving for t gives:
+    //
+    // dot(Q, Q)*t^2 + 2*dot(Q, R)*t + (dot(R, R) - r^2) = 0
+    // where
+    // Q = d - AB * m
+    // R = AO - AB * n
+    float3 Q = rayIn.GetDirection() - (AB * m);
+    float3 R = AO - (AB * n);
+
+    float a = Q.DotProduct(Q);
+    float b = 2.0f * Q.DotProduct(R);
+    float c = R.DotProduct(R) - (capRadius * capRadius);
+
+    if (a == 0.0f)
+    {
+        // Special case: AB and ray direction are parallel. If there is an intersection it will be on the end spheres...
+        // because the ray is down the local axis of the capsule
+        // Q = d - AB * m =>
+        // Q = d - AB * (|AB|*|d|*cos(AB,d) / |AB|^2) => |d| == 1.0
+        // Q = d - AB * (|AB|*cos(AB,d)/|AB|^2) =>
+        // Q = d - AB * cos(AB, d) / |AB| =>
+        // Q = d - unit(AB) * cos(AB, d)
+        //
+        // |Q| == 0 means Q = (0, 0, 0) or d = unit(AB) * cos(AB,d)
+        // both d and unit(AB) are unit vectors, so cos(AB, d) = 1 => AB and d are parallel.
+        // 
+        Sphere sphereA, sphereB;
+        sphereA.SetCenter(capSeg.GetVertex(0));
+        sphereA.SetRadius(radius);
+        sphereB.SetCenter(capSeg.GetVertex(1));
+        sphereB.SetRadius(radius);
+
+        float3 pt;
+        if (!sphereA.Intersects(rayIn, &pt) || !sphereB.Intersects(rayIn, &pt))
+        {
+            // No intersection with one of the spheres means no intersection at all...
+            return false;
+        }
+
+        float atmin=0.f, atmax = 0.f, btmin = 0.f, btmax = 0.f;
+        {
+            float3 CO_A = rayIn.GetOrigin() - sphereA.GetCenter();
+            float a_A = Dot(rayIn.GetDirection(), rayIn.GetDirection());
+            float b_A = 2.0f * Dot(CO_A, rayIn.GetDirection());
+            float c_A = Dot(CO_A, CO_A) - (sphereA.GetRadius() * sphereA.GetRadius());
+            float discriminant_A = b_A * b_A - 4.0f * a_A * c_A;
+            if (discriminant_A >= 0.0f)
+            {
+                atmin = (-b - sqrtf(discriminant_A)) / (2.0f * a);
+                atmax = (-b + sqrtf(discriminant_A)) / (2.0f * a);
+            }
+            if (atmin > atmax)
+                std::swap(atmin, atmax);
+        }
+        {
+            float3 CO_B = rayIn.GetOrigin() - sphereB.GetCenter();
+            float a_B = Dot(rayIn.GetDirection(), rayIn.GetDirection());
+            float b_B = 2.0f * Dot(CO_B, rayIn.GetDirection());
+            float c_B = Dot(CO_B, CO_B) - (sphereB.GetRadius() * sphereB.GetRadius());
+            float discriminant_B = b_B * b_B - 4.0f * a_B * c_B;
+            if (discriminant_B >= 0.0f)
+            {
+                btmin = (-b - sqrtf(discriminant_B)) / (2.0f * a);
+                btmax = (-b + sqrtf(discriminant_B)) / (2.0f * a);
+            }
+            if (btmin > btmax)
+                std::swap(btmin, btmax);
+        }
+        if (atmin < btmin)
+        {
+            intersectAndNormal1Out->SetOrigin(rayIn.GetOrigin() + (rayIn.GetDirection() * atmin));
+            intersectAndNormal1Out->SetDirection(intersectAndNormal1Out->GetOrigin() - capSeg.GetVertex(0));
+        }
+        else
+        {
+            intersectAndNormal1Out->SetOrigin(rayIn.GetOrigin() + (rayIn.GetDirection() * btmin));
+            intersectAndNormal1Out->SetDirection(intersectAndNormal1Out->GetOrigin() - capSeg.GetVertex(1));
+        }
+
+        if (atmax > btmax)
+        {
+            intersectAndNormal2Out->SetOrigin(rayIn.GetOrigin() + (rayIn.GetDirection() * atmax));
+            intersectAndNormal2Out->SetDirection(intersectAndNormal2Out->GetOrigin() - capSeg.GetVertex(0));
+        }
+        else
+        {
+            intersectAndNormal2Out->SetOrigin(rayIn.GetOrigin() + (rayIn.GetDirection() * btmax));
+            intersectAndNormal2Out->SetDirection(intersectAndNormal2Out->GetOrigin() - capSeg.GetVertex(1));
+        }
+
+        return true;
+    }
+
+    float discriminant = b * b - 4.0f * a * c;
+    if (discriminant < 0.0f)
+    {
+        // The ray doesn't hit the infinite cylinder defined by (A, B).
+        // No intersection.
+        return false;
+    }
+
+    float tmin = (-b - sqrtf(discriminant)) / (2.0f * a);
+    float tmax = (-b + sqrtf(discriminant)) / (2.0f * a);
+    if (tmin > tmax)
+    {
+        std::swap(tmin, tmax);
+    }
+
+    // Now check to see if K1 and K2 are inside the line segment defined by A,B
+    float t_k1 = tmin * m + n;
+    if (t_k1 < 0.0f)
+    {
+        // On sphere (A, r)...
+        Sphere s(capSeg.GetVertex(0), capRadius);
+
+        float3 pt;
+        if (s.Intersects(rayIn, &pt))
+        {
+            intersectAndNormal1Out->SetOrigin(pt);
+            intersectAndNormal1Out->SetDirection(pt - s.GetCenter());
+        }
+        else
+            return false;
+    }
+    else if (t_k1 > 1.0f)
+    {
+        // On sphere (B, r)...
+        Sphere s(capSeg.GetVertex(1), capRadius);
+
+        float3 pt;
+        if (s.Intersects(rayIn, &pt))
+        {
+            intersectAndNormal1Out->SetOrigin(pt);
+            intersectAndNormal1Out->SetDirection(pt - s.GetCenter());
+        }
+        else
+            return false;
+    }
+    else
+    {
+        // On the cylinder...
+        intersectAndNormal1Out->SetOrigin( rayIn.GetOrigin() + (rayIn.GetDirection() * tmin));
+        float3 k1 = capSeg.GetVertex(0) + AB * t_k1;
+        intersectAndNormal1Out->SetDirection(intersectAndNormal1Out->GetOrigin() - k1);
+    }
+
+    float t_k2 = tmax * m + n;
+    if (t_k2 < 0.0f)
+    {
+        // On sphere (A, r)...
+        Sphere s(capSeg.GetVertex(0), capRadius);
+
+        float3 pt;
+        if (s.Intersects(rayIn, &pt))
+        {
+            intersectAndNormal2Out->SetOrigin(pt);
+            intersectAndNormal2Out->SetDirection(pt - s.GetCenter());
+        }
+        else
+            return false;
+    }
+    else if (t_k2 > 1.0f)
+    {
+        // On sphere (B, r)...
+        Sphere s(capSeg.GetVertex(1), capRadius);
+
+        float3 pt;
+        if (s.Intersects(rayIn, &pt))
+        {
+            intersectAndNormal2Out->SetOrigin(pt);
+            intersectAndNormal2Out->SetDirection(pt - s.GetCenter());
+        }
+        else
+            return false;
+    }
+    else
+    {
+        // On the cylinder...
+        intersectAndNormal2Out->SetOrigin(rayIn.GetOrigin() + (rayIn.GetDirection() * tmax));
+        float3 k2 = capSeg.GetVertex(0) + AB * t_k2;
+        intersectAndNormal2Out->SetDirection(intersectAndNormal2Out->GetOrigin() - k2);
+    }
+
+    return true;
+}
+
+bool King::Capsule::Intersects(const Line& lineIn) const
+{
+    // find the nearest point on the capsule line segment and the line
+    // it then become a sphere point test
+    const float epsilon_squared = FLT_EPSILON * FLT_EPSILON;
+    FloatPoint3 rayA = segment.pt[1] - segment.pt[0];
+    FloatPoint3 rayB = lineIn.pt[1] - lineIn.pt[0];
+
+    FloatPoint3 pointOnSegA, pointOnSegB;
+
+    // line segment is degenerate (distance between end points is near zero)
+    // this is the same as Dot(rayA,rayA) and Dot(rayB,rayB)
+    float L11 = DirectX::XMVectorGetX(DirectX::XMVectorSum(DirectX::XMVectorPow(rayA, FloatPoint3(2.f, 2.f, 2.f))));
+    float L22 = DirectX::XMVectorGetX(DirectX::XMVectorSum(DirectX::XMVectorPow(rayB, FloatPoint3(2.f, 2.f, 2.f))));
+
+    if (L11 < epsilon_squared)
+    {
+        pointOnSegB = lineIn.FindNearestPointOnLineSegment(segment.pt[0]);
+    }
+    else if (L22 < epsilon_squared)
+    {
+        pointOnSegA = segment.FindNearestPointOnLineSegment(lineIn.pt[0]);
+    }
+    else
+    {
+        FloatPoint3 AB = lineIn.pt[0] - segment.pt[0];
+        // - dot product of A and B
+        float L12 = -FloatPoint3::SumComponents(rayA * rayB);
+        float DetL = L11 * L22 - L12 * L12;
+
+        // Lines/Segments A and B are parallel
+        if (fabsf(DetL) < FLT_EPSILON)
+        {
+            return false;
+        }
+        // The general case
+        else
+        {
+            float ra = FloatPoint3::SumComponents(rayA * AB);
+            float rb = -FloatPoint3::SumComponents(rayB * AB);
+
+            float t = (L11 * rb - ra * L12) / DetL;
+            float s = (ra - L12 * t) / L11;
+
+            pointOnSegA = s * rayA + segment.pt[0];
+            pointOnSegB = t * rayB + lineIn.pt[0];
+        }
+
+    }
+    Sphere s(pointOnSegA,GetRadius());
+    return s.Contains(pointOnSegB);
+}
+
+inline bool King::Capsule::Intersects(const Sphere& sphereIn) const 
+{ 
+    auto c = segment.FindNearestPointOnLineSegment(sphereIn.GetCenter()); 
+    return Sphere(c, radius).Intersects(sphereIn); 
+}
+
+bool King::Capsule::Intersects(const Box& boxIn) const
+{
+    const float3& c = boxIn.GetCenter();
+    auto s_center = segment.FindNearestPointOnLineSegment(c);
+    auto b_nearest = boxIn.FindNearestPointOnBox(s_center);
+
+    Sphere s(s_center, GetRadius());
+    return s.Contains(b_nearest);
+}
+
+// double dispatch
+
+inline bool King::Capsule::Collision(Point const& pointIn) const { return Intersects(pointIn); }
+
+inline bool King::Capsule::Collision(Ray const& rayIn) const { Ray ptN1, ptN2; return Intersects(rayIn, &ptN1, &ptN2); }
+
+inline bool King::Capsule::Collision(Line const& lineIn) const { return Intersects(lineIn); }
+
+inline bool King::Capsule::Collision(const Sphere& sphereIn) const { return Intersects(sphereIn); }
+
+inline bool King::Capsule::Collision(Box const& boxIn) const { return Intersects(boxIn); }

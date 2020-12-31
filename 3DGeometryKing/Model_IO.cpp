@@ -467,7 +467,9 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
                         cout << "Bad face read during load" << '\n';
                         for (unsigned long i = 0; i < numVertexThisFace; ++i)
                         {
-                            verticiesComposite.pop_back();
+                            // remove data if it was loaded
+                            if (verticiesComposite.size())
+                                verticiesComposite.pop_back();
                         }
                     }
                 }

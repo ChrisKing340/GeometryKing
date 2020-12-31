@@ -53,7 +53,7 @@ SOFTWARE.
 #endif
 
 #define KING_3DGEOMETRY_VERSION_MAJOR 1
-#define KING_3DGEOMETRY_VERSION_MINOR 0
+#define KING_3DGEOMETRY_VERSION_MINOR 2
 #define KING_3DGEOMETRY_VERSION_PATCH 0
 
 #include <DirectXCollision.h>
@@ -91,21 +91,27 @@ namespace King {
     class Triangle; // SIMD three points;
     class Quad; // SIMD four points
     class Sphere; // SIMD float[4]
+    class Capsule; // SIMD two points & a float
     class Box;  // SIMD two points; AABB and as a OBB by passing in a Quaternion to methods
-    class Fustrum; // SIMD six planes and eight points
+    class Frustum; // SIMD six planes and eight points
+
     // 3D Complex objects, working with vertex buffer references:
     class LineIndexed; // int[2] into a vertex buffer
     class TriangleIndexed; // int[3] into a vertex buffer
+
     // 3D Meshs, data is not owned and rather referenced from the model that stores it.
     class LineMesh;
     class TriangleMesh;
+
     // 3D Structure that matches verticies to an underlining connected hierarchy
     class BoneHierarchy; //skelton structure with transforms, index, and weights to influence verticies
+    
     // 3D Models containing meshes.  Models own the master data that is shared by different meshes. 
     class HeightGrid; // initalized using a TriangleMesh, keeps a rectangular grid of float heights in the XZ domain and a world bounding box with min/max heights for collision detection to grid in the Y domain.
     class LineModel; // from lines
     class Model; // from triangles
     class SkinnedModel; // Model with a pointer to BoneHierarchy data (if it is not skinned then pointer is not initalized)
+    
     // Helpers
     class VertexAttrib;
     class VertexFormat;
@@ -418,16 +424,16 @@ namespace King {
     class Collidable
     {
     public:
-        virtual bool Collision(Collidable const& in) const = 0;
+        virtual bool Collision(Collidable const& in) const = 0; // for double dispatch
 
-        virtual bool Collision(Point const& pointIn) const = 0;
-        virtual bool Collision(Ray const& pointIn) const = 0;
-        virtual bool Collision(Line const& lineIn) const = 0;
-        virtual bool Collision(Sphere const& sphereIn) const = 0;
-        virtual bool Collision(Box const& boxIn) const = 0;
-        // TO DO 
-        //virtual bool Collision(Plane const& planeIn) const = 0;
-        //virtual bool Collision(Frustum const& frustumIn) const = 0;
+        virtual bool  Collision(Point const& pointIn) const = 0;
+        virtual bool  Collision(Ray const& pointIn) const = 0;
+        virtual bool  Collision(Line const& lineIn) const = 0;
+        virtual bool  Collision(Plane const& planeIn) const = 0;
+        virtual bool  Collision(Sphere const& sphereIn) const = 0;
+        virtual bool  Collision(Capsule const& planeIn) const = 0;
+        virtual bool  Collision(Box const& boxIn) const = 0;
+        virtual bool  Collision(Frustum const& frustumIn) const = 0;
     };
     /******************************************************************************
     *    Point - Combines our position data type
@@ -503,19 +509,18 @@ namespace King {
         friend Point operator* (Point lhs, const DirectX::XMMATRIX &m) { lhs *= m; return lhs; } // invokes std::move(lhs)
 
         // Functionality
-        virtual bool                        Collision(Collidable const& in) const override { return in.Collision(*this); } // double dispatch
-
-        inline bool    __vectorcall         Intersects(const FloatPoint3 &pointIn) const;
-        inline bool                         Intersects(const Point &pointIn) const;
-    
+        virtual bool                        Collision(Collidable const& in) const override { return in.Collision(*this); } // double dispatch  
         virtual bool                        Collision(Point const& pointIn) const override;
-        virtual bool                        Collision(Ray const& pointIn) const override { return false; }
+        virtual bool                        Collision(Ray const& rayIn) const override;
         virtual bool                        Collision(Line const& lineIn) const override;
         virtual bool                        Collision(Sphere const& sphereIn) const override;
         virtual bool                        Collision(Box const& boxIn) const override;
-        // *** TO DO  ***
-        //virtual bool                        Collision(Plane const& planeIn) const override;
-        //virtual bool                        Collision(Frustum const& frustumIn) const override;
+        virtual bool                        Collision(Plane const& planeIn) const override;
+        virtual bool                        Collision(Capsule const& capsuleIn) const override;
+        virtual bool                        Collision(Frustum const& frustumIn) const override { return false; }
+
+        inline bool                         Intersects(const FloatPoint3& pointIn) const;
+        inline bool                         Intersects(const Point& pointIn) const;
         // Assignments
         // I/O
         friend std::ostream& operator<< (std::ostream& os, const Point& in);
@@ -549,7 +554,7 @@ namespace King {
         // Construction/Destruction
         Line() = default;
         Line(const Line &in) { *this = in; } // forward to copy assignment
-        Line(Line &&in) { *this = std::move(in); } // forward to move assignment
+        Line(Line &&in) noexcept { *this = std::move(in); } // forward to move assignment
         Line(const FloatPoint3 &pt1In, const FloatPoint3 &pt2In) { pt[0] = pt1In; pt[1] = pt2In; }
 
         virtual ~Line() = default;
@@ -557,32 +562,35 @@ namespace King {
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<Line*>(p)); }
-        inline Line & operator= (const Line &in) = default; // copy assignment
-        inline Line & operator= (Line &&in) = default; // move assignment
+        Line & operator= (const Line &in) = default; // copy assignment
+        Line & operator= (Line &&in) = default; // move assignment
         inline Line & operator*= (const DirectX::XMMATRIX &m) { pt[0] = DirectX::XMVector4Transform(FloatPoint4(pt[0], 1.0f), m); pt[1] = DirectX::XMVector4Transform(FloatPoint4(pt[1], 1.0f), m); return *this; }
         friend Line operator* (Line lhs, const DirectX::XMMATRIX &m) { lhs *= m; return lhs; } // invokes std::move(lhs)
-
+        // Comparators
+        inline bool operator==  (const Line& rhs) { return pt[0] == rhs.pt[0] && pt[1] == rhs.pt[1]; }
+        inline bool operator!=  (const Line& rhs) { return (pt[0] != rhs.pt[0] || pt[1] != rhs.pt[1]); }
         // Functionality
         inline bool __vectorcall            Intersects(const Point &pointIn) const;
         inline bool __vectorcall            Intersects(const Line &lineIn, FloatPoint3 *intersectionOut = nullptr) const;
         FloatPoint3 __vectorcall            FindNearestPointOnLineSegment(const FloatPoint3 &pointIn) const;
         // Accessors
         const auto &                        GetVertex(const uint32_t vertexIndexIn) const { return pt[vertexIndexIn]; }
-        FloatPoint3                         GetLength() { return FloatPoint3::Absolute(pt[1] - pt[0]); }
-        FloatPoint3                         GetMidPoint() { return (pt[0] + pt[1]) * 0.5f; }
+        float                               GetLength() const { return FloatPoint3::Magnitude(pt[1] - pt[0]); }
+        FloatPoint3                         GetLengthVector() const { return (pt[1] - pt[0]); }
+        FloatPoint3                         GetMidPoint() const { return (pt[0] + pt[1]) * 0.5f; }
         // Assignments
         inline void __vectorcall            Set(const Line &in) { pt[0] = in.pt[0]; pt[1] = in.pt[1]; }
         inline void __vectorcall            SetVertex(const uint32_t vertexIndexIn, const FloatPoint3 &in) { pt[vertexIndexIn] = in; }
 
         virtual bool                        Collision(Collidable const& in) const override { return in.Collision(*this); } // double dispatch
         virtual bool                        Collision(Point const& pointIn) const override;
-        virtual bool                        Collision(Ray const& pointIn) const override { return false; } // *** TO DO  ***
+        virtual bool                        Collision(Ray const& rayIn) const override;
         virtual bool                        Collision(Line const& lineIn) const override;
         virtual bool                        Collision(Sphere const& sphereIn) const override;
         virtual bool                        Collision(Box const& boxIn) const override;
-        // *** TO DO  ***
-//virtual bool                        Collision(Plane const& planeIn) const override;
-//virtual bool                        Collision(Frustum const& frustumIn) const override;
+        virtual bool                        Collision(Plane const& planeIn) const override;
+        virtual bool                        Collision(Capsule const& capsuleIn) const override;
+        virtual bool                        Collision(Frustum const& frustumIn) const override { return false; }
     };
     /******************************************************************************
     *    LineIndexed - Vertex indicies representing a connected line segment
@@ -615,9 +623,11 @@ namespace King {
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<LineIndexed*>(p)); }
-        inline LineIndexed & operator= (const LineIndexed &in) = default; // copy assignment
-        inline LineIndexed & operator= (LineIndexed &&in) = default; // move assignment
-
+        LineIndexed & operator= (const LineIndexed &in) = default; // copy assignment
+        LineIndexed & operator= (LineIndexed &&in) = default; // move assignment
+        // Comparators
+        inline bool operator==  (const LineIndexed& rhs) { return pt[0] == rhs.pt[0] && pt[1] == rhs.pt[1]; }
+        inline bool operator!=  (const LineIndexed& rhs) { return (pt[0] != rhs.pt[0] || pt[1] != rhs.pt[1]); }
         // Functionality
         inline bool    __vectorcall         Intersects(Line &lineIn, FloatPoint3 *intersectionOut = nullptr) { assert(vb != nullptr); Line(float3(GetVertex(0)),float3(GetVertex(1))).Intersects(lineIn, intersectionOut); }
         FloatPoint3 __vectorcall            FindNearestPointOnLineSegment(const FloatPoint3 &pointIn) { assert(vb != nullptr); return Line(float3(GetVertex(0)), float3(GetVertex(1))).FindNearestPointOnLineSegment(pointIn); }
@@ -658,8 +668,8 @@ namespace King {
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<Path*>(p)); }
-        inline Path & operator= (const Path &in) = default; // copy assignment
-        inline Path & operator= (Path &&in) = default; // move assignment
+        Path & operator= (const Path &in) = default; // copy assignment
+        Path & operator= (Path &&in) = default; // move assignment
         inline Path & operator*= (const DirectX::XMMATRIX &m) { for(Point & pt : *this) pt.Set( DirectX::XMVector4Transform(pt.GetVecConst(), m) ); return *this; }
         friend Path operator* (Path lhs, const DirectX::XMMATRIX &m) { lhs *= m; return lhs; } // invokes std::move(lhs)
 
@@ -692,20 +702,25 @@ namespace King {
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<Ray*>(p)); }
-        inline Ray & operator= (const Ray &in) = default; // copy assignment
-        inline Ray & operator= (Ray &&in) = default; // move assignment
+        Ray & operator= (const Ray &in) = default; // copy assignment
+        Ray & operator= (Ray &&in) = default; // move assignment
         inline Ray & operator*= (const DirectX::XMMATRIX &m) { origin = float3(DirectX::XMVector4Transform(static_cast<DirectX::XMVECTOR>(origin), m)); return *this; }
         friend Ray operator* (Ray lhs, const DirectX::XMMATRIX &m) { lhs *= m; return lhs; } // invokes std::move(lhs)
         // Functionality
         virtual bool                        Collision(Collidable const& in) const override { return in.Collision(*this); } // double dispatch
-        virtual bool                        Collision(Point const& pointIn) const override { return false; } // *** TO DO  ***
-        virtual bool                        Collision(Ray const& pointIn) const override { return false; } // *** TO DO  ***
-        virtual bool                        Collision(Line const& lineIn) const override { return false; } // *** TO DO  ***
+        virtual bool                        Collision(Point const& pointIn) const override;
+        virtual bool                        Collision(Ray const& rayIn) const override;
+        virtual bool                        Collision(Line const& lineIn) const override;
+        virtual bool                        Collision(Plane const& planeIn) const override;
         virtual bool                        Collision(Sphere const& sphereIn) const override;
+        virtual bool                        Collision(Capsule const& capsuleIn) const override;
         virtual bool                        Collision(Box const& boxIn) const override;
-        // *** TO DO  ***
-        //virtual bool                        Collision(Plane const& planeIn) const override;
-        //virtual bool                        Collision(Frustum const& frustumIn) const override;
+        virtual bool                        Collision(Frustum const& frustumIn) const override { return false; }
+
+        bool                                Intersects(const Point& pointIn) const;
+        bool                                Intersects(const Ray& rayIn, Position *ptOut) const;
+        bool                                Intersects(const Line& lineIn, Position* ptOut) const;
+        FloatPoint3                         FindNearestPoint(const Point& lineIn) const;
         // Accessors
         FloatPoint3 const &                 GetDirection() const { return direction; }
         FloatPoint3 const &                 GetOrigin() const { return origin; }
@@ -736,7 +751,7 @@ namespace King {
     *    w component keeps the scalar where orgin = -(normal) * s
     *    sx'+ sy'+ sz' + s = 0 ; homogeneous plane equation
     ******************************************************************************/
-    class alignas(16) Plane : public FloatPoint4
+    class alignas(16) Plane : public FloatPoint4, public Collidable
     {
     public:
         // Construction/Destruction
@@ -749,11 +764,11 @@ namespace King {
         inline explicit Plane(const DirectX::XMVECTOR &vec) { v = vec; }
         inline explicit Plane(const FloatPoint4 in) { v = in; }
         inline Plane(const Plane &in) { v = in; } // copy 
-        inline Plane(Plane &&in) { v = std::move(in); } // move
+        inline Plane(Plane &&in) noexcept { v = std::move(in); } // move
         virtual ~Plane() = default;
         // Operators 
-        inline Plane & operator= (const Plane &in) = default; // copy assignment
-        inline Plane & operator= (Plane &&in) = default; // move assignment
+        Plane & operator= (const Plane &in) = default; // copy assignment
+        Plane & operator= (Plane &&in) = default; // move assignment
         inline Plane & operator= (const FXMVECTOR &in) { v = in; return *this; }
         inline Plane & operator*= (const DirectX::XMMATRIX &m) { v = DirectX::XMPlaneTransform(v, m); return *this; }
         inline Plane operator* (const DirectX::XMMATRIX &m) { return Plane(DirectX::XMPlaneTransform(v, m)); }
@@ -762,14 +777,29 @@ namespace King {
         inline bool operator==  (const Plane &rhs) { return DirectX::XMVector4Equal(v, rhs.v); }
         inline bool operator!=  (const Plane &rhs) { return DirectX::XMVector4NotEqual(v, rhs.v); }
         // Functionality
+        virtual bool                        Collision(Collidable const& in) const override { return in.Collision(*this); } // double dispatch
+        virtual bool                        Collision(Point const& pointIn) const override;
+        virtual bool                        Collision(Line const& lineIn) const override;
+        virtual bool                        Collision(Ray const& rayIn) const override;
+        virtual bool                        Collision(Plane const& planeIn) const override;
+        virtual bool                        Collision(Sphere const& sphereIn) const override;
+        virtual bool                        Collision(Capsule const& capsuleIn) const override { return false; }
+        virtual bool                        Collision(Box const& boxIn) const override;
+        virtual bool                        Collision(Frustum const& frustumIn) const override { return false; }
+
         inline bool __vectorcall            Intersects(const Point &pointIn) const;
+        inline bool __vectorcall            Intersects(const Line& lineIn, Point *ptOut) const;
+        inline bool __vectorcall            Intersects(const Ray& rayIn, Point* ptOut) const;
+        bool __vectorcall                   Intersects(const Plane& planeIn, Line* lineOut) const;
         inline bool __vectorcall            Intersects(const Sphere &sphereIn) const;
         inline bool __vectorcall            Intersects(const Triangle& triangleIn) const;
         inline bool __vectorcall            Intersects(const Box& boxIn) const;
-        FloatPoint3 __vectorcall            FindNearestPointOnPlane(const FloatPoint3 & pointIn) const;
+        FloatPoint3 __vectorcall            FindNearestPointOnPlane(const FloatPoint3& pointIn) const { return ProjectOnToPlane(pointIn); }
         // Accessors
         FloatPoint3                         GetNormal(void) const { return DirectX::XMPlaneNormalize(v); }
         FloatPoint3                         GetOrigin(void) const { return -GetNormal() * GetW(); } // w keeps the scalar to translate unit vector to origin
+
+        float3                              ProjectOnToPlane(FloatPoint3 vecIn) const { auto n = GetNormal(); return vecIn - Dot(vecIn, n) * n; }
         float                               DistanceFromPoint(FloatPoint3 point) const { return Dot(point, GetNormal()) + GetW(); } // projects the point onto the plane and adds the perpendicular distance of the origin
         float                               DistanceFromPoint(Point point) const { return Dot(static_cast<FloatPoint4>(point), v); } // homogeneous (ax,ay,az,a) if a=1
     };
@@ -810,8 +840,8 @@ namespace King {
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<TriangleIndexed*>(p)); }
-        inline TriangleIndexed & operator= (const TriangleIndexed &in) = default; // copy assignment
-        inline TriangleIndexed& operator= (TriangleIndexed&& in) noexcept { *this = in; return *this; } // copy assign instead as we do not own the buffer
+        TriangleIndexed & operator= (const TriangleIndexed &in) = default; // copy assignment
+        TriangleIndexed& operator= (TriangleIndexed&& in) noexcept { *this = in; return *this; } // copy assign instead as we do not own the buffer
         // Functionality
         bool __vectorcall                   Intersects(const Ray &rayIn, FloatPoint3 *intersectPointOut) { return Intersects(rayIn.origin,rayIn.direction, intersectPointOut); }
         bool __vectorcall                   Intersects(const FloatPoint3 &rayOriginIn, const FloatPoint3 &rayDirectionIn, FloatPoint3 *intersectPointOut);
@@ -864,8 +894,8 @@ namespace King {
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<Triangle*>(p)); }
-        inline Triangle & operator= (const Triangle &in) = default; // copy assignment
-        inline Triangle & operator= (Triangle &&in) = default; // move assignment
+        Triangle & operator= (const Triangle &in) = default; // copy assignment
+        Triangle & operator= (Triangle &&in) = default; // move assignment
         // Functionality
         bool __vectorcall                   Intersects(const Ray &rayIn, FloatPoint3 *intersectPointOut) { Intersects(rayIn.origin, rayIn.direction, intersectPointOut); }
         bool __vectorcall                   Intersects(const FloatPoint3 &rayOriginIn, const FloatPoint3 &rayDirectionIn, FloatPoint3 *intersectPointOut);
@@ -914,8 +944,8 @@ namespace King {
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<Quad*>(p)); }
-        inline Quad & operator= (const Quad &in) = default; // copy assignment
-        inline Quad & operator= (Quad &&in) = default; // move assignment
+        Quad & operator= (const Quad &in) = default; // copy assignment
+        Quad & operator= (Quad &&in) = default; // move assignment
         // Functionality
         bool                                Intersects(const Ray& ray, FloatPoint3* intersectPointOut = nullptr);
         bool                                Intersects(const FloatPoint3 &rayOriginIn, const FloatPoint3 &rayDirectionIn, FloatPoint3 *intersectPointOut);
@@ -955,8 +985,8 @@ namespace King {
         inline Sphere(Sphere &&in) noexcept { v = std::move(in); } // move
         virtual ~Sphere() = default;
         // Operators 
-        inline Sphere & operator= (const Sphere &in) = default; // copy assignment
-        inline Sphere & operator= (Sphere &&in) = default; // move assignment
+        Sphere & operator= (const Sphere &in) = default; // copy assignment
+        Sphere & operator= (Sphere &&in) = default; // move assignment
         inline Sphere & operator= (const FXMVECTOR &in) { v = in; return *this; }
         inline Sphere & operator*= (const DirectX::XMMATRIX &m) { auto r = GetW(); v = DirectX::XMVector4Transform(FloatPoint4(v, 1.0f), m); SetW(r); return *this; } // does not support scaling since non-uniformed
         friend Sphere operator* (Sphere lhs, const DirectX::XMMATRIX &m) { lhs *= m; return lhs; } // invokes std::move(lhs)
@@ -965,19 +995,20 @@ namespace King {
         inline bool operator!=  (const Sphere &rhs) { return DirectX::XMVector4NotEqual(v, rhs.v); }
         // Functionality
         bool                                Contains(const Point & ptIn) const;
-        bool                                Intersects(const Ray & rhs, float & distOut) const;
+        bool                                Intersects(const Ray & rhs, float3 *ptOut) const;
         bool                                Intersects(const Line &rhs) const;
-        bool                                Intersects(const Sphere &rhs) const;
+        bool                                Intersects(const Plane&rhs) const;
+        bool                                Intersects(const Sphere& rhs) const;
                 
         virtual bool                        Collision(Collidable const& in) const override { return in.Collision(*this); } // double dispatch
         virtual bool                        Collision(Point const& pointIn) const override;
         virtual bool                        Collision(Ray const& rayIn) const override;
         virtual bool                        Collision(Line const& lineIn) const override;
+        virtual bool                        Collision(Plane const& planeIn) const override;
         virtual bool                        Collision(Sphere const& sphereIn) const override;
+        virtual bool                        Collision(Capsule const& capsuleIn) const override;
         virtual bool                        Collision(Box const& boxIn) const override;
-        // *** TO DO  ***
-        //virtual bool                        Collision(Plane const& planeIn) const override;
-        //virtual bool                        Collision(Frustum const& frustumIn) const override;
+        virtual bool                        Collision(Frustum const& frustumIn) const override { return false; }
         // Accessors
         FloatPoint3                         GetCenter() const { return FloatPoint3(v); }
         float                               GetRadius() const { return GetW(); }
@@ -996,6 +1027,73 @@ namespace King {
     std::wostream& operator<<(std::wostream& os, const King::Sphere& in);
     void to_json(json& j, const Sphere& from);
     void from_json(const json& j, Sphere& to);
+    /******************************************************************************
+    *    Capsule
+    * 
+    *    /---------\
+    *   (           )  = ((((((((((()((((((((((() = a line segment of infinite spheres
+    *    \---------/
+    *
+    ******************************************************************************/
+    class alignas(16) Capsule : public Collidable
+    {
+    public:
+        float           radius = 0.f;
+        Line            segment;
+
+    public:
+        // Construction/Destruction
+        inline Capsule() = default;
+        inline Capsule(const FloatPoint3 startIn, const FloatPoint3 endIn, const float radiusIn) : segment(startIn,endIn), radius(fabsf(radiusIn)) { ; }
+        inline Capsule(const Line& lineIn, const float radiusIn) : segment(lineIn), radius(fabsf(radiusIn)) { ; }
+
+        Capsule(const Capsule& in) : radius(in.radius), segment(in.segment) { ; } // copy 
+        Capsule(Capsule&& in) noexcept { radius = std::move(in.radius); segment = std::move(in.segment); } // move
+        virtual ~Capsule() = default;
+        // Operators 
+        inline Capsule& operator= (const Capsule& in) = default; // copy assignment
+        inline Capsule& operator= (Capsule&& in) = default; // move assignment
+        inline Capsule& operator*= (const DirectX::XMMATRIX& m) { segment *= m; return *this; }
+        friend Capsule operator* (Capsule lhs, const DirectX::XMMATRIX& m) { lhs *= m; return lhs; } // invokes std::move(lhs)
+        // Comparators
+        inline bool operator==  (const Capsule& rhs) { return (radius == rhs.radius && segment == rhs.segment); }
+        inline bool operator!=  (const Capsule& rhs) { return (radius != rhs.radius || segment != rhs.segment); }
+        // Functionality
+        /* To test collision against a capsule, you must find the closest point to it's line segment to whatever it is you are testing, then construct a spehre at that point. Then it becomes a whatever / sphere test.*/
+        bool                                Intersects(const Point& ptIn) const;
+        bool                                Intersects(const Ray& rayIn, Ray* intersectAndNormal1Out, Ray* intersectAndNormal2Out) const;
+        bool                                Intersects(const Line& lineIn) const;
+        //bool                                Intersects(const Plane& planeIn) const { return false; }
+        bool                                Intersects(const Sphere& sphereIn) const;
+        bool                                Intersects(const Box& boxIn) const;
+
+        virtual bool                        Collision(Collidable const& in) const override { return in.Collision(*this); } // double dispatch
+        virtual bool                        Collision(Point const& pointIn) const override;
+        virtual bool                        Collision(Ray const& rayIn) const override;
+        virtual bool                        Collision(Line const& lineIn) const override;
+        virtual bool                        Collision(Plane const& planeIn) const override { return false; }
+        virtual bool                        Collision(const Sphere& sphereIn) const override;
+        virtual bool                        Collision(Capsule const& capsuleIn) const override { return false; }
+        virtual bool                        Collision(Box const& boxIn) const override;
+        virtual bool                        Collision(Frustum const& frustumIn) const override { return false; }
+
+        // Accessors
+        Line                                GetSegment() const { return segment; }
+        float                               GetRadius() const { return radius; }
+        // Assignments
+        void __vectorcall                   SetSegment(const Line lineIn) { segment = lineIn; }
+        void                                SetRadius(const float radiusIn) { radius = radiusIn; }
+        // I/O
+/*        friend std::ostream& operator<< (std::ostream& os, const King::Capsule& in);
+        friend std::istream& operator>> (std::istream& is, Capsule& out);
+        friend void to_json(json& j, const Capsule& from);
+        friend void from_json(const json& j, Capsule& to)*/;
+    };
+    //std::ostream& operator<< (std::ostream& os, const King::Capsule& in);
+    //std::istream& operator>> (std::istream& is, King::Capsule& out);
+    //std::wostream& operator<<(std::wostream& os, const King::Capsule& in);
+    //void to_json(json& j, const Capsule& from);
+    //void from_json(const json& j, Capsule& to);
     /******************************************************************************
     *    Box
     *        An axis-aligned box with transforms for non-algined box.
@@ -1042,8 +1140,8 @@ namespace King {
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<Box*>(p)); }
-        inline Box & operator= (const Box &in) { Set(in.GetMin(), in.GetMax()); return *this; } // copy assignment
-        inline Box & operator= (Box &&in) = default; // move assignment
+        Box & operator= (const Box &in) { Set(in.GetMin(), in.GetMax()); return *this; } // copy assignment
+        Box & operator= (Box &&in) = default; // move assignment
         inline Box & operator*= (const DirectX::XMMATRIX &m) { pt_min = DirectX::XMVector4Transform(FloatPoint4(pt_min, 1.0f), m); pt_max = DirectX::XMVector4Transform(FloatPoint4(pt_max, 1.0f), m); return *this; } // does not support scaling since non-uniformed
         friend Box operator* (Box lhs, const DirectX::XMMATRIX &m) { lhs *= m; return lhs; } // invokes std::move(lhs)
         inline Box& operator+= (const float3& d) { MoveBy(d); return *this; }
@@ -1052,6 +1150,7 @@ namespace King {
         // Functionality
         bool                                Intersects(const Ray &rayIn, float &distOut) const;
         bool                                Intersects(const Line &lineIn) const;
+        bool                                Intersects(const Plane& planeIn) const;
         bool                                Intersects(const Box &boxIn) const;
         bool                                Intersects(const Sphere &sphereIn) const;
         bool                                Contains(const Box &boxIn) const; // boxIn is wholely inside of this box
@@ -1064,11 +1163,11 @@ namespace King {
         virtual bool                        Collision(Point const& pointIn) const override;
         virtual bool                        Collision(Ray const& rayIn) const override;
         virtual bool                        Collision(Line const& lineIn) const override;
+        virtual bool                        Collision(Plane const& planeIn) const override;
         virtual bool                        Collision(Sphere const& sphereIn) const override;
+        virtual bool                        Collision(Capsule const& capsuleIn) const override;
         virtual bool                        Collision(Box const& boxIn) const override;
-        // *** TO DO  ***
-        //virtual bool                        Collision(Plane const& planeIn) const override;
-        //virtual bool                        Collision(Frustum const& frustumIn) const override;
+        virtual bool                        Collision(Frustum const& frustumIn) const override { return false; }
 
         Box                                 CollisionVolume(const Box& boxIn); // over lapping volume with boxIn
 
@@ -1147,7 +1246,7 @@ namespace King {
     *
     *    Reference: Patterned after Frustum class in Microsoft mini engine
     ******************************************************************************/
-    class alignas(16) Frustum
+    class alignas(16) Frustum : public Collidable
     {
         /* variables */
     public:
@@ -1169,11 +1268,21 @@ namespace King {
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<Frustum*>(p)); }
-        inline Frustum & operator= (const Frustum &in) = default; // copy assignment
-        inline Frustum & operator= (Frustum &&in) = default; // move assignment
+        Frustum & operator= (const Frustum &in) = default; // copy assignment
+        Frustum & operator= (Frustum &&in) = default; // move assignment
         inline Frustum & operator*= (const DirectX::XMMATRIX &m);
         friend Frustum operator* (Frustum lhs, const DirectX::XMMATRIX &m) { lhs *= m; return lhs; } // invokes std::move(lhs)
         // Functionality
+        virtual bool                        Collision(Collidable const& in) const override { return in.Collision(*this); } // double dispatch
+        virtual bool                        Collision(Point const& pointIn) const override { return false; }
+        virtual bool                        Collision(Ray const& rayIn) const override { return false; }
+        virtual bool                        Collision(Line const& lineIn) const override { return false; }
+        virtual bool                        Collision(Plane const& planeIn) const override { return false; }
+        virtual bool                        Collision(Sphere const& sphereIn) const override { return false; }
+        virtual bool                        Collision(Capsule const& capsuleIn) const override { return false; }
+        virtual bool                        Collision(Box const& boxIn) const override { return false; }
+        virtual bool                        Collision(Frustum const& frustumIn) const override { return false; }
+
         bool __vectorcall                   Intersect(const Box &boxIn) const;
         bool __vectorcall                   Intersect(const Sphere &sphereIn) const;
         // Accessors
@@ -1224,8 +1333,8 @@ namespace King {
         // Operators 
         void* operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void* p) { _aligned_free(static_cast<Contact*>(p)); }
-        inline Contact& operator= (const Contact& other) = default; // copy assign
-        inline Contact& operator= (Contact&& other) = default; // move assign
+        Contact& operator= (const Contact& other) = default; // copy assign
+        Contact& operator= (Contact&& other) = default; // move assign
         explicit operator bool() const { return (bool)GetHasContact(); } // valid
         bool operator !() const { return !(bool)GetHasContact(); } // invalid
         // Math Operators
@@ -1285,8 +1394,8 @@ namespace King {
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<LineMesh*>(p)); }
-        inline LineMesh & operator= (const LineMesh &in) = default; // copy assignment
-        inline LineMesh & operator= (LineMesh &&in) = default; // move assignment
+        LineMesh & operator= (const LineMesh &in) = default; // copy assignment
+        LineMesh & operator= (LineMesh &&in) = default; // move assignment
         inline LineIndexed operator[] (uint32_t indexIn) const { return GetLineIndexed(indexIn); } // accessor
         // Functionality
         virtual void                        Initialize(uint32_t numLinesIn, const VertexFormat &vfIn, uint32_t vbStartIn, uint32_t ibStartIn, uint8_t *vbIn, uint32_t *ibIn) { _numLines = numLinesIn; _vertexFormat = vfIn; _vbStart = vbStartIn; _ibStart = ibStartIn; _vb = vbIn; _ib = ibIn; }
@@ -1346,7 +1455,7 @@ namespace King {
         // Construction/Destruction
         TriangleMesh() = default;
         TriangleMesh(const TriangleMesh &in) { *this = in; } // forward to copy assignment
-        TriangleMesh(TriangleMesh &&in) { *this = std::move(in); } // forward to move assignment
+        TriangleMesh(TriangleMesh &&in) noexcept { *this = std::move(in); } // forward to move assignment
         TriangleMesh(uint32_t numTrianglesIn, VertexFormat vfIn, uint32_t vbStartIn, uint32_t ibStartIn, uint8_t *vbIn, uint32_t *ibIn) { Initialize(numTrianglesIn, vfIn, vbStartIn, ibStartIn, vbIn, ibIn); }
 
         virtual ~TriangleMesh() = default;
@@ -1354,8 +1463,8 @@ namespace King {
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<TriangleMesh*>(p)); }
-        inline TriangleMesh & operator= (const TriangleMesh &in) = default; // copy assignment
-        inline TriangleMesh & operator= (TriangleMesh &&in) = default; // move assignment
+        TriangleMesh & operator= (const TriangleMesh &in) = default; // copy assignment
+        TriangleMesh & operator= (TriangleMesh &&in) = default; // move assignment
         inline TriangleIndexed operator[] (uint32_t indexIn) const { return GetTriangleIndexed(indexIn); } // accessor
         // Functionality
         virtual void                        Initialize(uint32_t numTrianglesIn, VertexFormat vfIn, uint32_t vbStartIn, uint32_t ibStartIn, uint8_t *vbIn, uint32_t *ibIn) { _numTriangles = numTrianglesIn; _vertexFormat = vfIn; _vbStart = vbStartIn; _ibStart = ibStartIn; _vb = vbIn; _ib = ibIn; }
@@ -1416,8 +1525,8 @@ namespace King {
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<HeightGrid*>(p)); }
-        inline HeightGrid & operator= (const HeightGrid &in) = default; // copy assignment
-        inline HeightGrid & operator= (HeightGrid &&in) = default; // move assignment
+        HeightGrid & operator= (const HeightGrid &in) = default; // copy assignment
+        HeightGrid & operator= (HeightGrid &&in) = default; // move assignment
         // Functionality
         IntPoint2                           InitializeXZ(const TriangleMesh & triMeshIn, long xIn=0l, long zIn=0l); // return IntPoint2(X,Z) size of height grid allocated
         float                               Height(const float2 & xzWorldIn);
@@ -1485,13 +1594,13 @@ namespace King {
         Material() { ; }
         Material(const std::string nameIn) : _name(nameIn) { ; }
         Material(const Material &in) { *this = in; } // forward to copy assignment
-        Material(Material &&in) { *this = std::move(in); } // forward to move assignment
+        Material(Material &&in) noexcept { *this = std::move(in); } // forward to move assignment
         virtual ~Material() = default;
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<Material*>(p)); }
-        inline Material & operator= (const Material &in) = default; // copy assign
-        inline Material & operator= (Material &&in) = default; // move assign
+        Material & operator= (const Material &in) = default; // copy assign
+        Material & operator= (Material &&in) = default; // move assign
         // Conversions
         // Functionality
         // Accessors
@@ -1532,15 +1641,15 @@ namespace King {
         // Construction/Destruction
         ModelScaffold() { _vertexFormat.SetNext(VertexAttrib::enumDesc::position, VertexAttrib::enumFormat::format_float32x3); _vertexBufferMaster.SetStride(_vertexFormat.GetByteSize()); }
         ModelScaffold(const ModelScaffold &in) { *this = in; } // forward to copy assignment
-        ModelScaffold(ModelScaffold &&in) { *this = std::move(in); } // forward to move assignment
+        ModelScaffold(ModelScaffold &&in) noexcept { *this = std::move(in); } // forward to move assignment
 
         virtual ~ModelScaffold() { Destroy(); }
 
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<ModelScaffold*>(p)); }
-        inline ModelScaffold & operator= (const ModelScaffold &in) = default; // copy assignment
-        inline ModelScaffold & operator= (ModelScaffold &&in) = default; // move assignment
+        ModelScaffold & operator= (const ModelScaffold &in) = default; // copy assignment
+        ModelScaffold & operator= (ModelScaffold &&in) = default; // move assignment
         // Functionality
         virtual void                        Initalize(const VertexFormat &vertexFormatIn, size_t verticiesIn, size_t indiciesIn) { _vertexFormat = vertexFormatIn; _vertexBufferMaster.Initialize(verticiesIn * _vertexFormat.GetByteSize()); _indexBufferMaster.Initialize(indiciesIn); }
         void                                Destroy() { _indexBufferMaster.Destroy(); _vertexBufferMaster.Destroy(); _boundingBox.SetZero(); }
@@ -1599,6 +1708,7 @@ namespace King {
     };
     /******************************************************************************
     *    LineModel
+    *       of Line meshes
     *   Use:    Set the vertex format before calling 
     *           Initalize(size_t verticiesIn, size_t indiciesIn)
     ******************************************************************************/
@@ -1624,8 +1734,8 @@ namespace King {
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<LineModel*>(p)); }
-        inline LineModel & operator= (const LineModel &in); // copy assignment
-        inline LineModel & operator= (LineModel &&in) = default; // move assignment
+        LineModel & operator= (const LineModel &in); // copy assignment
+        LineModel & operator= (LineModel &&in) = default; // move assignment
         // Functionality
         void                                Destroy() { _meshes.clear(); King::ModelScaffold::Destroy(); }
 
@@ -1646,6 +1756,7 @@ namespace King {
     };
     /******************************************************************************
     *    Model
+    *       of Triangle meshes
     ******************************************************************************/
     class alignas(16) Model : public ModelScaffold
     {
@@ -1663,7 +1774,7 @@ namespace King {
         // Construction/Destruction
         Model() { _vertexFormat.SetNext(VertexAttrib::enumDesc::position, VertexAttrib::enumFormat::format_float32x3); _vertexBufferMaster.SetStride(_vertexFormat.GetByteSize()); }
         Model(const Model &in) { *this = in; } // forward to copy assignment
-        Model(Model &&in) { *this = std::move(in); } // forward to move assignment
+        Model(Model &&in) noexcept { *this = std::move(in); } // forward to move assignment
 
         virtual ~Model() { Destroy(); }
 
@@ -1702,29 +1813,29 @@ namespace King {
     };
 
     /******************************************************************************
-    *    BoneHierarchy - modifier for geometry to allow skin transforms of a 
-    *    bone hierarchy.
+    *    BoneHierarchy
+    *       Modifier for geometry to allow skin transforms of a bone hierarchy.
     ******************************************************************************/
     class alignas(16) BoneHierarchy
     {
         /* structures */
         struct Bone
         {
-            std::string                     _name; // unique so we can build the skelton hiearchy after saves and loads
+            std::string                     _name; // unique so we can build the skeleton hiearchy after saves and loads
             DirectX::XMFLOAT4X4             _transform; // defines the bone orientation
         };
         struct Skeleton
         {
-            std::vector<Bone>                _bones; // sorted such that a child bone never comes before a parent bone
-            std::vector<DirectX::XMFLOAT4X4> _toParentTransform; // size of bones, contains the hiearchy of the bone structure
+            std::vector<Bone>                _bones; // sort such that a child bone never comes before a parent bone
+            std::vector<DirectX::XMFLOAT4X4> _toParentTransform; // 1 to 1 size with bones, contains the hiearchy of the bone structure
             // also note that toParentTransform[0] is alway identity as the top most node of the structure
         };
         /* variables */
     public:
         Skeleton                            _skeleton;
-        std::vector<uint8_t>                _boneInfluenceCount; // size is equal to # of verticies in mesh and contains the number of bones influencing each vertex
-        std::vector<uint8_t>                _boneIndex; // size is sum of boneInfluenceCount values, indexies into skeleton.bones and is ordered in vertex order
-        std::vector<float>                  _boneWeight; // size matches boneIndex and gives the weight of each
+        std::vector<uint8_t>                _boneInfluenceCount; // 1 to 1 size with # of verticies in mesh and contains the number of bones influencing each vertex
+        std::vector<uint8_t>                _boneIndex; // size is boneInfluenceCount values summed and hold the indicies into skeleton.bones and is ordered in vertex order; ex: _bones.size()=2, _boneInfluenceCount[0]=1, _boneInfluenceCount[1]=4, then _boneIndex.size() = 5;
+        std::vector<float>                  _boneWeight; // size matches boneIndex and gives the weight of each bones influence on this vertex
 
         /* methods */
     public:
@@ -1732,13 +1843,13 @@ namespace King {
         static std::shared_ptr<BoneHierarchy>   Create() { return std::make_shared<BoneHierarchy>(); }
         BoneHierarchy() { ; }
         BoneHierarchy(const BoneHierarchy &in) { *this = in; } // forward to copy assignment
-        BoneHierarchy(BoneHierarchy &&in) { *this = std::move(in); } // forward to move assignment
+        BoneHierarchy(BoneHierarchy &&in) noexcept { *this = std::move(in); } // forward to move assignment
         virtual ~BoneHierarchy() = default;
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<BoneHierarchy*>(p)); }
-        inline BoneHierarchy & operator= (const BoneHierarchy &in) = default; // copy assign
-        inline BoneHierarchy & operator= (BoneHierarchy &&in) = default; // move assign
+        BoneHierarchy & operator= (const BoneHierarchy &in) = default; // copy assign
+        BoneHierarchy & operator= (BoneHierarchy &&in) = default; // move assign
         // Conversions
         // Functionality
         // Accessors
@@ -1763,7 +1874,7 @@ namespace King {
         // Construction/Destruction
         SkinnedModel() { ; }
         SkinnedModel(const SkinnedModel &in) { *this = in; } // forward to copy assignment
-        SkinnedModel(SkinnedModel &&in) { *this = std::move(in); } // forward to move assignment
+        SkinnedModel(SkinnedModel &&in) noexcept { *this = std::move(in); } // forward to move assignment
         virtual ~SkinnedModel() { Destroy(); }
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
@@ -1771,7 +1882,7 @@ namespace King {
         inline SkinnedModel & operator= (const SkinnedModel &in) { Destroy(); Model::operator=(in); if (in._boneHierarchy) { _boneHierarchy = std::make_unique<BoneHierarchy>(); *_boneHierarchy = *in._boneHierarchy; } return *this; } // copy assignment
         inline SkinnedModel & operator= (const Model &in) { Destroy(); Model::operator=(in); return *this; } // copy assignment
         inline SkinnedModel & operator= (Model &in) { Destroy(); Model::operator=(std::move(in)); return *this; } // move assignment
-        inline SkinnedModel & operator= (SkinnedModel &&in) { std::swap(_boneHierarchy, in._boneHierarchy); Model::operator=(std::move(in)); return *this; } // move assignment
+        inline SkinnedModel & operator= (SkinnedModel &&in) noexcept { std::swap(_boneHierarchy, in._boneHierarchy); Model::operator=(std::move(in)); return *this; } // move assignment
         // Functionality
         virtual void                        Destroy() { delete _boneHierarchy.release(); Model::Destroy(); }
     

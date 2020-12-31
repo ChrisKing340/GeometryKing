@@ -86,6 +86,7 @@ namespace King {
         explicit Distance(const float &magIn, const float3 &dirIn) { _magnitude = abs(magIn); _unit_direction = float3::Normal(dirIn); if (_magnitude != magIn) { _unit_direction = -_unit_direction; }; }
         explicit Distance(const UnitOfMeasure::Length &l, const float3 &dirIn) { _magnitude = abs(l); _unit_direction = float3::Normal(dirIn); if (_magnitude != l) { _unit_direction = -_unit_direction; }; }
         Distance(const float3 &vectorIn) { _magnitude = float3::Magnitude(vectorIn); _unit_direction = float3::Normal(vectorIn); }
+        Distance(const float3& pt1In, const float3& pt2In) { auto AB=pt2In-pt1In; _magnitude = float3::Magnitude(AB); _unit_direction = float3::Normal(AB); }
         explicit Distance(const Acceleration & accIn, const UnitOfMeasure::Time &t) { _magnitude = UnitOfMeasure::Length(static_cast<float>(accIn.Get_magnitude()) * 0.5f * (float)t * (float)t); _unit_direction = accIn.Get_unit_direction(); }
         explicit Distance(const Velocity & velIn, const UnitOfMeasure::Time &t) { _magnitude = UnitOfMeasure::Length(static_cast<float>(velIn.Get_magnitude()) * t); _unit_direction = velIn.Get_unit_direction(); }
         Distance(const Distance &in) { *this = in; } // forward to copy assignment

@@ -330,6 +330,14 @@ namespace King {
         inline Rectangle2D & operator+= (const IntPoint2 deltaIn) { MoveBy(deltaIn); return *this; }
         inline Rectangle2D & operator*= (const IntPoint2 in) { Grow(FloatPoint2(in)); return *this; }
         inline Rectangle2D & operator/= (const IntPoint2 in) { Grow(FloatPoint2(1.0f) / FloatPoint2(in)); return *this; }
+
+        inline bool operator== (const Rectangle2D& in) { return lt == in.lt ? (rb == in.rb ? true : false) : false; }
+        inline bool operator!= (const Rectangle2D &in) { return lt != in.lt ? true : (rb != in.rb ? true : false); }
+        inline bool operator< (const Rectangle2D& in) { auto l = GetSize(); auto r = in.GetSize(); return l < r ? true : false; }
+        inline bool operator> (const Rectangle2D& in) { auto l = GetSize(); auto r = in.GetSize(); return l > r ? true : false; }
+        inline bool operator<= (const Rectangle2D& in) { auto l = GetSize(); auto r = in.GetSize(); return l <= r ? true : false; }
+        inline bool operator>= (const Rectangle2D& in) { auto l = GetSize(); auto r = in.GetSize(); return l >= r ? true : false; }
+
         // Conversions
         inline operator RECT() const { return Get_RECT(); }
         inline operator Rectangle2DF() const { return Get_Rectangle2DF(); }

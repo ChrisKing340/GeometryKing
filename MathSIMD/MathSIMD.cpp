@@ -96,12 +96,12 @@ DirectX::XMFLOAT3 King::Quaternion::GetEulerAngles() const
     DirectX::XMFLOAT4 q;
     DirectX::XMStoreFloat4(&q, v);
 
-    // If quaternion is normalised the unit is one, otherwise it is the correction factor
+    // If quaternion is normalized the unit is one, otherwise it is the correction factor
     //float unit = sqx + sqy + sqz + sqw; // = 1.0f if was normalized
     float unit = float4::SumComponents(sqVec);
     float test = q.x * q.y + q.z * q.w;
 
-    if (test > 0.499f * unit)
+    if (test > 0.4995f * unit)
     {
         // Singularity at north pole
         pitchYawRoll.x = -DirectX::XM_PIDIV2;
@@ -109,7 +109,7 @@ DirectX::XMFLOAT3 King::Quaternion::GetEulerAngles() const
         pitchYawRoll.z = 0.f;
         return pitchYawRoll;
     }
-    else if (test < -0.499f * unit)
+    else if (test < -0.4995f * unit)
     {
         // Singularity at south pole
         pitchYawRoll.x = DirectX::XM_PIDIV2;

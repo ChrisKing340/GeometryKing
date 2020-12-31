@@ -1,15 +1,15 @@
 /*%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 Title:          MathSIMD
 
-Description:    Multiple data set variable types defined to simply code for
+Description:    Multiple data set variable types defined to simplify code for
                 2D and 3D points and common math operations in Major 1 release.
                 Operator overloads and single varible tracking was the driving
                 reasons for building these classes within our engine.
 
                 Data parallelism accelerated code through implementing SIMD
                 (single instruction, multiple data) math libraries in Major 2.
-
-
+                Only floating point updated at this time as most used and greatest
+                performance gain data types.
                 The popular DirectXMath library for intrinsics and fall back
                 code is used to provide the intrinsics.  Note that this math
                 library does not require DirectX and is render system independent.
@@ -20,9 +20,11 @@ Usage:          Header only implementation.
                 for the multi-data variables, nor do I like it in std::vector,
                 as vectors are magnitude and direction.  Shader model has it
                 right with float3, etc. and I type define my internals to that
-                throughout my code. Use of tepydef let you change it to your liking.
+                throughout my code. Use of typedef let you change it to your liking.
 
-                This code is intended to be complied for 64 bit operating systems.
+                This code is intended to be complied for 64 bit operating systems
+                although alignment allocations are made to be backwards compatible
+                on 32 bit operating systems.
 
 Contact:        ChrisKing340@gmail.com
 
@@ -66,7 +68,7 @@ SOFTWARE.
 #endif
 
 #define KING_MATH_VERSION_MAJOR 2
-#define KING_MATH_VERSION_MINOR 2
+#define KING_MATH_VERSION_MINOR 3
 #define KING_MATH_VERSION_PATCH 0
 
 #include "..\..\json\single_include\nlohmann\json.hpp"
@@ -78,16 +80,16 @@ using json = nlohmann::json;
 #include <vector>
 #include <DirectXMath.h>
 #include <emmintrin.h> 
-//#include <functional>
 #include <ostream>
 #include <istream>
 #include <iomanip>
 #include <sal.h>
+#include <cstdlib>
 
 namespace King {
     // Our data types defined:
-    //      Unique data types built on Single Instruction Multiple Data, SIMD, DirectXMath library of intrinsics 
-    //      for speed and simple implementation
+    // Unique data types built on Single Instruction Multiple Data, SIMD, DirectXMath library of intrinsics 
+    // for speed and simple implementation
     class UIntPoint2; // not accelerated
     class IntPoint2; // not accelerated
     class IntPoint3; // not accelerated
@@ -98,7 +100,7 @@ namespace King {
 
 
     // Use of tepydef let you change it to your liking.  If you intend to use my King game engine, my King physics, 
-    // or my Geometry King code then do not change these feel free to add your own typedef
+    // or my Geometry King code then do not change these. Feel free to add your own typedef
     typedef UIntPoint2      uint2;
     typedef IntPoint2       int2;
     typedef IntPoint3       int3;
@@ -124,8 +126,11 @@ namespace King {
         /* methods */
     public:
         // Creation/Life cycle
+        //  *** TO DO *** Future
+        //   replace _aligned_malloc / _aligned_free with aligned_alloc / free for C++17 conformant included in 
+        //   cstdlib after Visual C 19 compiler is upgraded.  As of 12/20/2020 v16.8.2, still not conformant.
         void* operator new (size_t size) { return _aligned_malloc(size, 16); }
-        void   operator delete (void* p) { _aligned_free(static_cast<UIntPoint2*>(p)); }
+        void   operator delete (void* p) { _aligned_free(static_cast<UIntPoint2*>(p)); ; }
 
         inline UIntPoint2() { SetZero(); }
         inline UIntPoint2(const unsigned long& xy) { Set(xy); }
@@ -151,6 +156,13 @@ namespace King {
         inline operator DirectX::XMVECTOR() const { DirectX::XMVECTORU32 r; r.u[0] = u[0]; r.u[1] = u[1]; r.u[2] = r.u[3] = 0; return r; }
         inline operator DirectX::XMUINT2() const { return Get_XMUINT2(); }
         inline operator DirectX::XMFLOAT2() const { return Get_XMFLOAT2(); }
+        // Comparators
+        inline bool operator==  (const UIntPoint2& rhs) { return u[0] == rhs.u[0] && u[1] == rhs.u[1]; }
+        inline bool operator!=  (const UIntPoint2& rhs) { return u[0] != rhs.u[0] || u[1] != rhs.u[1]; }
+        inline bool operator< (const UIntPoint2& rhs) { return u[0] < rhs.u[0] && u[1] < rhs.u[1]; }
+        inline bool operator> (const UIntPoint2& rhs) { return u[0] > rhs.u[0] && u[1] > rhs.u[1]; }
+        inline bool operator<= (const UIntPoint2& rhs) { return u[0] <= rhs.u[0] && u[1] <= rhs.u[1]; }
+        inline bool operator>= (const UIntPoint2& rhs) { return u[0] >= rhs.u[0] && u[1] >= rhs.u[1]; }
         // Math Operators
         inline UIntPoint2 operator+ (const UIntPoint2 p) const { return UIntPoint2(u[0] + p.u[0], u[1] + p.u[1]); }
         inline UIntPoint2 operator- (const UIntPoint2 p) const { return UIntPoint2(u[0] - p.u[0], u[1] - p.u[1]); }
@@ -255,6 +267,13 @@ namespace King {
         inline operator DirectX::XMVECTOR() const { DirectX::XMVECTORI32 r; r.i[0] = i[0]; r.i[1] = i[1]; r.i[2] = r.i[3] = 0; return r.v; }
         inline operator DirectX::XMINT2() const { return Get_XMINT2(); }
         inline operator DirectX::XMFLOAT2() const { return Get_XMFLOAT2(); }
+        // Comparators
+        inline bool operator==  (const IntPoint2& rhs) { return i[0] == rhs.i[0] && i[1] == rhs.i[1]; }
+        inline bool operator!=  (const IntPoint2& rhs) { return i[0] != rhs.i[0] || i[1] != rhs.i[1]; }
+        inline bool operator< (const IntPoint2& rhs) { return i[0] < rhs.i[0] && i[1] < rhs.i[1]; }
+        inline bool operator> (const IntPoint2& rhs) { return i[0] > rhs.i[0] && i[1] > rhs.i[1]; }
+        inline bool operator<= (const IntPoint2& rhs) { return i[0] <= rhs.i[0] && i[1] <= rhs.i[1]; }
+        inline bool operator>= (const IntPoint2& rhs) { return i[0] >= rhs.i[0] && i[1] >= rhs.i[1]; }
         // Math Operators
         inline IntPoint2 operator- () const { return IntPoint2(-1 * i[0], -1 * i[1]); }
         inline IntPoint2 operator+ (const IntPoint2 p) const { return IntPoint2(i[0] + p.i[0], i[1] + p.i[1]); }
@@ -365,6 +384,13 @@ namespace King {
         inline operator DirectX::XMVECTOR() const { DirectX::XMVECTORI32 r; r.i[0] = i[0]; r.i[1] = i[1]; r.i[2] = i[2]; r.i[3] = 0; return r.v; }
         inline operator DirectX::XMINT3() const { return Get_XMINT3(); }
         inline operator DirectX::XMFLOAT3() const { return Get_XMFLOAT3(); }
+        // Comparators
+        inline bool operator==  (const IntPoint3& rhs) { return i[0] == rhs.i[0] && i[1] == rhs.i[1] && i[2] == rhs.i[2]; }
+        inline bool operator!=  (const IntPoint3& rhs) { return i[0] != rhs.i[0] || i[1] != rhs.i[1] || i[2] != rhs.i[2]; }
+        inline bool operator< (const IntPoint2& rhs) { return i[0] < rhs.i[0] && i[1] < rhs.i[1] && i[2] < rhs.i[2]; }
+        inline bool operator> (const IntPoint2& rhs) { return i[0] > rhs.i[0] && i[1] > rhs.i[1] && i[2] > rhs.i[2]; }
+        inline bool operator<= (const IntPoint2& rhs) { return i[0] <= rhs.i[0] && i[1] <= rhs.i[1] && i[2] <= rhs.i[2]; }
+        inline bool operator>= (const IntPoint2& rhs) { return i[0] >= rhs.i[0] && i[1] >= rhs.i[1] && i[2] >= rhs.i[2]; }
         // Math Operators
         inline IntPoint3 operator- () const { return IntPoint3(-1 * i[0], -1 * i[1], -1 * i[2]); }
         inline IntPoint3 operator+ (const IntPoint3 p) const { return IntPoint3(i[0] + p.i[0], i[1] + p.i[1], i[2] + p.i[2]); }
@@ -466,7 +492,7 @@ namespace King {
         inline FloatPoint2(const DirectX::XMVECTOR & vecIn) { v = vecIn; }
         inline FloatPoint2(const DirectX::XMVECTORF32 & vecIn) { v = vecIn.v; }
         inline FloatPoint2(uint8_t * bytesIn) { auto fp = reinterpret_cast<DirectX::XMFLOAT2*>(bytesIn); v = DirectX::XMLoadFloat2(fp); }
-        inline FloatPoint2(const float* floatIn) { v = DirectX::XMLoadFloat2(&DirectX::XMFLOAT2(floatIn)); }
+        inline FloatPoint2(const float* floatIn) { auto l = DirectX::XMFLOAT2(floatIn); v = DirectX::XMLoadFloat2(&l); }
         virtual ~FloatPoint2() = default;
         // Operators 
         inline FloatPoint2& operator= (const FloatPoint2 & in) = default; // copy assignment
@@ -479,6 +505,17 @@ namespace King {
         inline operator DirectX::XMFLOAT2A() const { return Get_XMFLOAT2A(); }
         inline operator DirectX::XMINT2() const { return Get_XMINT2(); }
         inline operator DirectX::XMUINT2() const { return Get_XMUINT2(); }
+        // Comparators
+        // directX behavior is not based on magnitudes, instead compares each component.  This differs such that
+        //  if (4,4) is compared to (2,25), a < test fails DirectX::XMVector2Less but passes on mag
+        //  this is important, since most common use is geometry comparisons (area, vol, etc.), where the data
+        //  proposal on 12/31/2020 to revert this back to like our int2 implementation of magnitudes.
+        inline bool operator<  (const FloatPoint2& rhs) const { return DirectX::XMVector2Less(v, rhs); }
+        inline bool operator<= (const FloatPoint2& rhs) const { return DirectX::XMVector2LessOrEqual(v, rhs); }
+        inline bool operator>  (const FloatPoint2& rhs) const { return DirectX::XMVector2Greater(v, rhs); }
+        inline bool operator>= (const FloatPoint2& rhs) const { return DirectX::XMVector2GreaterOrEqual(v, rhs); }
+        inline bool operator== (const FloatPoint2& rhs) const { return DirectX::XMVector2Equal(v, rhs); }
+        inline bool operator!= (const FloatPoint2& rhs) const { return DirectX::XMVector2NotEqual(v, rhs); }
         // Math Operators
         inline FloatPoint2 operator- () { return FloatPoint2(DirectX::XMVectorNegate(v)); }
         inline FloatPoint2 operator+ (const FloatPoint2 & p) const { return FloatPoint2(DirectX::XMVectorAdd(v, p.v)); }
@@ -503,13 +540,6 @@ namespace King {
         inline DirectX::XMVECTOR& operator/= (float s) { return v = DirectX::XMVectorDivide(v, FloatPoint2(s)); }
         inline FloatPoint2 operator* (const DirectX::XMMATRIX& m) { return DirectX::XMVector2TransformNormal(v, m); } // without translation
         inline FloatPoint2 operator*= (const DirectX::XMMATRIX& m) { v = DirectX::XMVector2TransformNormal(v, m); return *this; } // without translation
-        // Comparators
-        inline bool operator<  (const FloatPoint2 & rhs) const { return DirectX::XMVector2Less(v, rhs); }
-        inline bool operator<= (const FloatPoint2 & rhs) const { return DirectX::XMVector2LessOrEqual(v, rhs); }
-        inline bool operator>  (const FloatPoint2 & rhs) const { return DirectX::XMVector2Greater(v, rhs); }
-        inline bool operator>= (const FloatPoint2 & rhs) const { return DirectX::XMVector2GreaterOrEqual(v, rhs); }
-        inline bool operator== (const FloatPoint2 & rhs) const { return DirectX::XMVector2Equal(v, rhs); }
-        inline bool operator!= (const FloatPoint2 & rhs) const { return DirectX::XMVector2NotEqual(v, rhs); }
         // Accessors
         float* GetPtr() { return reinterpret_cast<float*>(this); } // returns a float
         inline const DirectX::XMFLOAT2          Get_XMFLOAT2() const { DirectX::XMFLOAT2 rtn; DirectX::XMStoreFloat2(&rtn, v); return rtn; }
@@ -579,8 +609,8 @@ namespace King {
         inline FloatPoint3(const DirectX::XMVECTOR & vecIn) { v = DirectX::XMVectorSetW(vecIn, 0.f); }
         inline FloatPoint3(const DirectX::XMVECTORF32 & vecIn) { v = vecIn.v; }
         inline FloatPoint3(FloatPoint4 vecIn);
-        inline FloatPoint3(uint8_t * bytesIn) { auto fp = reinterpret_cast<float*>(bytesIn); v = DirectX::XMLoadFloat3(&DirectX::XMFLOAT3(fp)); }
-        inline FloatPoint3(const float* floatIn) { v = DirectX::XMLoadFloat3(&DirectX::XMFLOAT3(floatIn)); }
+        inline FloatPoint3(uint8_t * bytesIn) { auto l = DirectX::XMFLOAT3(reinterpret_cast<float*>(bytesIn)); v = DirectX::XMLoadFloat3(&l); }
+        inline FloatPoint3(const float* floatIn) { auto l = DirectX::XMFLOAT3(floatIn); v = DirectX::XMLoadFloat3(&l); }
         virtual ~FloatPoint3() = default;
         // Operators 
         inline FloatPoint3& operator= (const FloatPoint3 & in) = default; // copy assignment
@@ -591,6 +621,13 @@ namespace King {
         inline operator FloatPoint2() const { return FloatPoint2(v); }
         inline operator DirectX::XMFLOAT3() const { return Get_XMFLOAT3(); }
         inline operator DirectX::XMFLOAT3A() const { return Get_XMFLOAT3A(); }
+        // Comparators
+        inline bool operator<  (const FloatPoint3& rhs) const { return DirectX::XMVector3Less(v, rhs.GetVecConst()); }
+        inline bool operator<= (const FloatPoint3& rhs) const { return DirectX::XMVector3LessOrEqual(v, rhs.GetVecConst()); }
+        inline bool operator>  (const FloatPoint3& rhs) const { return DirectX::XMVector3Greater(v, rhs.GetVecConst()); }
+        inline bool operator>= (const FloatPoint3& rhs) const { return DirectX::XMVector3GreaterOrEqual(v, rhs.GetVecConst()); }
+        inline bool operator== (const FloatPoint3& rhs) const { return DirectX::XMVector3Equal(v, rhs.GetVecConst()); }
+        inline bool operator!= (const FloatPoint3& rhs) const { return DirectX::XMVector3NotEqual(v, rhs.GetVecConst()); }
         // Math Operators
         inline FloatPoint3 operator- () { return FloatPoint3(DirectX::XMVectorNegate(v)); }
         inline FloatPoint3 operator+ (const FloatPoint3 s) const { return FloatPoint3(DirectX::XMVectorAdd(v, s.v)); }
@@ -619,13 +656,6 @@ namespace King {
         inline DirectX::XMVECTOR& operator-= (float s) { DirectX::XMVECTOR sv = _mm_set_ps1(s); return v = DirectX::XMVectorSubtract(v, sv); }
         inline DirectX::XMVECTOR& operator*= (float s) { return v = DirectX::XMVectorScale(v, s); }
         inline DirectX::XMVECTOR& operator/= (float s) { DirectX::XMVECTOR sv = _mm_set_ps1(s); return v = DirectX::XMVectorDivide(v, sv); }
-        // Comparators
-        inline bool operator<  (const FloatPoint3 & rhs) const { return DirectX::XMVector3Less(v, rhs.GetVecConst()); }
-        inline bool operator<= (const FloatPoint3 & rhs) const { return DirectX::XMVector3LessOrEqual(v, rhs.GetVecConst()); }
-        inline bool operator>  (const FloatPoint3 & rhs) const { return DirectX::XMVector3Greater(v, rhs.GetVecConst()); }
-        inline bool operator>= (const FloatPoint3 & rhs) const { return DirectX::XMVector3GreaterOrEqual(v, rhs.GetVecConst()); }
-        inline bool operator== (const FloatPoint3 & rhs) const { return DirectX::XMVector3Equal(v, rhs.GetVecConst()); }
-        inline bool operator!= (const FloatPoint3 & rhs) const { return DirectX::XMVector3NotEqual(v, rhs.GetVecConst()); }
         // Accessors
         inline const DirectX::XMFLOAT3          Get_XMFLOAT3() const { DirectX::XMFLOAT3 rtn; DirectX::XMStoreFloat3(&rtn, v); return rtn; }
         inline const DirectX::XMFLOAT3A         Get_XMFLOAT3A() const { DirectX::XMFLOAT3A rtn; DirectX::XMStoreFloat3A(&rtn, v); return rtn; }
@@ -687,7 +717,7 @@ namespace King {
         inline FloatPoint4(const DirectX::FXMVECTOR & vecIn) { v = vecIn; }
         inline FloatPoint4(const DirectX::XMVECTORF32 & vecIn) { v = vecIn.v; }
         inline FloatPoint4(uint8_t * bytesIn) { auto fp = reinterpret_cast<DirectX::XMFLOAT4*>(bytesIn); v = DirectX::XMLoadFloat4(fp); }
-        inline FloatPoint4(const float* floatIn) { v = DirectX::XMLoadFloat4(&DirectX::XMFLOAT4(floatIn)); }
+        inline FloatPoint4(const float* floatIn) { auto l = DirectX::XMFLOAT4(floatIn); v = DirectX::XMLoadFloat4(&l); }
         virtual ~FloatPoint4() = default;
         // Operators 
         inline FloatPoint4& operator= (const FloatPoint4 & in) = default; // copy assignment
@@ -701,6 +731,13 @@ namespace King {
         inline operator DirectX::XMFLOAT3() const { return Get_XMFLOAT3(); }
         inline operator DirectX::XMFLOAT4() const { return Get_XMFLOAT4(); }
         inline operator DirectX::XMFLOAT4A() const { return Get_XMFLOAT4A(); }
+        // Comparators
+        inline bool operator<  (const FloatPoint4& rhs) const { return DirectX::XMVector4Less(v, rhs.GetVecConst()); }
+        inline bool operator<= (const FloatPoint4& rhs) const { return DirectX::XMVector4LessOrEqual(v, rhs.GetVecConst()); }
+        inline bool operator>  (const FloatPoint4& rhs) const { return DirectX::XMVector4Greater(v, rhs.GetVecConst()); }
+        inline bool operator>= (const FloatPoint4& rhs) const { return DirectX::XMVector4GreaterOrEqual(v, rhs.GetVecConst()); }
+        inline bool operator== (const FloatPoint4& rhs) const { return DirectX::XMVector4Equal(v, rhs.GetVecConst()); }
+        inline bool operator!= (const FloatPoint4& rhs) const { return DirectX::XMVector4NotEqual(v, rhs.GetVecConst()); }
         // Math Operators
         inline FloatPoint4 operator- () { return FloatPoint4(DirectX::XMVectorNegate(v)); }
         inline FloatPoint4 operator+ (const FloatPoint4 & s) { return FloatPoint4(DirectX::XMVectorAdd(v, s.v)); }
@@ -729,13 +766,6 @@ namespace King {
         inline DirectX::XMVECTOR& operator/= (float s) { return v = DirectX::XMVectorDivide(v, DirectX::XMVectorReplicate(s)); }
         inline FloatPoint4 operator* (const DirectX::XMMATRIX & m) { return FloatPoint4(DirectX::XMVector4Transform(v, m)); }
         inline DirectX::XMVECTOR& operator*=  (const DirectX::XMMATRIX & m) { return v = DirectX::XMVector4Transform(v, m); }
-        // Comparators
-        inline bool operator<  (const FloatPoint4 & rhs) const { return DirectX::XMVector4Less(v, rhs.GetVecConst()); }
-        inline bool operator<= (const FloatPoint4 & rhs) const { return DirectX::XMVector4LessOrEqual(v, rhs.GetVecConst()); }
-        inline bool operator>  (const FloatPoint4 & rhs) const { return DirectX::XMVector4Greater(v, rhs.GetVecConst()); }
-        inline bool operator>= (const FloatPoint4 & rhs) const { return DirectX::XMVector4GreaterOrEqual(v, rhs.GetVecConst()); }
-        inline bool operator== (const FloatPoint4 & rhs) const { return DirectX::XMVector4Equal(v, rhs.GetVecConst()); }
-        inline bool operator!= (const FloatPoint4 & rhs) const { return DirectX::XMVector4NotEqual(v, rhs.GetVecConst()); }
         // Accessors
         inline const DirectX::XMFLOAT4          Get_XMFLOAT4() const { DirectX::XMFLOAT4 rtn; DirectX::XMStoreFloat4(&rtn, v); return rtn; }
         inline const DirectX::XMFLOAT4A         Get_XMFLOAT4A() const { DirectX::XMFLOAT4A rtn; DirectX::XMStoreFloat4A(&rtn, v); return rtn; }
@@ -780,6 +810,7 @@ namespace King {
     *       2wy=0
     *       2wz=0
     *   geometrically, they are then out of phase by 90 degrees (pi/2 radians)
+    *   so cross product.
     *   encode the float4 with:
     *       w = cos(angle/2)
     *       x = i * sin(angle/2)
@@ -834,6 +865,9 @@ namespace King {
         operator int() = delete;
         operator float() = delete;
         inline operator DirectX::XMMATRIX() const { return DirectX::XMMatrixRotationQuaternion(v); }
+        // Comparators
+        inline bool operator== (const Quaternion& rhs) const { return DirectX::XMVector4Equal(v, rhs.GetVecConst()); }
+        inline bool operator!= (const Quaternion& rhs) const { return DirectX::XMVector4NotEqual(v, rhs.GetVecConst()); }
         // Functionality
         inline virtual void MakeNormalize() { v = DirectX::XMQuaternionNormalize(v); }
         inline Quaternion   Inverse() const { return Quaternion(DirectX::XMQuaternionInverse(v)); }
