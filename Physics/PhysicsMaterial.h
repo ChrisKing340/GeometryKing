@@ -60,11 +60,11 @@ namespace King {
         /* variables */
     public:
     protected:
-        float _density                       = 7870.0f; // Iron in kg/m^3
-        float _coefficientOfRestitution      = 0.65f; // 0.65 Steel
-        float _coefficientOfStaticFriction   = 0.25f; // 0.51 Steel
-        float _coefficientOfKineticFriction  = 0.20f; // 0.44 Steel
-        float _coefficientOfDampening        = 0.0f;
+        float _density                       = 7870.0f; // 𝜌, Iron in kg/m^3
+        float _coefficientOfRestitution      = 0.65f; // e, 0.65 Steel
+        float _coefficientOfStaticFriction   = 0.25f; // 𝜇s, 0.51 Steel
+        float _coefficientOfKineticFriction  = 0.20f; // 𝜇k, 0.44 Steel
+        float _coefficientOfDampening        = 0.0f; // ζ
         
     private:
         /* methods */

@@ -75,7 +75,8 @@ using json = nlohmann::json;
 namespace King {
 
     /******************************************************************************
-    *    AngularVelocity
+    *    AngularVelocity  
+    *       radians / sec    
     ******************************************************************************/
     class AngularVelocity;
     class Distance;
@@ -90,7 +91,7 @@ namespace King {
     public:
     protected:
         UnitOfMeasure::AngularSpeed         _magnitude; // absolute, >= 0
-        float3                              _unit_direction; // Euler angles normalized
+        float3                              _unit_direction; // axis of rotation
     private:
         /* methods */
     public:
@@ -111,10 +112,15 @@ namespace King {
         // Conversions
         inline explicit operator float() const { return _magnitude; }
         inline explicit operator UnitOfMeasure::AngularSpeed() const { return _magnitude; }
-        inline explicit operator float3() const { return GetVector(); }
+        inline operator float3() const { return GetVector(); }
+        inline operator DirectX::XMFLOAT3() const { return GetVector().Get_XMFLOAT3(); }
+        inline operator DirectX::XMFLOAT3A() const { return GetVector().Get_XMFLOAT3A(); }
+        inline operator Quaternion() const { return Quaternion(DirectX::XMQuaternionRotationRollPitchYawFromVector(_unit_direction * _magnitude)); }
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<AngularVelocity*>(p)); }
+        inline AngularVelocity & operator= (const float3 other) { _magnitude = other.GetMagnitude(); _unit_direction = other / _magnitude; return *this; }
+        inline AngularVelocity & operator= (const DirectX::XMFLOAT3& other) { _magnitude = float3(other).GetMagnitude(); _unit_direction = float3(other) / _magnitude; return *this; }
         inline AngularVelocity & operator= (const AngularVelocity &other) { _magnitude = other._magnitude; _unit_direction = other._unit_direction; return *this; } // copy assign
         inline AngularVelocity & operator= (AngularVelocity &&other) noexcept { std::swap(_magnitude, other._magnitude); std::swap(_unit_direction, other._unit_direction); return *this; } // move assign
         explicit operator bool() const { return (bool)_magnitude && (bool)_unit_direction; } // valid

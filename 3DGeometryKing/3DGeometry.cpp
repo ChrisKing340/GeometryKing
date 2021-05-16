@@ -872,22 +872,22 @@ inline bool King::Box::Intersects(const Plane& planeIn) const
 /******************************************************************************
 *    Method:    Intersects Box
 *
-*   |------|*this
-*   |      |
-*   |      |
-*   | |----|-| boxIn
-*   |------| |
-*     |      |
+*   |------|*this     pt_min|------|      boxIn.pt_min|------|
+*   |      |                |      |                  |      |
+*   |      |                |      |                  |      |
+*   | |----|-| boxIn        |      |                  |      |
+*   |------| |              |------|pt_max            |------|boxIn.pt_max
+*     |      |              
 *     |      |
 *     |------|
+* 
 ******************************************************************************/
 bool King::Box::Intersects(const Box & boxIn) const
 {
-    if (pt_min > boxIn.pt_max)
-        return false;
-    if (boxIn.pt_min > pt_max)
-        return false;
-    return true;
+    XMVECTOR d = DirectX::XMVectorOrInt(DirectX::XMVectorGreater(pt_min, boxIn.pt_max), DirectX::XMVectorGreater(boxIn.pt_min, pt_max));
+    
+    // if any component is false, return true
+    return !DirectX::Internal::XMVector3AnyTrue(d);
 }
 /******************************************************************************
 *    Method:    Intersects Sphere
@@ -900,16 +900,25 @@ bool King::Box::Intersects(const Box & boxIn) const
 *     |      |
 *     \      /
 *      \----/
+*   r^2 = x^2 + y^2 + z^2
+*   l = x = y = z
+*   r^2 = l^2 + l^2 + l^2
+*   r^2 = 3 * l^2
+*   l = 0.57735027 * r
 ******************************************************************************/
 bool King::Box::Intersects(const Sphere & sphereIn) const
 {
-    auto centerToNearestPointDistance = FindNearestPointOnBox(sphereIn.GetCenter()) - sphereIn.GetCenter();
+    auto c(sphereIn.GetCenter());
+    float r(sphereIn.GetRadius());
 
-    // square components and sum them together.
-    XMVECTOR distanceSquared = XMVector3Dot(centerToNearestPointDistance, centerToNearestPointDistance);
+    auto delta_dist = FindNearestPointOnBox(c) - c;
 
-    XMVECTOR r = XMVectorReplicate(sphereIn.GetRadius());
-    return XMVector3LessOrEqual(distanceSquared, XMVectorMultiply(r, r));
+    // sum of the squares
+    auto distSq = Dot(delta_dist, delta_dist);
+    // compare to a square inlieu of sqrt and compare
+    auto rSq = r * r;
+
+    return distSq < rSq;
 }
 /******************************************************************************
 *    Method:    Find Nearest Point On Box
@@ -921,7 +930,7 @@ bool King::Box::Intersects(const Sphere & sphereIn) const
 ******************************************************************************/
 FloatPoint3 __vectorcall King::Box::FindNearestPointOnBox(const FloatPoint3 &pt3In) const
 {
-    return Max(pt_min, Min(pt_max, rbf));
+    return Max(pt_min, Min(pt_max, pt3In));
 }
 /******************************************************************************
 *    Method:    Find Nearest Point On Box (transformed)
@@ -1046,9 +1055,36 @@ vector<pair<FloatPoint3, enum King::Box::CornerDescription>> King::Box::Identify
 *   |  ptIn|
 *   |------|
 ******************************************************************************/
-bool __vectorcall King::Box::Contains(const FloatPoint3 & ptIn) const
+bool __vectorcall King::Box::Contains(const FloatPoint3 ptIn) const
 {
     return DirectX::XMVector3InBounds(ptIn - GetCenter(), GetExtents());
+}
+/******************************************************************************
+*    Method:    Constrain Point
+*   |------|
+*   |      |
+*   |  *   |
+*   |  ptIn|
+*   |------|
+******************************************************************************/
+void King::Box::Constrain(FloatPoint3* ptOut) const
+{
+    if (!DirectX::XMVector3InBounds(*ptOut - GetCenter(), GetExtents()))
+    {
+        XMFLOAT3 p = *ptOut;
+        XMFLOAT3 min = GetMin();
+        XMFLOAT3 max = GetMax();
+        if (p.x < min.x) p.x = min.x;
+        else if (p.x > max.x) p.x = max.x;
+
+        if (p.y < min.y) p.y = min.y;
+        else if (p.y > max.y) p.y = max.y;
+
+        if (p.z < min.z) p.z = min.z;
+        else if (p.z > max.z) p.z = max.z;
+
+        *ptOut = p;
+    }
 }
 /******************************************************************************
 *    Method:    Contains Box
@@ -1291,6 +1327,258 @@ void King::Box::GetCornersLowest4(DirectX::XMFLOAT3 * pArrayOut, const Quaternio
 }
 /******************************************************************************
 *    Method:    operator= ; copy assignment
+*           4-------7
+*           |       |
+*           |   T   |
+*           |       |
+*   4-------5-------6-------7-------4
+*   |       |       |       |       |
+*   |   L   |   F   |   R   |   Bk  |
+*   |       |       |       |       |
+*   0-------1-------2-------3-------0
+*           |       |
+*           |   Bm  |
+*           |       |
+*           0-------3
+*   0 = { -1.0f, -1.0f, -1.0f } // lbb (min)
+*   1 = { -1.0f, -1.0f,  1.0f } // lbf
+*   2 = { 1.0f, -1.0f,  1.0f } // rbf
+*   3 = { 1.0f, -1.0f, -1.0f } // rbb
+*   4 = { -1.0f,  1.0f, -1.0f } // ltb
+*   5 = { -1.0f, 1.0f, 1.0f } // ltf
+*   6 = { 1.0f,  1.0f,  1.0f } // rtf (max)
+*   7 = { 1.0f,  1.0f, -1.0f } // rtb
+*
+* ******************************************************************************/
+King::ModelScaffold & King::ModelScaffold::operator= (const King::Box& boxIn)
+{
+    _modelName = "Box";
+    // position is added as default
+    //_vertexFormat.SetNext(VertexAttrib::enumDesc::position, VertexAttrib::enumFormat::format_float32x3);
+    //_vertexBufferMaster.SetStride(_vertexFormat.GetByteSize());
+
+    _boundingBox = boxIn;
+
+    // get points
+    DirectX::XMFLOAT3 vp[8];
+    _boundingBox.GetCorners8(vp);
+    // initialize vertex buffer
+    _vertexBufferMaster.Initialize(8 * _vertexBufferMaster.GetStride());
+    auto size = _vertexBufferMaster.GetElements();
+    SetVertexStream(0, reinterpret_cast<uint8_t*>(vp), size);
+    
+    // Points, bottom 4 then top 4
+    _indexBufferMaster = { 0,1,2,3,4,5,6,7 };
+
+    return *this;
+}
+/******************************************************************************
+*    Method:    operator= ; copy assignment
+*           4-------7
+*           |       |
+*           |   T   |
+*           |       |
+*   4-------5-------6-------7-------4
+*   |       |       |       |       |
+*   |   L   |   F   |   R   |   Bk  |
+*   |       |       |       |       |
+*   0-------1-------2-------3-------0
+*           |       |
+*           |   Bm  |
+*           |       |
+*           0-------3
+*   0 = { -1.0f, -1.0f, -1.0f } // lbb (min)
+*   1 = { -1.0f, -1.0f,  1.0f } // lbf
+*   2 = { 1.0f, -1.0f,  1.0f } // rbf
+*   3 = { 1.0f, -1.0f, -1.0f } // rbb
+*   4 = { -1.0f,  1.0f, -1.0f } // ltb
+*   5 = { -1.0f, 1.0f, 1.0f } // ltf
+*   6 = { 1.0f,  1.0f,  1.0f } // rtf (max)
+*   7 = { 1.0f,  1.0f, -1.0f } // rtb
+*
+* ******************************************************************************/
+King::LineModel& King::LineModel::operator= (const King::Box& boxIn)
+{
+    _modelName = "Box";
+    // position is added as default
+    //_vertexFormat.SetNext(VertexAttrib::enumDesc::position, VertexAttrib::enumFormat::format_float32x3);
+    _vertexFormat.SetNext(VertexAttrib::enumDesc::color, VertexAttrib::enumFormat::format_float32x4);
+
+    _vertexBufferMaster.Initialize(8 * _vertexFormat.GetByteSize()); 
+    _vertexBufferMaster.SetStride(_vertexFormat.GetByteSize());
+
+    _boundingBox = boxIn;
+
+    // get points
+    DirectX::XMFLOAT3 vp[8];
+    _boundingBox.GetCorners8(vp);
+
+    // initialize vertex buffer
+    auto size = _vertexBufferMaster.GetElements(); // 8
+    auto color = float4(0.f, 1.0f, 1.0f, 1.0f).Get_XMFLOAT4(); // yellow opaque
+
+    for (size_t i = 0; i < 8; ++i)
+    {
+        SetVertexElement(i, VertexAttrib::enumDesc::position, reinterpret_cast<uint8_t*>(&vp[i]));
+        SetVertexElement(i, VertexAttrib::enumDesc::color, reinterpret_cast<uint8_t*>(&color));
+    }
+
+    //_vertexBufferMaster.WriteText("lineBoxTest.txt");
+    //std::ofstream outfile("lineBoxTest.txt", std::ofstream::trunc);
+    //outfile << "Length: " << std::to_string((_vertexBufferMaster.GetLength())) << '\n';
+    //outfile << "Stride: " << std::to_string((_vertexBufferMaster.GetStride())) << '\n';
+    //outfile << "Elements: " << std::to_string((_vertexBufferMaster.GetElements())) << '\n';
+    //outfile << "Data:" << '\n';
+
+    //for (size_t i = 0; i < _vertexBufferMaster.GetElements() * 7; ++i)
+    //{
+    //    outfile << std::to_string(reinterpret_cast<float*>(&_vertexBufferMaster.GetData())[i]) << "\t";
+    //    if (i % 7 == 6) // every 7 values, new line
+    //        outfile << '\n';
+    //}
+    //outfile.close();
+
+    // Lines
+    //_indexBufferMaster.Initialize(24);
+    _indexBufferMaster = { 0,1, 1,2, 2,3, 3,0, 4,5, 5,6, 6,7, 7,4, 0,4, 1,5, 2,6, 3,7 };
+     
+    auto mesh = CreateMesh((uint32_t)_indexBufferMaster.GetElements() / 2);
+    mesh->Set_name("lineMesh");
+    mesh->CalculateBoundingBox();
+
+    // just incase we create more than one mesh or append data to our master we will reset the pointer addresses in each mesh
+    for (auto& m : _meshes)
+    {
+        m->SetVB(&_vertexBufferMaster.GetData());
+        m->SetIB(&_indexBufferMaster.GetData());
+    }
+    return *this;
+}
+/******************************************************************************
+*    Method:    operator= ; copy assignment
+*       Defines a box with normals facing outward and vertex unwrapped as:
+*
+*   u ->     <--w-->
+*          12------13                           v
+*           |       |                          |
+*           |   T   |                    d     v
+*    <--d-->|       |<--d--> <--w-->
+*   4-------5-------6-------7-------9   
+*   |       |       |       |       |
+*   |   L   |   F   |   R   |   Bk  |    h
+*   |       |       |       |       |
+*   0-------1-------2-------3-------8   
+*           |       |
+*           |   Bm  |                    d
+*           |       |
+*          10------11                   
+*   0 = { -1.0f, -1.0f, -1.0f }, // lbb (min)
+*   1 = { -1.0f, -1.0f,  1.0f }, // lbf
+*   2 = { 1.0f, -1.0f,  1.0f },  // rbf
+*   3 = { 1.0f, -1.0f, -1.0f },  // rbb
+*   4 = { -1.0f,  1.0f, -1.0f }, // ltb
+*   5 = { -1.0f, 1.0f, 1.0f },   // ltf
+*   6 = { 1.0f,  1.0f,  1.0f },  // rtf (max)
+*   7 = { 1.0f,  1.0f, -1.0f },  // rtb
+*   8 = { -1.0f, -1.0f, -1.0f }, // lbb (min)
+*   9 = { -1.0f,  1.0f, -1.0f }, // ltb
+*  10 = { -1.0f, -1.0f, -1.0f }, // lbb (min)
+*  11 = { 1.0f, -1.0f, -1.0f },  // rbb
+*  12 = { -1.0f,  1.0f, -1.0f }, // ltb
+*  13 = { 1.0f,  1.0f, -1.0f },  // rtb
+******************************************************************************/
+King::Model& King::Model::operator= (const King::Box& boxIn)
+{
+    _modelName = "Box";
+    // position is added as default
+    //_vertexFormat.SetNext(VertexAttrib::enumDesc::position, VertexAttrib::enumFormat::format_float32x3);
+    _vertexFormat.SetNext(VertexAttrib::enumDesc::textureCoord, VertexAttrib::enumFormat::format_float32x2);
+    _vertexFormat.SetNext(VertexAttrib::enumDesc::normal, VertexAttrib::enumFormat::format_float32x3);
+    _vertexFormat.SetNext(VertexAttrib::enumDesc::tangent, VertexAttrib::enumFormat::format_float32x3);
+    _vertexFormat.SetNext(VertexAttrib::enumDesc::bitangent, VertexAttrib::enumFormat::format_float32x3);    
+    assert(_vertexFormat.GetByteSize() == 56);
+
+    _boundingBox = boxIn;
+    
+    // uv coordinates normalize to (0-1, 0-1) except v can be < 1 depending on proportions (if a box of whd = (1,1,1) then v_max = 0.75
+    float3 whd = _boundingBox.GetDiagonal();
+    float2 wd(whd.GetX(),whd.GetZ());
+    wd.MakeNormalize(); wd *= 0.5f;
+
+    float w = wd.GetX();
+    float d = wd.GetY();
+    float h = whd.GetY();
+    float hTod = h / whd.GetZ();
+    if (hTod > 2.0f) hTod = 2.0f;
+    h = d * hTod;
+
+    // get points
+    DirectX::XMFLOAT3 vp[8];
+    _boundingBox.GetCorners8(vp);
+
+    // initialize vertex buffer
+    _vertexBufferMaster.Initialize(14 * _vertexFormat.GetByteSize());
+    _vertexBufferMaster.SetStride(_vertexFormat.GetByteSize());
+    auto size = _vertexBufferMaster.GetElements(); // 14
+
+    // first eight
+    for (size_t i = 0; i<8; ++i)
+        SetVertexElement(i, VertexAttrib::enumDesc::position, reinterpret_cast<uint8_t*>(&vp[i]));
+    // next six duplicates with different uv coordinates and normals
+    SetVertexElement(8, VertexAttrib::enumDesc::position, reinterpret_cast<uint8_t*>(&vp[0]));
+    SetVertexElement(9, VertexAttrib::enumDesc::position, reinterpret_cast<uint8_t*>(&vp[4]));
+    SetVertexElement(10, VertexAttrib::enumDesc::position, reinterpret_cast<uint8_t*>(&vp[0]));
+    SetVertexElement(11, VertexAttrib::enumDesc::position, reinterpret_cast<uint8_t*>(&vp[3]));
+    SetVertexElement(12, VertexAttrib::enumDesc::position, reinterpret_cast<uint8_t*>(&vp[4]));
+    SetVertexElement(13, VertexAttrib::enumDesc::position, reinterpret_cast<uint8_t*>(&vp[7]));
+
+    // texture coordinates
+    XMFLOAT2 uv;
+    uv = { 0.f , d + h }; SetVertexElement(0, VertexAttrib::enumDesc::textureCoord, reinterpret_cast<uint8_t*>(&uv));
+    uv = { d , d + h }; SetVertexElement(1, VertexAttrib::enumDesc::textureCoord, reinterpret_cast<uint8_t*>(&uv));
+    uv = { d + w, d + h }; SetVertexElement(2, VertexAttrib::enumDesc::textureCoord, reinterpret_cast<uint8_t*>(&uv));
+    uv = { 1.0f - w, d + h }; SetVertexElement(3, VertexAttrib::enumDesc::textureCoord, reinterpret_cast<uint8_t*>(&uv));
+    uv = { 0.f , d }; SetVertexElement(4, VertexAttrib::enumDesc::textureCoord, reinterpret_cast<uint8_t*>(&uv));
+    uv = { d , d }; SetVertexElement(5, VertexAttrib::enumDesc::textureCoord, reinterpret_cast<uint8_t*>(&uv));
+    uv = { d + w, d }; SetVertexElement(6, VertexAttrib::enumDesc::textureCoord, reinterpret_cast<uint8_t*>(&uv));
+    uv = { 1.0f - w, d }; SetVertexElement(7, VertexAttrib::enumDesc::textureCoord, reinterpret_cast<uint8_t*>(&uv));
+    uv = { 1.f , d + h }; SetVertexElement(8, VertexAttrib::enumDesc::textureCoord, reinterpret_cast<uint8_t*>(&uv));
+    uv = { 1.f , d }; SetVertexElement(9, VertexAttrib::enumDesc::textureCoord, reinterpret_cast<uint8_t*>(&uv));
+    uv = { d, d + h + d }; SetVertexElement(10, VertexAttrib::enumDesc::textureCoord, reinterpret_cast<uint8_t*>(&uv));
+    uv = { d + w, d + h + d }; SetVertexElement(11, VertexAttrib::enumDesc::textureCoord, reinterpret_cast<uint8_t*>(&uv));
+    uv = { d, 0.f}; SetVertexElement(12, VertexAttrib::enumDesc::textureCoord, reinterpret_cast<uint8_t*>(&uv));
+    uv = { d + w, 0.f}; SetVertexElement(13, VertexAttrib::enumDesc::textureCoord, reinterpret_cast<uint8_t*>(&uv));
+
+    // Triangles using RHS convention, normals outward
+    _indexBufferMaster = { 0,1,4, 4,1,5, 5,1,2, 5,2,6, 6,2,3, 6,3,7, 7,3,8, 7,8,9, 1,10,11, 1,11,2, 12,5,6, 12,6,13 };
+
+    // add normals
+    CalculateNormals();
+    // add tangents and bitangents
+    CalculateTangentsAndBiTangents();
+    // re-order verticies into the order they are accessed first to last in the index buffer
+    OptimizeVertexBuffer();
+
+    // Store the mesh
+    auto mesh = TriangleMesh::Create(12, _vertexFormat, 0, 0, &_vertexBufferMaster.GetData(), &_indexBufferMaster.GetData());
+    mesh->Set_name("triangleMesh");
+    mesh->CalculateBoundingBox();
+    _meshes.push_back(mesh);
+
+    // just incase we create more than one mesh or append data to our master we will reset the pointer addresses in each mesh
+    for (auto& m : _meshes)
+    {
+        m->SetVB(&_vertexBufferMaster.GetData());
+        m->SetIB(&_indexBufferMaster.GetData());
+    }
+
+    // material
+    AddMaterial(Material::Create());
+
+    return *this;
+}
+/******************************************************************************
+*    Method:    operator= ; copy assignment
 ******************************************************************************/
 King::LineModel & King::LineModel::operator= (const King::LineModel &in)
 {
@@ -1319,7 +1607,6 @@ King::LineModel & King::LineModel::operator= (const King::LineModel &in)
 inline King::Model & King::Model::operator= (const King::Model &in)
 {
     _modelName = in._modelName;
-    _materials = in._materials;
     _vertexFormat = in._vertexFormat;
     _indexFormat = in._indexFormat;
     _boundingBox = in._boundingBox;
@@ -1330,11 +1617,12 @@ inline King::Model & King::Model::operator= (const King::Model &in)
     _vertexBufferMaster = in._vertexBufferMaster;
     _indexBufferMaster = in._indexBufferMaster;
     _meshes = in._meshes;
+    _materials = in._materials;
 
     for (auto & m : _meshes)
     {
-        m.SetVB(&_vertexBufferMaster.GetData());
-        m.SetIB(&_indexBufferMaster.GetData());
+        m->SetVB(&_vertexBufferMaster.GetData());
+        m->SetIB(&_indexBufferMaster.GetData());
     }
     return *this;
 }
@@ -1342,28 +1630,82 @@ inline King::Model & King::Model::operator= (const King::Model &in)
 *    Method:    Load
 ******************************************************************************/
 bool King::Model::Load(std::string fileNameIN)
-{ 
-    Model_IO m;
-    
+{    
     std::filesystem::path p(fileNameIN);
+
+    // native file format in binary
+    if ((p.extension() == ".kng" || p.extension() == ".KNG" || p.extension() == ".Kng"))
+    {
+        std::vector<std::shared_ptr<Model>> models;
+        ifstream infile(p, std::ios_base::binary);
+        if (infile.is_open())
+        {
+            uint32_t magic;
+            uint32_t version;
+            uint32_t numModels;
+
+            infile.read(reinterpret_cast<char*>(&magic), sizeof(magic));
+
+            if (magic != 1971001974)
+            {
+                cout << "File: " << fileNameIN << " is not a .KNG native file" << '\n';
+            }
+            else
+            {
+                //cout << "native .KNG file " << fileNameIN << '\n';
+
+                infile.read(reinterpret_cast<char*>(&version), sizeof(version));
+                infile.read(reinterpret_cast<char*>(&numModels), sizeof(numModels));
+
+                if (infile.fail()) return false;
+
+                uint32_t maxVersion = 1;
+                if (version > maxVersion)
+                {
+                    cout << "Version " << version << " of .KNG file format is not supported. Max is version " << maxVersion << "\n";
+                    return false;
+                }
+
+                for (uint32_t i = 0; i < numModels; ++i)
+                {
+                    auto model = Model::Create();
+                    if (version == 1) model->Read_v1(infile);
+
+                    models.push_back(model);
+                }
+
+                if (infile.fail()) return false;
+
+                if (models.size())// just want one
+                {
+                    *this = *models.front(); // copies model contents to our model
+                }
+                if (models.size()) return true;
+            }
+        }
+        infile.close();
+
+    }
     
     // simple models and a very common file format for inter-operability
     if ((p.extension() == ".obj" || p.extension() == ".OBJ" || p.extension() == ".Obj"))
     {
+        Model_IO m;
         auto models = m.Load_OBJ(fileNameIN, &_vertexFormat); // returns a standard model
         if (models.size())// just want one
         {
-            *this = *models.back(); // copies model contents to our model
+            *this = *models.front(); // copies model contents to our model
         }
         if (models.size()) return true;
     }
-    // complex models with bones and animation clips with a good readable file format but poorly supported
+    // complex models with bones and animation clips with a good readable file format but poorly supported (quake 3 arena format)
     if ((p.extension() == ".m3d" || p.extension() == ".M3D" || p.extension() == ".M3d" || p.extension() == ".m3D"))
     {
+        Model_IO m;
         //auto models = m.Load_M3D(fileNameIN, &_vertexFormat); // returns a standard model
         //if (models.size())// just want one
         //{
-        //    *this = *models.back(); // model will ignore the bones and animation clips on copy
+        //    *this = *models.front(); // model will ignore the bones and animation clips on copy
         //}
         //if (models.size()) return true;
     }
@@ -1375,14 +1717,150 @@ bool King::Model::Load(std::string fileNameIN)
 ******************************************************************************/
 bool King::Model::Save(std::string fileNameIN) 
 { 
-    bool rtn;
-    Model_IO m; 
-    std::vector<std::shared_ptr<Model>> models; 
-    models.push_back(std::dynamic_pointer_cast<Model>(shared_from_this()));
-    rtn = m.Save_OBJ(fileNameIN, models); 
-    if(rtn)
-        rtn = m.Save_MTL(fileNameIN, models); 
+    bool rtn(false);
+
+    std::filesystem::path p(fileNameIN);
+
+    // native file format in binary
+    if ((p.extension() == ".kng" || p.extension() == ".KNG" || p.extension() == ".Kng"))
+    {
+        ofstream outfile(fileNameIN, std::ios_base::binary | std::ios_base::trunc);
+
+        //cout << "Saving file: " << fileNameIN << '\n';
+
+        if (outfile.is_open())
+        {
+            uint32_t magic = 1971001974; // file type identifier
+            uint32_t version = 1;
+            uint32_t numModels = 1;
+
+            outfile.write(reinterpret_cast<char*>(&magic), sizeof(magic));
+            outfile.write(reinterpret_cast<char*>(&version), sizeof(version));
+            outfile.write(reinterpret_cast<char*>(&numModels), sizeof(numModels));
+
+            for (uint32_t i = 0; i < numModels; ++i)
+            {
+                if (version == 1) Write_v1(outfile);
+            }
+
+            if (outfile.fail()) return false;
+        }
+        outfile.close();
+
+        return true;
+    }
+    else if ((p.extension() == ".obj" || p.extension() == ".OBJ" || p.extension() == ".Obj"))
+    {
+        Model_IO m;
+        std::vector<std::shared_ptr<Model>> models;
+        models.push_back(std::dynamic_pointer_cast<Model>(shared_from_this()));
+
+        rtn = m.Save_OBJ(fileNameIN, models);
+        if (rtn)
+            rtn = m.Save_MTL(fileNameIN, models);
+        return rtn;
+    }
+
     return rtn;
+}
+/******************************************************************************
+*    Method:    Read_v1
+*       Read from an open binary file
+******************************************************************************/
+bool King::Model::Read_v1(ifstream& dataFileIn)
+{
+    if (!dataFileIn.is_open()) return false;
+    // lambda
+    auto ReadString = [&dataFileIn](string& strOut)
+    {
+        size_t len;
+        dataFileIn.read(reinterpret_cast<char*>(&len), sizeof(len));
+        char* temp = new char[len + 1];
+        dataFileIn.read(temp, len);
+        temp[len] = '\0';
+        strOut = temp;
+        delete[] temp;
+    };
+    // read contents
+    uint32_t numMaterials;
+    dataFileIn.read(reinterpret_cast<char*>(&numMaterials), sizeof(numMaterials));
+
+    uint32_t numMeshes;
+    dataFileIn.read(reinterpret_cast<char*>(&numMeshes), sizeof(numMeshes));
+
+    ModelScaffold::Read_v1(dataFileIn);
+
+    bool good = true;
+    string key;
+
+    while (dataFileIn && good && numMaterials)
+    {
+        auto mtl = Material::Create();
+        
+        ReadString(key);
+        good = mtl->Read_v1(dataFileIn);
+        // store
+        _materials[key] = mtl;
+
+        --numMaterials;
+    }
+    while (dataFileIn && good && numMeshes)
+    {
+        auto mesh = TriangleMesh::Create();
+
+        good = mesh->Read_v1(dataFileIn);
+
+        // set reference data
+        mesh->SetVertexFormat(GetVertexFormat());
+        mesh->SetVB(&GetVertexBufferMaster().GetData());
+        mesh->SetIB(&GetIndexBufferMaster().GetData());
+        // store
+        _meshes.push_back(mesh);
+
+        --numMeshes;
+    }
+
+    if (dataFileIn.fail() || !good) return false;
+    return true;
+}
+/******************************************************************************
+*    Method:    Write_v1
+*       Write to an open binary file
+******************************************************************************/
+bool King::Model::Write_v1(ofstream& outfileIn)
+{
+    if (!outfileIn.is_open()) return false;
+    // lambda
+    auto WriteString = [&outfileIn](const string& str)
+    {
+        size_t len = str.size();
+        outfileIn.write(reinterpret_cast<const char*>(&len), sizeof(len));
+        outfileIn.write(str.c_str(), len);
+    };
+    // write contents
+    size_t numMaterials = _materials.size();
+    outfileIn.write(reinterpret_cast<const char*>(&numMaterials), sizeof(numMaterials));
+
+    size_t numMueshes = _meshes.size();
+    outfileIn.write(reinterpret_cast<const char*>(&numMueshes), sizeof(numMueshes));
+
+    ModelScaffold::Write_v1(outfileIn);
+
+    for (const auto &mtl : _materials)
+    {
+        // map
+        WriteString(mtl.first);
+        mtl.second->Write_v1(outfileIn);
+    }
+
+    for (const auto &mesh : _meshes)
+    {
+        // vector
+        mesh->Write_v1(outfileIn);
+    }
+
+    if (outfileIn.fail()) return false;
+    return true;
 }
 /******************************************************************************
 *    Method:    CalculateBoundingBox
@@ -1390,6 +1868,8 @@ bool King::Model::Save(std::string fileNameIN)
 Box King::LineModel::CalculateBoundingBox()
 {
     _boundingBox.SetZero();
+    if (!_meshes.size()) return _boundingBox;
+    else _boundingBox.SetCenter(_meshes[0]->GetVertexPosition(0));
 
     for (auto & mesh : _meshes)
     {
@@ -1403,12 +1883,65 @@ Box King::LineModel::CalculateBoundingBox()
 Box King::Model::CalculateBoundingBox() 
 {
     _boundingBox.SetZero();
+    if (!_meshes.size()) return _boundingBox;
+    else _boundingBox.SetCenter(_meshes[0]->GetVertexPosition(0));
 
     for (auto & mesh : _meshes)
     {
-        _boundingBox.Merge(mesh.CalculateBoundingBox());
+        _boundingBox.Merge(mesh->CalculateBoundingBox());
     }
     return _boundingBox;
+}
+/******************************************************************************
+*    Method:    CalculateNormals
+******************************************************************************/
+void King::Model::CalculateNormals()
+{
+    if (!(_vertexFormat.Has(VertexAttrib::position) && _vertexFormat.Has(VertexAttrib::normal) ))
+        return;
+
+    const auto& ib = _indexBufferMaster;
+    auto& vb = _vertexBufferMaster;
+    const auto positionAttribute = _vertexFormat.GetAttribute(_vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::position));
+    const auto normalAttribute = _vertexFormat.GetAttribute(_vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::normal));
+    // zero out normals
+    for (size_t i = 0; i < ib.GetElements(); ++i)
+    {
+        auto n = reinterpret_cast<float*>(&vb[ib[i]] + normalAttribute.GetOffset());
+        *n = 0.0f;
+    }
+    // add face normal to vertex
+    for (size_t i = 0; i < ib.GetElements(); i += 3)
+    {
+        const float3 pt0(reinterpret_cast<float*>(&vb[ib[i + 0]] + positionAttribute.GetOffset()));
+        const float3 pt1(reinterpret_cast<float*>(&vb[ib[i + 1]] + positionAttribute.GetOffset()));
+        const float3 pt2(reinterpret_cast<float*>(&vb[ib[i + 2]] + positionAttribute.GetOffset()));
+        // face normal
+        auto c = Cross(pt1 - pt0, pt2 - pt0);
+        {
+            float* n0 = reinterpret_cast<float*>(&vb[ib[i + 0]] + normalAttribute.GetOffset());
+            float3 n(n0); n += c;
+            n0[0] = n.GetX(); n0[1] = n.GetY(); n0[2] = n.GetZ();
+        }
+        {
+            float* n1 = reinterpret_cast<float*>(&vb[ib[i + 1]] + normalAttribute.GetOffset());
+            float3 n(n1); n += c;
+            n1[0] = n.GetX(); n1[1] = n.GetY(); n1[2] = n.GetZ();
+        }
+        {
+            float* n2 = reinterpret_cast<float*>(&vb[ib[i + 2]] + normalAttribute.GetOffset());
+            float3 n(n2); n += c;
+            n2[0] = n.GetX(); n2[1] = n.GetY(); n2[2] = n.GetZ();
+        }
+    }
+    // normalize normals (effectively smoothing the normals of verticies that are shared with multiple faces
+    for (size_t i = 0; i < ib.GetElements(); ++i)
+    {
+        float* ni = reinterpret_cast<float*>(&vb[ib[i]] + normalAttribute.GetOffset());
+        float3 n(ni);
+        n.MakeNormalize();
+        ni[0] = n.GetX(); ni[1] = n.GetY(); ni[2] = n.GetZ();
+    }
 }
 /******************************************************************************
 *    Method:    CalculateTangentsAndBiTangents
@@ -1634,13 +2167,13 @@ void King::Model::OptimizeMeshVertexBuffer(const TriangleMesh & forMeshIn)
     if (meshNumIndex == newIndexBuffer.size())
         copy(newIndexBuffer.begin(), newIndexBuffer.end(), ib);
 
-    cout << "OptimizeVertexBuffer" << '\n';
-    cout << "  " << "Verticies before: " << meshNumVerts << '\n';
-    cout << "  " << "Verticies after:  " << new_verts.size()/stride << '\n';
-    cout << "  " << "Verticies reordered: " << vertexSwapped << '\n';
-    cout << "  " << "Indicies before: " << meshNumIndex << '\n';
-    cout << "  " << "Indicies after: " << newIndexBuffer.size() << '\n';
-    cout << "  " << "Indicies remapped: " << indexRemapped << '\n';
+    //cout << "OptimizeVertexBuffer" << '\n';
+    //cout << "  " << "Verticies before: " << meshNumVerts << '\n';
+    //cout << "  " << "Verticies after:  " << new_verts.size()/stride << '\n';
+    //cout << "  " << "Verticies reordered: " << vertexSwapped << '\n';
+    //cout << "  " << "Indicies before: " << meshNumIndex << '\n';
+    //cout << "  " << "Indicies after: " << newIndexBuffer.size() << '\n';
+    //cout << "  " << "Indicies remapped: " << indexRemapped << '\n';
 }
 /******************************************************************************
 *    Method:    ReportOut
@@ -1683,11 +2216,11 @@ void King::Model::LogReport(const std::wstring fileNameIn)
         {
             file << '\n' ;
             file << "# " << "Mesh[" << std::to_string(counter) << "]" << '\n' ;
-            file << "# " << "  " << "Name: " << mesh.Get_name() << '\n' ;
-            file << "# " << "  " << "Material: " << mesh.Get_materialName() << '\n' ;
-            file << "# " << "  " << "Triangles: " << std::to_string(mesh.GetNumTriangles()) << '\n' ;
-            file << "# " << "  " << "VB start: " << std::to_string(mesh.GetVBStart()) << '\n' ;
-            file << "# " << "  " << "IB start: " << std::to_string(mesh.GetIBStart()) << '\n' ;
+            file << "# " << "  " << "Name: " << mesh->Get_name() << '\n' ;
+            file << "# " << "  " << "Material: " << mesh->Get_materialName() << '\n' ;
+            file << "# " << "  " << "Triangles: " << std::to_string(mesh->GetNumTriangles()) << '\n' ;
+            file << "# " << "  " << "VB start: " << std::to_string(mesh->GetVBStart()) << '\n' ;
+            file << "# " << "  " << "IB start: " << std::to_string(mesh->GetIBStart()) << '\n' ;
             ++counter;
         }
         counter = 0;
@@ -1712,6 +2245,126 @@ void King::Model::LogReport(const std::wstring fileNameIn)
         }
     }
     file.close();
+}
+/******************************************************************************
+*    Method:    Translate
+******************************************************************************/
+void King::ModelScaffold::Translate(const float3 transIn)
+{
+    if (!_vertexFormat.IsFirst(King::VertexAttrib::enumDesc::position)) return;
+
+    auto in = reinterpret_cast<XMFLOAT3*>(&GetVertexBufferMaster().GetData());
+    auto stride = GetVertexBufferMaster().GetStride();
+    size_t numElements = GetVertexBufferMaster().GetElements();
+
+    float3 intrensic;
+    for (size_t i = 0; i < numElements; i++)
+    {
+        intrensic.Set(*in);
+        *in = intrensic + transIn;
+        in = reinterpret_cast<XMFLOAT3*>((reinterpret_cast<char*>(in) + stride));
+    }
+    CalculateBoundingBox();
+}
+/******************************************************************************
+*    Method:    Read_v1
+*       Read and interpret data from an open file into the model definition
+******************************************************************************/
+bool King::ModelScaffold::Read_v1(ifstream& dataFileIn)
+{
+    bool rtn = true;
+
+    if (!dataFileIn.is_open()) return false;
+    // lambda
+    auto ReadString = [&dataFileIn](string& strOut)
+    {
+        size_t len;
+        dataFileIn.read(reinterpret_cast<char*>(&len), sizeof(len));
+        char* temp = new char[len + 1];
+        dataFileIn.read(temp, len);
+        temp[len] = '\0';
+        strOut = temp;
+        delete[] temp;
+    };
+
+    ReadString(_modelName);
+
+    for (int i = 0; i < 8; ++i)
+    {
+        dataFileIn.read(reinterpret_cast<char*>(&_vertexFormat.attributes[i]._offset), sizeof(uint16_t));
+        
+        int temp;
+        dataFileIn.read(reinterpret_cast<char*>(&temp), sizeof(temp));
+        _vertexFormat.attributes[i]._format = (enum VertexAttrib::enumFormat)temp;
+
+        dataFileIn.read(reinterpret_cast<char*>(&temp), sizeof(temp));
+        _vertexFormat.attributes[i]._desc = (enum VertexAttrib::enumDesc)temp;;
+    }
+    dataFileIn.read(reinterpret_cast<char*>(&_vertexFormat.nextAttribute), sizeof(_vertexFormat.nextAttribute));
+
+    dataFileIn.read(reinterpret_cast<char*>(&_indexFormat), sizeof(_indexFormat));
+    dataFileIn.read(reinterpret_cast<char*>(&_boundingBox), sizeof(_boundingBox));
+
+    rtn = _vertexBufferMaster.ReadMemoryBlock(dataFileIn);
+    if (rtn) rtn = _indexBufferMaster.ReadMemoryBlock(dataFileIn);        
+
+    if (dataFileIn.fail() || !rtn) return false;
+    return true;
+}
+/******************************************************************************
+*    Method:    Write_v1
+*       Write class data to an open file
+******************************************************************************/
+bool King::ModelScaffold::Write_v1(ofstream& outfileIn)
+{
+    if (!outfileIn.is_open()) return false;
+    // lambda
+    auto WriteString = [&outfileIn](const string& str)
+    {
+        size_t len = str.size();
+        outfileIn.write(reinterpret_cast<const char*>(&len), sizeof(len));
+        outfileIn.write(str.c_str(), len);
+    };
+    WriteString(_modelName);
+
+    for (int i = 0; i < 8; ++i)
+    {
+        outfileIn.write(reinterpret_cast<char*>(&_vertexFormat.attributes[i]._offset), sizeof(uint16_t));
+
+        int temp = _vertexFormat.attributes[i]._format;
+        outfileIn.write(reinterpret_cast<char*>(&temp), sizeof(temp));
+
+        temp = _vertexFormat.attributes[i]._desc;
+        outfileIn.write(reinterpret_cast<char*>(&temp), sizeof(temp));
+    }
+    outfileIn.write(reinterpret_cast<char*>(&_vertexFormat.nextAttribute), sizeof(_vertexFormat.nextAttribute));
+
+    outfileIn.write(reinterpret_cast<char*>(&_indexFormat), sizeof(_indexFormat));
+    outfileIn.write(reinterpret_cast<char*>(&_boundingBox), sizeof(_boundingBox));
+
+    _vertexBufferMaster.WriteMemoryBlock(outfileIn);
+    _indexBufferMaster.WriteMemoryBlock(outfileIn);
+    
+    if (outfileIn.fail()) return false;
+    return true;
+}
+
+/******************************************************************************
+*    Method:    Transform
+******************************************************************************/
+void King::ModelScaffold::Transform(const Pose& transformIn)
+{
+    if (!_vertexFormat.IsFirst(King::VertexAttrib::enumDesc::position)) return;
+
+    DirectX::XMMATRIX transform = transformIn.Get_XMMATRIX();
+
+    auto in = reinterpret_cast<XMFLOAT3*>(&GetVertexBufferMaster().GetData());
+    auto out = in;
+    auto stride = GetVertexBufferMaster().GetStride();
+    size_t numElements = GetVertexBufferMaster().GetElements();
+
+    DirectX::XMVector3TransformCoordStream(out, stride, in, stride, numElements, transform); // stride should be in bytes
+    CalculateBoundingBox();
 }
 /******************************************************************************
 *    Method:    GetVertexAddr
@@ -1799,10 +2452,11 @@ void King::ModelScaffold::SetVertexElement(const size_t & vertexIndexIn, const V
 {
     assert((bool)_vertexBufferMaster);
     auto index = _vertexFormat.GetAttributeIndexFromDescription(propertyIn);
+    auto offset = _vertexFormat.GetAttribute(index).GetOffset();
     assert(index < 8);
 
     auto length = _vertexFormat.GetAttribute(index).GetByteSize();
-    std::copy(dataIn, dataIn + length, &_vertexBufferMaster[vertexIndexIn]);
+    std::copy(dataIn, dataIn + length, (&_vertexBufferMaster[vertexIndexIn]) + offset);
 }
 
 /******************************************************************************
@@ -1850,12 +2504,12 @@ Box King::LineMesh::CalculateBoundingBox()
 ******************************************************************************/
 Box King::TriangleMesh::CalculateBoundingBox() 
 {
-    Box rtn(GetVertexPosition(0));
-
     if (!_vb || !_vertexFormat.Has(VertexAttrib::enumDesc::position))
         return Box();
+
+    Box rtn(GetVertexPosition(0));
     {
-        const auto to = GetNumIndicies();
+        const auto to = GetNumVerticies();
         for (uint32_t i = 1; i < to; ++i)
         {
             rtn.Merge(GetVertexPosition(i));
@@ -1863,6 +2517,62 @@ Box King::TriangleMesh::CalculateBoundingBox()
     }
     _boundingBox = rtn;
     return rtn;
+}
+/******************************************************************************
+*    Method:    Read_v1
+*       Binary read
+******************************************************************************/
+bool King::TriangleMesh::Read_v1(ifstream& dataFileIn)
+{
+    if (!dataFileIn.is_open()) return false;
+    // lambda
+    auto ReadString = [&dataFileIn](string& strOut)
+    {
+        size_t len;
+        dataFileIn.read(reinterpret_cast<char*>(&len), sizeof(len));
+        char* temp = new char[len + 1];
+        dataFileIn.read(temp, len);
+        temp[len] = '\0';
+        strOut = temp;
+        delete[] temp;
+    };
+
+    ReadString(_name);
+    ReadString(_materialName);
+    dataFileIn.read(reinterpret_cast<char*>(&_vbStart), sizeof(_vbStart));
+    dataFileIn.read(reinterpret_cast<char*>(&_ibStart), sizeof(_ibStart));
+    dataFileIn.read(reinterpret_cast<char*>(&_numTriangles), sizeof(_numTriangles));
+    dataFileIn.read(reinterpret_cast<char*>(&_boundingBox), sizeof(_boundingBox));
+
+    // does not load referenced data which must be set outside the class
+
+    if (dataFileIn.fail()) return false;
+    return true;
+}
+/******************************************************************************
+*    Method:    Write_v1
+*       Binary write
+******************************************************************************/
+bool King::TriangleMesh::Write_v1(ofstream& outfileIn)
+{
+    if (!outfileIn.is_open()) return false;
+    // lambda
+    auto WriteString = [&outfileIn](const string& str)
+    {
+        size_t len = str.size();
+        outfileIn.write(reinterpret_cast<const char*>(&len), sizeof(len));
+        outfileIn.write(str.c_str(), len);
+    };
+
+    WriteString(_name);
+    WriteString(_materialName);
+    outfileIn.write(reinterpret_cast<char*>(&_vbStart), sizeof(_vbStart));
+    outfileIn.write(reinterpret_cast<char*>(&_ibStart), sizeof(_ibStart));
+    outfileIn.write(reinterpret_cast<char*>(&_numTriangles), sizeof(_numTriangles));
+    outfileIn.write(reinterpret_cast<char*>(&_boundingBox), sizeof(_boundingBox));
+
+    if (outfileIn.fail()) return false;
+    return true;
 }
 /******************************************************************************
 *    Class:    HeightGrid
@@ -2305,11 +3015,11 @@ std::vector<float3> King::SkinnedModel::CalculateVertexSkinPositions(size_t mesh
     float w; // weight of the bone influence
 
     // identify vertex positions
-    const auto vb = m.GetVB();
+    const auto vb = m->GetVB();
     assert(vb != nullptr);
-    const auto ib = m.GetIB();
-    const auto & ibStart = m.GetIBStart();
-    const auto & vFormat = m.GetVertexFormat();
+    const auto ib = m->GetIB();
+    const auto & ibStart = m->GetIBStart();
+    const auto & vFormat = m->GetVertexFormat();
     const auto & stride = vFormat.GetByteSize();
     const auto & attrP = vFormat.GetAttributeIndexFromDescription(VertexAttrib::enumDesc::position);
     const auto & offset = vFormat.GetAttribute(attrP).GetOffset();
@@ -2317,7 +3027,7 @@ std::vector<float3> King::SkinnedModel::CalculateVertexSkinPositions(size_t mesh
     auto GetVertexAddr = [&](const uint32_t indexIn) { return vb + ((size_t) *(ib + ibStart + indexIn) * stride); };
 
     // copy vertex positions
-    const auto numVerticies = m.GetNumVerticies();
+    const auto numVerticies = m->GetNumVerticies();
     for (uint32_t i = 0; i < numVerticies; ++i)
     {
         skinPositions.push_back( float3(reinterpret_cast<float*>(GetVertexAddr(i) + offset)) );
@@ -2351,6 +3061,59 @@ std::vector<float3> King::SkinnedModel::CalculateVertexSkinPositions(size_t mesh
     }
     
     return skinPositions; // compiler should involk std::move() optimization
+}
+/******************************************************************************
+*    Method:    Read_v1
+******************************************************************************/
+bool King::SkinnedModel::Read_v1(ifstream& dataFileIn)
+{
+    bool good = true;
+
+    if (!dataFileIn.is_open()) return false;
+    // lambda
+    auto ReadString = [&dataFileIn](string& strOut)
+    {
+        size_t len;
+        dataFileIn.read(reinterpret_cast<char*>(&len), sizeof(len));
+        char* temp = new char[len + 1];
+        dataFileIn.read(temp, len);
+        temp[len] = '\0';
+        strOut = temp;
+        delete[] temp;
+    };
+    // read contents
+    good = Model::Read_v1(dataFileIn);
+
+    if (good)
+    {
+        _boneHierarchy = BoneHierarchy::CreateUnique();
+        good = _boneHierarchy->Read_v1(dataFileIn);
+    }
+
+    if (dataFileIn.fail() || !good) return false;
+    return true;
+}
+/******************************************************************************
+*    Method:    Write_v1
+******************************************************************************/
+bool King::SkinnedModel::Write_v1(ofstream& outfileIn)
+{
+    if (!outfileIn.is_open()) return false;
+    // lambda
+    auto WriteString = [&outfileIn](const string& str)
+    {
+        size_t len = str.size();
+        outfileIn.write(reinterpret_cast<const char*>(&len), sizeof(len));
+        outfileIn.write(str.c_str(), len);
+    };
+    // write contents
+    if (!Model::Write_v1(outfileIn))
+        return false;
+    if (_boneHierarchy)
+        if (!_boneHierarchy->Write_v1(outfileIn)) return false;
+
+    if (outfileIn.fail()) return false;
+    return true;
 }
 
 inline King::Pose::Pose(const XMMATRIX & M3x3, float3 translate) : _translation(translate) { _rotation = DirectX::XMQuaternionRotationMatrix(M3x3); }
@@ -3021,12 +3784,12 @@ bool King::Contact::SAT_ContactPointsFromOBBonOBBIntersection(const Box& A, cons
     auto contactVertsA = GetContactVerts(cornersA, p);
     auto contactVertsB = GetContactVerts(cornersB, -p);
 
-    cout << "    Contact VertsA: " << contactVertsA.size() << "\n";
-    for (auto& ea : contactVertsA)
-        cout << "        " << ea << "\n";
-    cout << "    Contact VertsB: " << contactVertsB.size() << "\n";
-    for (auto& ea : contactVertsB)
-        cout << "        " << ea << "\n";
+    //cout << "    Contact VertsA: " << contactVertsA.size() << "\n";
+    //for (auto& ea : contactVertsA)
+    //    cout << "        " << ea << "\n";
+    //cout << "    Contact VertsB: " << contactVertsB.size() << "\n";
+    //for (auto& ea : contactVertsB)
+    //    cout << "        " << ea << "\n";
 
     if (!contactVertsA.size() || !contactVertsB.size())
         return false; // this should not really happen unless p or corners have an issue
@@ -3090,9 +3853,9 @@ bool King::Contact::SAT_ContactPointsFromOBBonOBBIntersection(const Box& A, cons
         }
     }
 
-    cout << "    Clipped Verts: " << _contactVerts.size() << "\n";
-    for (auto& ea : _contactVerts)
-        cout << "        " << ea << "\n";
+    //cout << "    Clipped Verts: " << _contactVerts.size() << "\n";
+    //for (auto& ea : _contactVerts)
+    //    cout << "        " << ea << "\n";
 
     if (_contactVerts.size())
         return true;
@@ -3582,3 +4345,206 @@ inline bool King::Capsule::Collision(Line const& lineIn) const { return Intersec
 inline bool King::Capsule::Collision(const Sphere& sphereIn) const { return Intersects(sphereIn); }
 
 inline bool King::Capsule::Collision(Box const& boxIn) const { return Intersects(boxIn); }
+
+bool King::Material::Read_v1(ifstream& dataFileIn)
+{
+    if (!dataFileIn.is_open()) return false;
+    // lambda
+    auto ReadString = [&dataFileIn](string& strOut)
+    {
+        size_t len;
+        dataFileIn.read(reinterpret_cast<char*>(&len), sizeof(len));
+        char* temp = new char[len + 1];
+        dataFileIn.read(temp, len);
+        temp[len] = '\0';
+        strOut = temp;
+        delete[] temp;
+    };
+    // read contents
+    dataFileIn.read(reinterpret_cast<char*>(&_shaderMethod), sizeof(_shaderMethod));
+    ReadString(_name);
+    dataFileIn.read(reinterpret_cast<char*>(&_properties), sizeof(_properties));
+    dataFileIn.read(reinterpret_cast<char*>(&_fileNames.ver), sizeof(_fileNames.ver));
+    ReadString(_fileNames.light);
+    ReadString(_fileNames.diffuse);
+    ReadString(_fileNames.specular);
+    ReadString(_fileNames.specular_strength);
+    ReadString(_fileNames.normal);
+    ReadString(_fileNames.emmissive);
+    ReadString(_fileNames.transparency);
+    ReadString(_fileNames.displacement);
+    ReadString(_fileNames.stencil);
+    ReadString(_fileNames.reflection);
+
+    if (dataFileIn.fail()) return false;
+    return true;
+}
+
+bool King::Material::Write_v1(ofstream& outfileIn)
+{
+    if (!outfileIn.is_open()) return false;
+    // lambda
+    auto WriteString = [&outfileIn](const string& str)
+    {
+        size_t len = str.size();
+        outfileIn.write(reinterpret_cast<const char*>(&len), sizeof(len));
+        outfileIn.write(str.c_str(), len);
+    };
+    // write contents
+    outfileIn.write(reinterpret_cast<char*>(&_shaderMethod), sizeof(_shaderMethod));
+    WriteString(_name);
+    outfileIn.write(reinterpret_cast<char*>(&_properties), sizeof(_properties));
+    outfileIn.write(reinterpret_cast<char*>(&_fileNames.ver), sizeof(_fileNames.ver));
+    WriteString(_fileNames.light);
+    WriteString(_fileNames.diffuse);
+    WriteString(_fileNames.specular);
+    WriteString(_fileNames.specular_strength);
+    WriteString(_fileNames.normal);
+    WriteString(_fileNames.emmissive);
+    WriteString(_fileNames.transparency);
+    WriteString(_fileNames.displacement);
+    WriteString(_fileNames.stencil);
+    WriteString(_fileNames.reflection);
+
+    if (outfileIn.fail()) return false;
+    return true;
+}
+/******************************************************************************
+*    Method:    Read_v1
+******************************************************************************/
+bool King::BoneHierarchy::Read_v1(ifstream& dataFileIn)
+{
+    bool good = true;
+
+    if (!dataFileIn.is_open()) return false;
+    // lambda
+    auto ReadString = [&dataFileIn](string& strOut)
+    {
+        size_t len;
+        dataFileIn.read(reinterpret_cast<char*>(&len), sizeof(len));
+        char* temp = new char[len + 1];
+        dataFileIn.read(temp, len);
+        temp[len] = '\0';
+        strOut = temp;
+        delete[] temp;
+    };
+    // read contents
+    uint32_t num_bones;
+    dataFileIn.read(reinterpret_cast<char*>(&num_bones), sizeof(num_bones));
+    while (dataFileIn && num_bones)
+    {
+        Bone bone;
+
+        ReadString(bone._name);
+        dataFileIn.read(reinterpret_cast<char*>(&bone._transform), sizeof(bone._transform));
+        
+        _skeleton._bones.push_back({ bone._name, bone._transform });
+        --num_bones;
+    }
+
+    uint32_t num_toParentTransform;
+    dataFileIn.read(reinterpret_cast<char*>(&num_toParentTransform), sizeof(num_toParentTransform));
+    while (dataFileIn && num_toParentTransform)
+    {
+        DirectX::XMFLOAT4X4 toParentTransform;
+
+        dataFileIn.read(reinterpret_cast<char*>(&toParentTransform), sizeof(toParentTransform));
+
+        _skeleton._toParentTransform.push_back(toParentTransform);
+        --num_toParentTransform;
+    }
+
+    uint32_t num_boneInfluenceCount;
+    dataFileIn.read(reinterpret_cast<char*>(&num_boneInfluenceCount), sizeof(num_boneInfluenceCount));
+    while (dataFileIn && num_boneInfluenceCount)
+    {
+        uint8_t boneInfluenceCount;
+
+        dataFileIn.read(reinterpret_cast<char*>(&boneInfluenceCount), sizeof(boneInfluenceCount));
+
+        _boneInfluenceCount.push_back(boneInfluenceCount);
+        --num_boneInfluenceCount;
+    }
+
+    uint32_t num_boneIndex;
+    dataFileIn.read(reinterpret_cast<char*>(&num_boneIndex), sizeof(num_boneIndex));
+    while (dataFileIn && num_boneIndex)
+    {
+        uint8_t boneIndex;
+
+        dataFileIn.read(reinterpret_cast<char*>(&boneIndex), sizeof(boneIndex));
+
+        _boneIndex.push_back(boneIndex);
+        --num_boneIndex;
+    }
+
+    uint32_t num_boneWeight;
+    dataFileIn.read(reinterpret_cast<char*>(&num_boneWeight), sizeof(num_boneWeight));
+    while (dataFileIn && num_boneWeight)
+    {
+        uint8_t boneWeight;
+
+        dataFileIn.read(reinterpret_cast<char*>(&boneWeight), sizeof(boneWeight));
+
+        _boneWeight.push_back(boneWeight);
+        --num_boneWeight;
+    }
+
+    if (dataFileIn.fail() || !good) return false;
+    return true;
+}
+/******************************************************************************
+*    Method:    Write_v1
+******************************************************************************/
+bool King::BoneHierarchy::Write_v1(ofstream& outfileIn)
+{
+    if (!outfileIn.is_open()) return false;
+    // lambda
+    auto WriteString = [&outfileIn](const string& str)
+    {
+        size_t len = str.size();
+        outfileIn.write(reinterpret_cast<const char*>(&len), sizeof(len));
+        outfileIn.write(str.c_str(), len);
+    };
+    // write contents
+    // Skeleton
+    size_t num_bones = _skeleton._bones.size();
+    outfileIn.write(reinterpret_cast<const char*>(&num_bones), sizeof(num_bones));
+    for (const auto &bone : _skeleton._bones)
+    {
+        // vector
+        WriteString(bone._name);
+        outfileIn.write(reinterpret_cast<const char*>(&bone._transform), sizeof(bone._transform));
+    }
+    size_t num_toParentTransform = _skeleton._toParentTransform.size();
+    outfileIn.write(reinterpret_cast<const char*>(&num_toParentTransform), sizeof(num_toParentTransform));
+    for (const auto& toParentTransform : _skeleton._toParentTransform)
+    {
+        // vector
+        outfileIn.write(reinterpret_cast<const char*>(&toParentTransform), sizeof(toParentTransform));
+    }
+    size_t num_boneInfluenceCount = _boneInfluenceCount.size();
+    outfileIn.write(reinterpret_cast<const char*>(&num_boneInfluenceCount), sizeof(num_boneInfluenceCount));
+    for (const auto& boneInfluence : _boneInfluenceCount)
+    {
+        // vector
+        outfileIn.write(reinterpret_cast<const char*>(&boneInfluence), sizeof(boneInfluence));
+    }
+    size_t num_boneIndex = _boneIndex.size();
+    outfileIn.write(reinterpret_cast<const char*>(&num_boneIndex), sizeof(num_boneIndex));
+    for (const auto& boneIndex : _boneIndex)
+    {
+        // vector
+        outfileIn.write(reinterpret_cast<const char*>(&boneIndex), sizeof(boneIndex));
+    }
+    size_t num_boneWeight = _boneWeight.size();
+    outfileIn.write(reinterpret_cast<const char*>(&num_boneWeight), sizeof(num_boneWeight));
+    for (const auto& boneWeight : _boneWeight)
+    {
+        // vector
+        outfileIn.write(reinterpret_cast<const char*>(&boneWeight), sizeof(boneWeight));
+    }
+
+    if (outfileIn.fail()) return false;
+    return true;
+}

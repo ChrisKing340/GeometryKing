@@ -61,10 +61,16 @@ using json = nlohmann::json;
 *        An object at rest stays at rest and an object in motion stays in motion
 *        unless acted upon by a net sum external force. Known as Law of inertia.
 *
-*    Kinematics:
-*        ͢vf - ͢vi = ͢a • 𝛥t
-*        ͢pf - ͢pi = ͢v • 𝛥t + 1/2 • ͢a • 𝛥t^2 ; poition in meters with constant ͢a
+*        The force causes acceleration, according to the 2nd Law. If we consider
+*        the condition of constant ͢a, then we can simplify and derive:
 *
+*    Kinematics:
+*        𝛥t = tf - ti ; time in seconds (s)
+*        ͢af = ͢ai = ͢a ; acceleration in meters per second squared (m/s^2)
+*        ͢vf - ͢vi = ͢a • 𝛥t ; velocity in meters per second (m/s)
+*        pf - pi = ͢v • 𝛥t + 1/2 • ͢a • 𝛥t^2 ; position in meters (m)
+*        pf - pi = 𝛥t • ( ͢vi + ͢vf ) / 2
+*        ͢vf^2 - ͢vi^2 = 2 • ͢a • ( ͢pf - ͢pi )
 ******************************************************************************/
 
 namespace King {
@@ -73,8 +79,8 @@ namespace King {
     *    Velocity
     ******************************************************************************/
     class Velocity;
-    Velocity operator*(const UnitOfMeasure::Time &t, const Acceleration & accIn); // dv = ͢vf - ͢vi = t * ͢a 
-    Velocity operator*(const Acceleration & accIn, const UnitOfMeasure::Time &t); // dv = ͢vf - ͢vi = ͢a * t
+    Velocity operator*(const UnitOfMeasure::Time &t, const Acceleration & accIn); // dv = ͢vf - ͢vi = 𝛥t * ͢a 
+    Velocity operator*(const Acceleration & accIn, const UnitOfMeasure::Time &t); // dv = ͢vf - ͢vi = ͢a * 𝛥t
 
     class alignas(16) Velocity
     {

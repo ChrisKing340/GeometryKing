@@ -88,8 +88,10 @@ namespace King {
         // Conversions
         inline explicit operator float() const { return _magnitude; }
         inline explicit operator UnitOfMeasure::Angle() const { return _magnitude; }
-        inline explicit operator Quaternion() const { return Quaternion(GetVector().Get_XMFLOAT3()); } // pitch, Yaw, Roll
+        inline operator Quaternion() const { return _rotation; }
         inline operator float3() const { return GetVector(); }  // allow implicit for a default behavior
+        inline operator DirectX::XMFLOAT3() const { return GetVector().Get_XMFLOAT3(); }
+        inline operator DirectX::XMFLOAT3A() const { return GetVector().Get_XMFLOAT3A(); }
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<Rotation*>(p)); }

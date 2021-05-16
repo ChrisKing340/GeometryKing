@@ -165,6 +165,7 @@ namespace King {
 			string modifer_type				= "-type";
 
 			// .mtl format tokens
+            // reference PBR extensions at http ://exocortex.com/blog/extending_wavefront_mtl_to_support_pbr
 			string prop_specularStrength	= "Ns"; // exponent 0 to 1000
 			string color_ambient			= "Ka"; // ambient color
 			string color_diffuse			= "Kd"; // diffuse color
@@ -178,8 +179,8 @@ namespace King {
 			string shader_method			= "illum"; // 1 is default, 2 is specular on, 4 is cutouts
 
 			string map_ambient				= "map_Ka"; // light map
-			string map_diffuse				= "map_Kd";
-			string map_specular				= "map_Ks";
+			string map_diffuse				= "map_Kd"; // diffuse map
+			string map_specular				= "map_Ks"; // specular map
 			string map_specular_strength	= "map_Ns"; // specular highlight component
 			string map_transparency			= "map_d";
 			string map_normal				= "map_Bump";
@@ -239,14 +240,17 @@ namespace King {
 		// Conversions
 		// Functionality
 		void												Destroy() { ; }
-
+        // wavefront format supported by every popular modeling software for exporting data.  Lacks skeleton animation and inconsistentcies on modeling exports implementations (winding order, encoding of quads and larger polygons).
+        //  our format is tested with with modeling software Blender.
 		std::vector<shared_ptr<King::Model>>				Load_OBJ(const std::string fileNameIN, const VertexFormat *vertexFormatIn = nullptr);
 		bool												Save_OBJ(const std::string fileNameIN, const std::vector<shared_ptr<King::Model>> &modelsIN);
-
-		// From the book 
+        // our native format in binary
+        std::vector<shared_ptr<King::ModelScaffold>>		Load_KNG(const std::string fileNameIN);
+        bool												Save_KNG(const std::string fileNameIN, const std::vector<shared_ptr<King::ModelScaffold>>& modelsIN);
+		// https://en.wikipedia.org/wiki/Quake_III_Arena popular format, text based, and contains skelton animation data.  
 		//std::vector<shared_ptr<King::SkinnedModel>>		Load_M3D(const std::string fileNameIN, const VertexFormat *vertexFormatIn = nullptr);
 		//bool												Save_M3D(const std::string fileNameIN, shared_ptr<King::SkinnedModel>& modelIn, std::map<std::string, std::shared_ptr<Material>>& materialsIN);
-
+        // material format used with wavefront files and our native format as accompany file
 		std::map<std::string, std::shared_ptr<Material>>	Load_MTL(const std::string fileNameIN);
 		bool												Save_MTL(const std::string fileNameIN, const std::vector<shared_ptr<King::Model>> &modelsIN);
 		bool 												Save_MTL(const std::string fileNameIN, std::map<std::string, std::shared_ptr<Material>> &materialsIN);

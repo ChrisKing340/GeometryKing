@@ -101,25 +101,48 @@ DirectX::XMFLOAT3 King::Quaternion::GetEulerAngles() const
     float unit = float4::SumComponents(sqVec);
     float test = q.x * q.y + q.z * q.w;
 
-    if (test > 0.4995f * unit)
-    {
-        // Singularity at north pole
-        pitchYawRoll.x = -DirectX::XM_PIDIV2;
-        pitchYawRoll.y = -2.f * atan2(q.x, q.w);
-        pitchYawRoll.z = 0.f;
-        return pitchYawRoll;
-    }
-    else if (test < -0.4995f * unit)
-    {
-        // Singularity at south pole
-        pitchYawRoll.x = DirectX::XM_PIDIV2;
-        pitchYawRoll.y = 2.f * atan2(q.x, q.w);
-        pitchYawRoll.z = 0.f;
-        return pitchYawRoll;
-    }
-    pitchYawRoll.x = -asin(2.f * test / unit);
-    pitchYawRoll.y = atan2(2.f * (q.y * q.w - q.x * q.z), sq.x - sq.y - sq.z + sq.w);
-    pitchYawRoll.z = -atan2(2.f * (q.x * q.w - q.y * q.z), -sq.x + sq.y - sq.z + sq.w);
+    //if (test > 0.4995f * unit)
+    //{
+    //    // Singularity at north pole
+    //    pitchYawRoll.x = -DirectX::XM_PIDIV2;
+    //    pitchYawRoll.y = -2.f * atan2(q.x, q.w);
+    //    pitchYawRoll.z = 0.f;
+    //    return pitchYawRoll;
+    //}
+    //else if (test < -0.4995f * unit)
+    //{
+    //    // Singularity at south pole
+    //    pitchYawRoll.x = DirectX::XM_PIDIV2;
+    //    pitchYawRoll.y = 2.f * atan2(q.x, q.w);
+    //    pitchYawRoll.z = 0.f;
+    //    return pitchYawRoll;
+    //}
+    // (+)x = w/RHS, thumb down the (+) x axis for 180 deg (+PI), then(-PI) increasing back to zero for 360 deg.
+    // (+)y = w/RHS, thumb down the (+) y axis for 180 deg (+PI), then(-PI) increasing back to zero for 360 deg.
+    pitchYawRoll.x =  atan2(2.f * (q.x * q.w - q.y * q.z), -sq.x + sq.y - sq.z + sq.w);
+    pitchYawRoll.y =  atan2(2.f * (q.y * q.w - q.x * q.z), sq.x - sq.y - sq.z + sq.w);
+    pitchYawRoll.z =  asin(2.f * test / unit);
+
+    // (+)z = w/RHS, thumb down the (+) z axis
+    // EX: quadrant 1 (left of north), on (+) rotation as it crosses into quadrant 2:
+    //    R{ x:         0 y : 0 z : 0.705643 w : 0.708563 }
+    //  PYR{ x:         0 y : 0 z : 1.56667 }
+    //
+    //  R{ x:         0 y : 0 z : 0.711523 w : 0.702658 }
+    //  PYR{ x:   3.14159 y : 3.14159 z : 1.55826 }
+    //                                0 (North)
+    //                x:  0 y:  0   /--\  x:  0 y:  0
+    //                             /    \
+    //                     PIdiv2 |   z  | -PIdiv2
+    //                             \    /
+    //  x:  3.14159 y:  3.14159     \--/  x:  -3.14159 y:  -3.14159
+    //                                0
+    //2/2/2021 removed code below because it is reporting -x axis rotation as +z rotation.  This has been in place a long, long time
+    //quat = R { x:  0.535816 y:         0 z:         0 w:  0.844313 }
+    //function returns = PYR{ x:        -0 y : 0 z : -1.13097 }
+    //pitchYawRoll.x = -asin(2.f * test / unit);
+    //pitchYawRoll.y = atan2(2.f * (q.y * q.w - q.x * q.z), sq.x - sq.y - sq.z + sq.w);
+    //pitchYawRoll.z = -atan2(2.f * (q.x * q.w - q.y * q.z), -sq.x + sq.y - sq.z + sq.w);
 
     return pitchYawRoll;
 
@@ -150,8 +173,19 @@ DirectX::XMFLOAT3 King::Quaternion::CalculateAngularVelocity(const Quaternion pr
 
 // Assignments
 
-void King::Quaternion::SetAxisAngle(const float3& vector, const float& angleRadians)
+void __vectorcall King::Quaternion::SetAxisAngle(float3 vector, float angleRadians)
 {
+    // axis and angle is encoded into a float4, not stored directly eventhough
+    // vector is float3 and angle is a float1.  The encoding allows for some nice
+    // special algebra that makes the rotations easy to add and subtract.
+    // angle = 2 * cosine function of w; if w = 0, angle = pi, w = 1, angle = 0
+
+    if (angleRadians < 0.f)
+    {
+        angleRadians = abs(angleRadians);
+        vector = -vector;
+    }
+
     if (XMVector3Equal(vector, DirectX::XMVectorZero()))
     {
         v = vector;

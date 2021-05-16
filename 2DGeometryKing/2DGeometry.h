@@ -206,16 +206,16 @@ namespace King {
         void   operator delete (void *p) { _aligned_free(static_cast<Rectangle2DF*>(p)); }
         inline Rectangle2DF & operator= (const Rectangle2DF &in) = default; // copy assignment
         inline Rectangle2DF & operator= (const RECT &rIn) { Set(rIn); return *this; }
-        inline Rectangle2DF & operator= (const FloatPoint2 &in) { lt = in; rb = in; return *this; }
+        inline Rectangle2DF & operator= (const FloatPoint2 in) { lt = in; rb = in; return *this; }
         inline Rectangle2DF & operator= (Rectangle2DF &&in) = default; // move assignment
-        inline Rectangle2DF operator+ (const FloatPoint2 &in) const { Rectangle2DF rtn(*this); rtn.MoveBy(in); return rtn; }
-        inline Rectangle2DF operator- (const FloatPoint2 &in) const { Rectangle2DF rtn(*this); rtn.MoveBy(-in); return rtn; }
-        inline Rectangle2DF operator* (const FloatPoint2 &in) const { Rectangle2DF rtn(*this); rtn.Grow(in); return rtn; }
-        inline Rectangle2DF operator/ (const FloatPoint2 &in) const { Rectangle2DF rtn(*this); rtn.Grow(FloatPoint2(1.0f) / in); return rtn; }
-        inline Rectangle2DF & operator-= (const FloatPoint2 &deltaIn) { MoveBy(-deltaIn); return *this; }
-        inline Rectangle2DF & operator+= (const FloatPoint2 &deltaIn) { MoveBy(deltaIn); return *this; }
-        inline Rectangle2DF & operator*= (const FloatPoint2 &in) { Grow(in); return *this; }
-        inline Rectangle2DF & operator/= (const FloatPoint2 &in) { Grow(FloatPoint2(1.0f) / in); return *this; }
+        inline Rectangle2DF operator+ (const FloatPoint2 in) const { Rectangle2DF rtn(*this); rtn.MoveBy(in); return rtn; }
+        inline Rectangle2DF operator- (const FloatPoint2 in) const { Rectangle2DF rtn(*this); rtn.MoveBy(-in); return rtn; }
+        inline Rectangle2DF operator* (const FloatPoint2 in) const { Rectangle2DF rtn(*this); rtn.Grow(in); return rtn; }
+        inline Rectangle2DF operator/ (const FloatPoint2 in) const { Rectangle2DF rtn(*this); rtn.Grow(FloatPoint2(1.0f) / in); return rtn; }
+        inline Rectangle2DF & operator-= (const FloatPoint2 deltaIn) { MoveBy(-deltaIn); return *this; }
+        inline Rectangle2DF & operator+= (const FloatPoint2 deltaIn) { MoveBy(deltaIn); return *this; }
+        inline Rectangle2DF & operator*= (const FloatPoint2 in) { Grow(in); return *this; }
+        inline Rectangle2DF & operator/= (const FloatPoint2 in) { Grow(FloatPoint2(1.0f) / in); return *this; }
         inline Rectangle2DF & operator*= (const float &scaleIn) { rb *= scaleIn; return *this; }
         inline Rectangle2DF & operator/= (const float &scaleIn) { rb /= scaleIn; return *this; }
         // Conversions

@@ -4,16 +4,20 @@
 using json = nlohmann::json; // for convenience
 // King namespace
 #include "UnitOfMeasure.h" // has own namespace King::UnitOfMesure::
+
+// Forces
 #include "Force.h"
-#include "Torque.h"
+// Linear
 #include "Acceleration.h"
-#include "AngularAcceleration.h"
 #include "Velocity.h"
+#include "Position.h"
+#include "Distance.h"
+// Rotational
+#include "Torque.h"
+#include "AngularAcceleration.h"
 #include "AngularVelocity.h"
 #include "Rotation.h"
-#include "Distance.h"
-#include "Position.h"
-
+// Properties
 #include "PhysicsMaterial.h"
 #include "PhysicsState.h"
 #include "PhysicsRigidBody.h"
@@ -68,11 +72,21 @@ using json = nlohmann::json; // for convenience
 *			m1 • ͢v1 + m2 • ͢v2 = m1 • ͢v1' + m2 • ͢v2'
 ******************************************************************************/
 
+
+
 // Mechanics
 //    Kinematics
 //        Trajectory
 
 namespace King {
+    // Curved motion, use component accelerations
+    float3 __vectorcall UnitTangentVector(Velocity velIn); // The analogue to the slope of the tangent line is the direction of the tangent line. Since velocity is the derivative of position, it is a tangent function to position.
+    float3 __vectorcall UnitNormalPrincipleVector(Acceleration accIn); // principle unit vector. Geometrically, for a non straight curve, this vector is the unique vector that point into the curve.
+    // accIn = (at * ͢T) + (an * ͢N)
+    //  ͢aT = (at * ͢T) ; magnitude and direction
+    Acceleration __vectorcall AccelerationTangentialComponent(Acceleration accIn, Velocity velIn);
+    //  ͢aN = (an * ͢N) ; magnitude and direction
+    Acceleration __vectorcall AccelerationNormalComponent(Acceleration accIn, Velocity velIn);
 
 namespace Physics {
     // Templates
@@ -94,6 +108,7 @@ namespace Physics {
     //*** Work ***
     // Work links the concept of force and energy and is most useful when force varies with time, and therefore acceleration is not constant
     // Use operators defined in class Distance for Energy = Force * Distance
+    // Springs
     UnitOfMeasure::Energy MechanicsWork_SpringWorkFromDistance(const float& kSpringConstantIn, const float3& unitVectorSpringLineOfMotion, const Distance&);
     UnitOfMeasure::Energy MechanicsWork_SpringWorkFromTwoPositions(const float& kSpringConstantIn, const float3& unitVectorSpringLineOfMotion, const Position& spring_p0In, const Position& p1In, const Position& p2In);
     Distance MechanicsWork_SpringDistanceFromForce(const float& kSpringConstantIn, const float3& unitVectorSpringLineOfMotion, const Force&);

@@ -222,7 +222,8 @@ Position King::Physics::MechanicsKinematics_Trajectory(const Position& initialPo
 Position King::Physics::MechanicsKinematics_TrajectoryPositionAtTimeWithNegativeYGravity(const Position& initialPosIn, const Velocity& initialVelIn, const UnitOfMeasure::Time& tIn)
 {
     // p = p0 + v0 t + 1/2 g t^2
-    Position p = initialPosIn + initialVelIn * tIn + Acceleration(gravity, float3(0.f,-1.0f,0.f)) * tIn * tIn * 0.5f;
+    auto g = Acceleration(UnitOfMeasure::gravity, float3(0.f, -1.0f, 0.f));
+    Position p = initialPosIn + initialVelIn * tIn + g * tIn * tIn * 0.5f;
     return p;
 }
 
@@ -247,7 +248,7 @@ UnitOfMeasure::Energy King::Physics::MechanicsWork_SpringWorkFromDistance(const 
     float displacement(unitVectorSpringLineOfMotion.DotProduct(dIn));
 
     UnitOfMeasure::Energy work;
-    work = 0.5 * kSpringConstantIn * displacement * displacement;
+    work = 0.5f * (float)kSpringConstantIn * (float)displacement * (float)displacement;
     return work;
 }
 UnitOfMeasure::Energy King::Physics::MechanicsWork_SpringWorkFromTwoPositions(const float& kSpringConstantIn, const float3& unitVectorSpringLineOfMotion, const Position& spring_p0In, const Position& p1In, const Position& p2In)
@@ -261,7 +262,7 @@ UnitOfMeasure::Energy King::Physics::MechanicsWork_SpringWorkFromTwoPositions(co
     auto displacement = l02 - l01;
 
     UnitOfMeasure::Energy work;
-    work = 0.5 * kSpringConstantIn * displacement * displacement;
+    work = 0.5f * (float)kSpringConstantIn * (float)displacement * (float)displacement;
     return work;
 }
 
@@ -335,6 +336,9 @@ void King::PhysicsRigidBody::Update(const UnitOfMeasure::Time& dtIn)
         auto l = (UnitOfMeasure::Length)r;
 
         netForce += F;
+
+        // *** TO DO ***
+        // rotation
     }
     _forcesActingOnBody.clear();
 
@@ -353,6 +357,7 @@ void King::PhysicsRigidBody::Update(const UnitOfMeasure::Time& dtIn)
     f._rotation = i._rotation + f._angularVelocity * dtIn;
 
     // depends on geometry and direction of revolution
+    // *** TO DO ***
     if ((bool)f._rotation && f._rotation != i._rotation)
     {
         float r = 1.0f; // radius
@@ -373,3 +378,16 @@ void King::PhysicsRigidBody::Update(const UnitOfMeasure::Time& dtIn)
 
 
 // functions
+
+// Functions to remind us of what velocity and acceleration is without their magnitudes, the tangent and principle unit vector of motion.  If Acceleration is zero, we are moving in a straight line.
+// mathematics of vectors, tangent and normals, https://ltcconline.net/greenl/courses/202/vectorFunctions/tannorm.htm
+float3 __vectorcall King::UnitTangentVector(Velocity velIn) { return velIn.Get_unit_direction(); }
+
+// The analogue to the slope of the tangent line is the direction of the tangent line. Since velocity is the derivative of position, it is a tangent function to position.
+float3 __vectorcall King::UnitNormalPrincipleVector(Acceleration accIn) { return accIn.Get_unit_direction(); }
+
+// accIn = (at * ͢T) + (an * ͢N)
+//  ͢aT = (at * ͢T) ; magnitude and direction
+Acceleration __vectorcall King::AccelerationTangentialComponent(Acceleration accIn, Velocity velIn) { Acceleration aT; aT.Set_unit_direction(UnitTangentVector(velIn)); aT.Set_magnitude(float3::DotProduct(accIn.GetVector(), aT.Get_unit_direction()).GetX()); return aT; }
+//  ͢aN = (an * ͢N) ; magnitude and direction
+Acceleration __vectorcall King::AccelerationNormalComponent(Acceleration accIn, Velocity velIn) { Acceleration aN; aN.Set_unit_direction(UnitNormalPrincipleVector(accIn)); aN.Set_magnitude(float3::CrossProduct(velIn.GetVector(), accIn.GetVector()).GetMagnitude() / velIn.Get_magnitude()); return aN; }

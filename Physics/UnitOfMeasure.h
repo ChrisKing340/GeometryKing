@@ -194,7 +194,7 @@ namespace UnitOfMeasure
     const float mToft = 3.2808399f; // ft
     const float ftTom = 1.0f / mToft; // m
     const float mileToFeet = 5280.f; // ft
-    const float ftTomile = 1.0f / mileToFeet; // miles
+    const float feetTomile = 1.0f / mileToFeet; // miles
     const float mileTom = mileToFeet * ftTom; // m
     const float nmTom = 1852.f; // m
     const float mTonm = 1.0f / nmTom;// nautical mile

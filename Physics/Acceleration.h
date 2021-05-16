@@ -68,7 +68,7 @@ namespace King {
     ******************************************************************************/
     class Acceleration;
     Acceleration operator/(const Force & f, const UnitOfMeasure::Mass & m); // a = ∑ ͢F / m
-    
+
     class alignas(16) Acceleration
     {
         /* variables */

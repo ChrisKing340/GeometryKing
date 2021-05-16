@@ -65,12 +65,14 @@ SOFTWARE.
 #include "..\3rdParty\json.hpp"
 using json = nlohmann::json;
 
+// SIMD acceleration
 #include "..\MathSIMD\MathSIMD.h"
+// Simple memory handling
 #include "..\General\MemoryBlock.h"
+// Basis of physical properties
 #include "..\Physics\UnitOfMeasure.h"
-#include "..\Physics\Position.h"
-#include "..\Physics\Distance.h"
-
+#include "..\Physics\Physics.h"
+// WIP: Collsision testing, these are TEMPORARIES for experimentation
 #include "CK_Cube.h"
 #include "CK_CubeCollision.h"
 
@@ -229,15 +231,15 @@ namespace King {
     ******************************************************************************/
     class alignas(16) VertexFormat
     {
-    protected:
+    public:
         VertexAttrib    attributes[8];
-    private:
         uint16_t        nextAttribute = 0;
     public:
         VertexFormat() = default;
         VertexFormat(const VertexFormat & otherIn) { for (uint16_t i = 0; i < 8; ++i) attributes[i] = otherIn.attributes[i]; nextAttribute = otherIn.nextAttribute; } // copy assign
 
         bool Has(VertexAttrib::enumDesc descIn) const { for (uint16_t i = 0; i < nextAttribute; ++i) if (attributes[i]._desc == descIn) return true; return false; }
+        bool IsFirst(VertexAttrib::enumDesc descIn) const { if (nextAttribute > 0 && attributes[0]._desc == descIn) return true; return false; }
 
         uint16_t SetNext(VertexAttrib::enumDesc descIn, VertexAttrib::enumFormat formatIn)
         {
@@ -302,7 +304,7 @@ namespace King {
         explicit Pose(float3 translate) : _translation(translate) {}
         explicit Pose(quat rotate, float3 translate) : _rotation(rotate), _translation(translate) {}
         explicit Pose(const XMMATRIX &M3x3, float3 translate);
-        ~Pose() = default;
+        virtual ~Pose() = default;
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<Pose*>(p)); }
@@ -392,14 +394,14 @@ namespace King {
         inline DirectX::XMMATRIX            Get_XMMATRIX() const { auto rtn = DirectX::XMMatrixAffineTransformation(_scale, float3(), _rotation, _translation); assert(!XMMatrixIsNaN(rtn)); return rtn; }
         inline DirectX::XMFLOAT4X4          Get_XMFLOAT4X4() const { DirectX::XMFLOAT4X4 rtn; DirectX::XMStoreFloat4x4(&rtn, DirectX::XMMatrixAffineTransformation(_scale, float3(), _rotation, _translation)); return rtn; }
         // Assignments
-        inline void _vectorcall             Set(const quat &rotation, const float3 &scale, const float3 &translation) { _rotation = rotation; _scale = scale; _translation = translation; }
-        inline void _vectorcall             SetRotation(const quat &rotation) { _rotation = rotation; _rotation.Validate(); }
-        inline void _vectorcall             SetRotationAboutXYZAxis(const float &radiansX, const float &radiansY, const float &radiansZ) { _rotation = DirectX::XMQuaternionRotationRollPitchYaw(radiansX, radiansY, radiansZ); }
-        inline void _vectorcall             SetRotationAboutXAxis(const float &radians) { _rotation = DirectX::XMQuaternionRotationRollPitchYaw(radians, 0.0f, 0.0f); }
-        inline void _vectorcall             SetRotationAboutYAxis(const float &radians) { _rotation = DirectX::XMQuaternionRotationRollPitchYaw(0.0f, radians, 0.0f); }
-        inline void _vectorcall             SetRotationAboutZAxis(const float &radians) { _rotation = DirectX::XMQuaternionRotationRollPitchYaw(0.0f, 0.0f, radians); }
-        inline void _vectorcall             SetScale(const float3 &scale) { _scale = scale; }
-        inline void _vectorcall             SetTranslation(const float3 &translation) { _translation = translation; }
+        inline void                         Set(const quat rotation, const float3 scale, const float3 translation) { _rotation = rotation; _scale = scale; _translation = translation; }
+        inline void                         SetRotation(const quat rotation) { _rotation = rotation; _rotation.Validate(); }
+        inline void                         SetRotationAboutXYZAxis(const float radiansX, const float radiansY, const float radiansZ) { _rotation = DirectX::XMQuaternionRotationRollPitchYaw(radiansX, radiansY, radiansZ); }
+        inline void                         SetRotationAboutXAxis(const float &radians) { _rotation = DirectX::XMQuaternionRotationRollPitchYaw(radians, 0.0f, 0.0f); }
+        inline void                         SetRotationAboutYAxis(const float &radians) { _rotation = DirectX::XMQuaternionRotationRollPitchYaw(0.0f, radians, 0.0f); }
+        inline void                         SetRotationAboutZAxis(const float &radians) { _rotation = DirectX::XMQuaternionRotationRollPitchYaw(0.0f, 0.0f, radians); }
+        inline void                         SetScale(const float3 scale) { _scale = scale; }
+        inline void                         SetTranslation(const float3 translation) { _translation = translation; }
         // Input & Output
         friend std::ostream& operator<< (std::ostream &os, const Pose &in);
         friend std::istream& operator>> (std::istream &is, Pose &out);
@@ -756,8 +758,8 @@ namespace King {
     public:
         // Construction/Destruction
         inline explicit Plane() { v = DirectX::XMVectorZero(); }
-        inline explicit Plane(const FloatPoint3 normalToPlane, const float distFromOrigin) { v = FloatPoint4(normalToPlane, distFromOrigin); } // should distFromOrigin be negated?
-        inline explicit Plane(const FloatPoint3 normalToPlane, const Point origin) { v = DirectX::XMPlaneFromPointNormal(static_cast<DirectX::XMVECTOR>(origin), normalToPlane); }
+        inline explicit Plane(const FloatPoint3 normalToPlane, const float distFromOrigin) { v = DirectX::XMPlaneNormalizeEst(normalToPlane); v = DirectX::XMVectorSetW(v, distFromOrigin); } // should distFromOrigin be negated?
+        inline explicit Plane(const FloatPoint3 normalToPlane, const Point origin) { v = DirectX::XMPlaneFromPointNormal(static_cast<DirectX::XMVECTOR>(origin), DirectX::XMPlaneNormalizeEst(normalToPlane)); }
         inline explicit Plane(const Point &point1, const Point &point2, const Point &point3) { v = DirectX::XMPlaneFromPoints(static_cast<DirectX::XMVECTOR>(point1), static_cast<DirectX::XMVECTOR>(point2), static_cast<DirectX::XMVECTOR>(point3)); } // input points should be CCW
         Plane(float x, float y, float z, float s) { v = FloatPoint4(x,y,z,s); } // should distFromOrigin be negated?
 
@@ -773,6 +775,8 @@ namespace King {
         inline Plane & operator*= (const DirectX::XMMATRIX &m) { v = DirectX::XMPlaneTransform(v, m); return *this; }
         inline Plane operator* (const DirectX::XMMATRIX &m) { return Plane(DirectX::XMPlaneTransform(v, m)); }
         friend Plane operator* (Plane lhs, const DirectX::XMMATRIX &m) { lhs *= m; return lhs; } // invokes std::move(lhs)
+        explicit operator bool() const { return !DirectX::XMVector4IsNaN(v); } // valid
+        bool operator !() const { return DirectX::XMVector4IsNaN(v); } // invalid
         // Comparators
         inline bool operator==  (const Plane &rhs) { return DirectX::XMVector4Equal(v, rhs.v); }
         inline bool operator!=  (const Plane &rhs) { return DirectX::XMVector4NotEqual(v, rhs.v); }
@@ -794,12 +798,11 @@ namespace King {
         inline bool __vectorcall            Intersects(const Sphere &sphereIn) const;
         inline bool __vectorcall            Intersects(const Triangle& triangleIn) const;
         inline bool __vectorcall            Intersects(const Box& boxIn) const;
-        FloatPoint3 __vectorcall            FindNearestPointOnPlane(const FloatPoint3& pointIn) const { return ProjectOnToPlane(pointIn); }
+        FloatPoint3 __vectorcall            FindNearestPointOnPlane(const FloatPoint3& pointIn) const { auto n = GetNormal(); return pointIn - Dot(pointIn, n) * n; }
         // Accessors
-        FloatPoint3                         GetNormal(void) const { return DirectX::XMPlaneNormalize(v); }
-        FloatPoint3                         GetOrigin(void) const { return -GetNormal() * GetW(); } // w keeps the scalar to translate unit vector to origin
+        FloatPoint3                         GetNormal(void) const { return float3(*this); }
+        FloatPoint3                         GetOrigin(void) const { return -float3(*this) * GetW(); } // w keeps the scalar to translate unit vector to origin
 
-        float3                              ProjectOnToPlane(FloatPoint3 vecIn) const { auto n = GetNormal(); return vecIn - Dot(vecIn, n) * n; }
         float                               DistanceFromPoint(FloatPoint3 point) const { return Dot(point, GetNormal()) + GetW(); } // projects the point onto the plane and adds the perpendicular distance of the origin
         float                               DistanceFromPoint(Point point) const { return Dot(static_cast<FloatPoint4>(point), v); } // homogeneous (ax,ay,az,a) if a=1
     };
@@ -988,7 +991,7 @@ namespace King {
         Sphere & operator= (const Sphere &in) = default; // copy assignment
         Sphere & operator= (Sphere &&in) = default; // move assignment
         inline Sphere & operator= (const FXMVECTOR &in) { v = in; return *this; }
-        inline Sphere & operator*= (const DirectX::XMMATRIX &m) { auto r = GetW(); v = DirectX::XMVector4Transform(FloatPoint4(v, 1.0f), m); SetW(r); return *this; } // does not support scaling since non-uniformed
+        inline Sphere& operator*= (const DirectX::XMMATRIX& m) { auto r = GetW(); v = DirectX::XMVector4Transform(FloatPoint4(v, 1.0f), m); SetW(r* DirectX::XMVectorGetX(m.r[0])); return *this; } //supports uniform scaling by using x axis only but could be non-uniformed
         friend Sphere operator* (Sphere lhs, const DirectX::XMMATRIX &m) { lhs *= m; return lhs; } // invokes std::move(lhs)
         // Comparators
         inline bool operator==  (const Sphere &rhs) { return DirectX::XMVector4Equal(v, rhs.v); }
@@ -1154,7 +1157,9 @@ namespace King {
         bool                                Intersects(const Box &boxIn) const;
         bool                                Intersects(const Sphere &sphereIn) const;
         bool                                Contains(const Box &boxIn) const; // boxIn is wholely inside of this box
-        bool __vectorcall                   Contains(const FloatPoint3 &ptIn) const;
+        bool __vectorcall                   Contains(const FloatPoint3 ptIn) const;
+
+        void                                Constrain(FloatPoint3 *ptOut) const; // constrain point to our box
 
         FloatPoint3 __vectorcall            FindNearestPointOnBox(const FloatPoint3 &pt3In) const;
         FloatPoint3 __vectorcall            FindNearestPointOnBox(const FloatPoint3 &pt3In, const DirectX::FXMMATRIX &M) const;
@@ -1219,13 +1224,13 @@ namespace King {
         inline Quad                         GetQuadBottom(const Quaternion * quaternionIn = nullptr) { DirectX::XMFLOAT3 a[4]; GetCornersBottom4(a, quaternionIn); return Quad(a); }
         // Assignments                      
         inline void                         SetZero() { pt_min.SetZero(); pt_max.SetZero(); }
-        inline void    __vectorcall         Set(const FloatPoint3 &pt_minIn, const FloatPoint3 &pt_maxIn) { pt_min = pt_minIn; pt_max = pt_maxIn; } // defines the box with min (pt_min) and max (pt_max) points in RHS
+        inline void __vectorcall            Set(const FloatPoint3 pt_minIn, const FloatPoint3 pt_maxIn) { pt_min = pt_minIn; pt_max = pt_maxIn; } // defines the box with min (pt_min) and max (pt_max) points in RHS
         inline void                         Set(const DirectX::BoundingBox &in) { auto c = DirectX::XMLoadFloat3(&in.Center); auto e = DirectX::XMLoadFloat3(&in.Extents); pt_min = c - e; pt_max = c + e; }
-        inline void    __vectorcall         SetCenterAndExtents(const FloatPoint3 &cIn, const FloatPoint3 &eIn) { pt_min = cIn - eIn; pt_max = cIn + eIn; } // defines the box with min (pt_min) and max (pt_max) points in RHS
-        inline void    __vectorcall         Setpt_min(const FloatPoint3 &pt_minIn) { pt_min = pt_minIn; }
-        inline void    __vectorcall         Setpt_max(const FloatPoint3 &pt_maxIn) { pt_max = pt_maxIn; }
-        inline void    __vectorcall         SetWHD(const FloatPoint3 &whdIn) { FloatPoint3 offset = Abs(whdIn) * 0.5f; FloatPoint3 c = GetCenter(); pt_min = c - offset; pt_max = c + offset; }
-        inline void    __vectorcall         SetCenter(const FloatPoint3 &centerIn) { FloatPoint3 delta = centerIn - GetCenter(); MoveBy(delta); }
+        inline void __vectorcall            SetCenterAndExtents(const FloatPoint3 cIn, const FloatPoint3 eIn) { pt_min = cIn - eIn; pt_max = cIn + eIn; } // defines the box with min (pt_min) and max (pt_max) points in RHS
+        inline void __vectorcall            Setpt_min(const FloatPoint3 pt_minIn) { pt_min = pt_minIn; }
+        inline void __vectorcall            Setpt_max(const FloatPoint3 pt_maxIn) { pt_max = pt_maxIn; }
+        inline void __vectorcall            SetWHD(const FloatPoint3 whdIn) { FloatPoint3 offset = Abs(whdIn) * 0.5f; FloatPoint3 c = GetCenter(); pt_min = c - offset; pt_max = c + offset; }
+        inline void __vectorcall            SetCenter(const FloatPoint3 centerIn) { FloatPoint3 delta = centerIn - GetCenter(); MoveBy(delta); }
         void __vectorcall                   SetAABBfromThisTransformedBox(FXMMATRIX M);
         // I/O
         friend std::ostream& operator<< (std::ostream &os, const King::Box &in);
@@ -1282,6 +1287,7 @@ namespace King {
         virtual bool                        Collision(Capsule const& capsuleIn) const override { return false; }
         virtual bool                        Collision(Box const& boxIn) const override { return false; }
         virtual bool                        Collision(Frustum const& frustumIn) const override { return false; }
+        // *** TO DO *** add a cone collision test, and implement a better frustum culling routine; reference https://www.flipcode.com/archives/Frustum_Culling.shtml *** TO DO ***
 
         bool __vectorcall                   Intersect(const Box &boxIn) const;
         bool __vectorcall                   Intersect(const Sphere &sphereIn) const;
@@ -1290,8 +1296,8 @@ namespace King {
         inline Plane&                       GetFrustumPlane(Frustum::PlaneID id) { assert(id < Frustum::PlaneID::kINVALID); return _FrustumPlanes[id]; }
     private:
         void                                ConstructPerspectiveFrustum(float HTan, float VTan, float NearClip, float FarClip); // Perspective frustum constructor (for pyramid-shaped frusta)
-        void                                ConstructOrthographicFrustum(float Left, float Right, float Top, float Bottom, float NearClip, float FarClip); // Orthographic frustum constructor (for box-shaped frusta)
-        void                                ConstructOrthographicFrustum(const Box& in, const quat *rQIn = nullptr); // Frustrum that is orthographic and rotated by an arbitrary axis
+        void                                ConstructOrthographicFrustum(float Left, float Right, float Top, float Bottom, float NearClip, float FarClip); // Orthographic frustum constructor (for box-shaped frusta from front plane and depth)
+        void                                ConstructOrthographicFrustum(const Box& in, const quat *rQIn = nullptr); //  // Orthographic frustum constructor (for box-shaped frusta)
         // I/O
         friend std::ostream& operator<< (std::ostream& os, const King::Frustum& in);
         friend std::istream& operator>> (std::istream& is, Frustum& out);
@@ -1431,26 +1437,29 @@ namespace King {
     *        CCW rotation for RHS face normals
     *        Class object that references master data and does not keep data itself.
     *        Uses an index buffer to define triangles from a vertex buffer to form
-    *        a mesh.
+    *        a mesh.  These buffers are maintained in the model class
     ******************************************************************************/
     class alignas(16) TriangleMesh
     {
         /* variables */
     private:
-        std::string                         _name;
-        std::string                         _materialName = "default";
-        VertexFormat                        _vertexFormat;
-        uint8_t *                           _vb = nullptr; // reference, do not free
-        uint32_t *                          _ib = nullptr; // reference, do not free
+        // begin file type v1
+        std::string                         _name; // name the mesh
+        std::string                         _materialName = "default"; // lookup name in the owning model class that keeps the material data
         uint32_t                            _vbStart = 0; // vertex buffer start offset (starting vertex #) to add to address
         uint32_t                            _ibStart = 0; // index buffer start offset (starting index #) to add to address
         uint32_t                            _numTriangles = 0; // assumes ib is a triangle list with 3 index per triangle
-        
         Box                                 _boundingBox; // calculate and store after data definitions
+        // end file type v1
+        VertexFormat                        _vertexFormat; // same as model class that owns TriangleMesh instance
+        uint8_t*                            _vb = nullptr; // reference, do not free, owned by model class that owns TriangleMesh instance
+        uint32_t*                           _ib = nullptr; // reference, do not free, owned by model class that owns TriangleMesh instance
+
         /* methods */
     public:
         // Creation/Life cycle
         static std::shared_ptr<TriangleMesh> Create() { return std::make_shared<TriangleMesh>(); }
+        static std::shared_ptr<TriangleMesh> Create(uint32_t numTrianglesIn, const VertexFormat& vfIn, uint32_t vbStartIn, uint32_t ibStartIn, uint8_t* vbIn, uint32_t* ibIn) { return std::make_shared<TriangleMesh>(numTrianglesIn, vfIn, vbStartIn, ibStartIn, vbIn, ibIn); }
         static std::unique_ptr<TriangleMesh> CreateUnique() { return std::make_unique<TriangleMesh>(); }
         // Construction/Destruction
         TriangleMesh() = default;
@@ -1469,6 +1478,9 @@ namespace King {
         // Functionality
         virtual void                        Initialize(uint32_t numTrianglesIn, VertexFormat vfIn, uint32_t vbStartIn, uint32_t ibStartIn, uint8_t *vbIn, uint32_t *ibIn) { _numTriangles = numTrianglesIn; _vertexFormat = vfIn; _vbStart = vbStartIn; _ibStart = ibStartIn; _vb = vbIn; _ib = ibIn; }
         virtual Box                         CalculateBoundingBox(); // call after loading or changing position data
+        // I/O
+        virtual bool                        Read_v1(ifstream& dataFile);
+        virtual bool                        Write_v1(ofstream& dataFile);
         // Accessors
         Box                                 GetBoundingBox() const { return _boundingBox; }
         const auto &                        Get_name() const { return _name; }
@@ -1545,30 +1557,18 @@ namespace King {
     class alignas(16) Material
     {
         /* structures */
-        struct Properties
+        struct ColorProp
         {
-            uint16_t ver = 0;
-            struct ColorProp
-            {
-                float ambient[3] = { 0.4f, 0.4f, 0.4f };
-                float diffuse[3] = { 0.5f, 0.5f, 0.5f };
-                float specular[3] = { 0.1f, 0.1f, 0.1f };
-                float emissive[3] = { 0.f, 0.f, 0.f };
-                float transparent[3] = { 0.5f, 0.5f, 0.5f }; // light passing through a transparent surface is multiplied by this filter color
-            } color;
-
-            float indexOfRefraction = 1.f; // 0.001 to 10; 1.0 means that light does not bend, glass has value 1.5
-            float specularStrength = 1; // exponent 0 to 1000, shininess
-            float dissolved = 1.f; // 0 transparent to 1 opaque (eg. alpha)
-            float transmissionFilter = 1.f; // 0 to 1
-            bool isCutOut = false; // color (diffuse) is always on, cutout specifies if material has alpha channel (for rendering order)
-            bool isAmbient = true; // ambient on/off
-            bool isShiny = true; // specular on/off
-            bool isEmissive = false; // emissive on/off
+            uint16_t ver = 1;
+            float ambient[3] = { 1.f, 1.f, 1.f };
+            float diffuse[3] = { 0.8f, 0.8f, 0.8f };
+            float specular[3] = { 0.1f, 0.1f, 0.1f };
+            float emissive[3] = { 0.f, 0.f, 0.f };
+            float transparent[3] = { 0.5f, 0.5f, 0.5f }; // light passing through a transparent surface is multiplied by this filter color
         };
         struct FileNames
         {
-            uint16_t ver = 0;
+            uint16_t ver = 1;
             string light; // ambient occlusion / light map
             string diffuse; // texture map
             string specular; // specular color
@@ -1580,12 +1580,28 @@ namespace King {
             string stencil;
             string reflection;
         };
+        struct Properties
+        {
+            uint16_t ver = 1;
+            ColorProp color;
+            float indexOfRefraction = 1.f; // 0.001 to 10; 1.0 means that light does not bend, glass has value 1.5
+            float specularStrength = 1; // exponent 0 to 1000, shininess
+            float dissolved = 1.f; // 0 transparent to 1 opaque (eg. alpha)
+            float transmissionFilter = 1.f; // 0 to 1
+            bool isCutOut = false; // color (diffuse) is always on, cutout specifies if material has alpha channel (for rendering order)
+            bool isAmbient = true; // ambient on/off
+            bool isShiny = true; // specular on/off
+            bool isEmissive = false; // emissive on/off
+        };
+
         /* variables */
     private:
-        std::string                         _name;
-        Properties                          _properties;
-        FileNames                           _fileNames;
+        // begin file type v1
         uint8_t                             _shaderMethod = 0;
+        std::string                         _name = "default"s;
+        Properties                          _properties;      
+        FileNames                           _fileNames;
+        // end file type v1
 
         /* methods */
     public:
@@ -1603,6 +1619,9 @@ namespace King {
         Material & operator= (Material &&in) = default; // move assign
         // Conversions
         // Functionality
+        // I/O
+        bool                                Read_v1(ifstream& dataFile);
+        bool                                Write_v1(ofstream& dataFile);
         // Accessors
         const auto &                        Get_name() const { return _name; }
         const auto &                        Get_properties() const { return _properties; }
@@ -1617,29 +1636,33 @@ namespace King {
     /******************************************************************************
     *    ModelScaffold
     *   Base class for models such as King::LineModel and King::Model (TriangleModel)
-    *   Remarks: This class keeps master data but not the mesh indexing.  Mesh data
-    *            will reference master data to build up the mesh and is dependent
-    *            on the type of mesh.
+    *   
+    *   Remarks: This class keeps master data, sub-meshes in derived classes
+    *   will reference the data kept in this master data.
     ******************************************************************************/
     class alignas(16) ModelScaffold : public std::enable_shared_from_this<King::ModelScaffold> // base class
     {
          /* variables */
     protected:
+        // begin file type v1
         std::string                         _modelName;
-
-        MemoryBlock<uint8_t>                _vertexBufferMaster; // set stride to data size after vertexFormat is initialized
-        MemoryBlock<uint32_t>               _indexBufferMaster; // 4,294,967,295 maximum verticies with 32 bit indexing
 
         VertexFormat                        _vertexFormat;
         IndexFormat                         _indexFormat = IndexFormat::uint32;
 
         Box                                 _boundingBox;
+
+        MemoryBlock<uint8_t>                _vertexBufferMaster; // set stride to data size after vertexFormat is initialized
+        MemoryBlock<uint32_t>               _indexBufferMaster; // 4,294,967,295 maximum verticies with 32 bit indexing
+        // end file type v1
+
         /* methods */
     public:
         // Creation/Life cycle
         static std::shared_ptr<ModelScaffold>    Create() { return std::make_shared<ModelScaffold>(); }
         // Construction/Destruction
         ModelScaffold() { _vertexFormat.SetNext(VertexAttrib::enumDesc::position, VertexAttrib::enumFormat::format_float32x3); _vertexBufferMaster.SetStride(_vertexFormat.GetByteSize()); }
+        ModelScaffold(const Box& boxIn) : ModelScaffold() { *this = boxIn; } // forward to copy assignment
         ModelScaffold(const ModelScaffold &in) { *this = in; } // forward to copy assignment
         ModelScaffold(ModelScaffold &&in) noexcept { *this = std::move(in); } // forward to move assignment
 
@@ -1648,6 +1671,7 @@ namespace King {
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<ModelScaffold*>(p)); }
+        ModelScaffold& operator= (const Box& boxIn);
         ModelScaffold & operator= (const ModelScaffold &in) = default; // copy assignment
         ModelScaffold & operator= (ModelScaffold &&in) = default; // move assignment
         // Functionality
@@ -1657,8 +1681,13 @@ namespace King {
         virtual bool                        Load(std::string fileNameIN) { return false; }
         virtual bool                        Save(std::string fileNameIN) { return false; }
 
-                                            // define in derived class
-        virtual Box                         CalculateBoundingBox() { Box rtn; rtn.SetZero(); return rtn; } 
+        virtual bool                        Read_v1(ifstream& dataFile);
+        virtual bool                        Write_v1(ofstream& dataFile);
+
+        virtual void                        Transform(const Pose& transformIn); // modifies the underlying data
+        virtual void _vectorcall            Translate(const float3 In); // modifies the underlying data
+
+        virtual Box                         CalculateBoundingBox() { Box rtn; rtn.SetZero(); return rtn; } // define in derived class
         // Confirmations
         bool                                HasPositions() const { return _vertexFormat.Has(King::VertexAttrib::enumDesc::position); }
         bool                                HasColors() const { return _vertexFormat.Has(King::VertexAttrib::enumDesc::color); }
@@ -1725,7 +1754,8 @@ namespace King {
         // Creation/Life cycle
         static std::shared_ptr<LineModel>    Create() { return std::make_shared<LineModel>(); }
         // Construction/Destruction
-        LineModel() { ; }
+        LineModel() = default;
+        LineModel(const Box& boxIn) { *this = boxIn; } // forward to copy assignment
         LineModel(const LineModel &in) { *this = in; } // forward to copy assignment
         LineModel(LineModel &&in) noexcept { *this = std::move(in); } // forward to move assignment
 
@@ -1734,6 +1764,7 @@ namespace King {
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<LineModel*>(p)); }
+        LineModel & operator= (const Box& boxIn);
         LineModel & operator= (const LineModel &in); // copy assignment
         LineModel & operator= (LineModel &&in) = default; // move assignment
         // Functionality
@@ -1764,8 +1795,10 @@ namespace King {
 
         /* variables */
     protected:
-        std::vector<TriangleMesh>           _meshes;
+        // begin file type v1
+        std::vector< std::shared_ptr<TriangleMesh>>      _meshes;
         std::map<std::string, std::shared_ptr<Material>> _materials;
+        // end file type v1
 
         /* methods */
     public:
@@ -1773,6 +1806,7 @@ namespace King {
         static std::shared_ptr<Model>       Create() { return std::make_shared<Model>(); }
         // Construction/Destruction
         Model() { _vertexFormat.SetNext(VertexAttrib::enumDesc::position, VertexAttrib::enumFormat::format_float32x3); _vertexBufferMaster.SetStride(_vertexFormat.GetByteSize()); }
+        Model(const Box& boxIn) { *this = boxIn; } // forward to copy assignment
         Model(const Model &in) { *this = in; } // forward to copy assignment
         Model(Model &&in) noexcept { *this = std::move(in); } // forward to move assignment
 
@@ -1781,8 +1815,9 @@ namespace King {
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<Model*>(p)); }
-        inline Model & operator= (const Model &in); // copy assignment
-        inline Model & operator= (Model &&in) = default; // move assignment
+        Model & operator= (const Box& boxIn);
+        Model & operator= (const Model &in); // copy assignment
+        Model & operator= (Model &&in) = default; // move assignment
 
         // Functionality
         void                                Destroy() { _meshes.clear(); King::ModelScaffold::Destroy(); }
@@ -1790,17 +1825,21 @@ namespace King {
         virtual bool                        Load(std::string fileNameIN) override;
         virtual bool                        Save(std::string fileNameIN) override;
         
+        virtual bool                        Read_v1(ifstream& dataFile);
+        virtual bool                        Write_v1(ofstream& dataFile);
+
         virtual Box                         CalculateBoundingBox() override;
+        void                                CalculateNormals();
         void                                CalculateTangentsAndBiTangents();
 
-        void                                OptimizeVertexBuffer() { for (auto & m : _meshes) { OptimizeMeshVertexBuffer(m); } }
+        void                                OptimizeVertexBuffer() { for (auto & m : _meshes) { OptimizeMeshVertexBuffer(*m.get()); } }
         void                                OptimizeMeshVertexBuffer(const TriangleMesh & forMeshIn); // re-order to match index buffer ordering
 
         void                                LogReport(const std::wstring fileNameIn);
         // Accessors
         const auto                          GetNumMeshes() const { return _meshes.size(); }
-        TriangleMesh &                      GetMesh(size_t index) { assert(index < _meshes.size()); return _meshes[index]; }
-        std::vector<TriangleMesh> &         GetMeshes() { return _meshes; }
+        std::shared_ptr<TriangleMesh>       GetMesh(size_t index) { assert(index < _meshes.size()); return _meshes[index]; }
+        const std::vector< std::shared_ptr<TriangleMesh>> & GetMeshes() const { return _meshes; }
 
         const auto                          GetNumMaterials() const { return _materials.size(); }
         std::shared_ptr<Material>           GetMaterial(string name) { assert(_materials.count(name)); return _materials[name]; }
@@ -1808,7 +1847,8 @@ namespace King {
 
         virtual std::size_t                 GetBoneCount() const { return 0; } // base class has no bones
         // Assignments
-        void                                AddMesh(const TriangleMesh &meshIn) { _meshes.push_back(meshIn); }
+        void                                AddMesh(const TriangleMesh& meshIn) { auto m = TriangleMesh::Create(); *m = meshIn; _meshes.push_back(m); }
+        void                                AddMesh(std::shared_ptr <TriangleMesh> meshIn) { _meshes.push_back(meshIn); }
         void                                AddMaterial(std::shared_ptr<Material> mtl_IN);
     };
 
@@ -1832,15 +1872,18 @@ namespace King {
         };
         /* variables */
     public:
+        // begin file type v1
         Skeleton                            _skeleton;
         std::vector<uint8_t>                _boneInfluenceCount; // 1 to 1 size with # of verticies in mesh and contains the number of bones influencing each vertex
         std::vector<uint8_t>                _boneIndex; // size is boneInfluenceCount values summed and hold the indicies into skeleton.bones and is ordered in vertex order; ex: _bones.size()=2, _boneInfluenceCount[0]=1, _boneInfluenceCount[1]=4, then _boneIndex.size() = 5;
         std::vector<float>                  _boneWeight; // size matches boneIndex and gives the weight of each bones influence on this vertex
+        // end file type v1
 
         /* methods */
     public:
         // Creation/Life cycle
         static std::shared_ptr<BoneHierarchy>   Create() { return std::make_shared<BoneHierarchy>(); }
+        static std::unique_ptr<BoneHierarchy>   CreateUnique() { return std::make_unique<BoneHierarchy>(); }
         BoneHierarchy() { ; }
         BoneHierarchy(const BoneHierarchy &in) { *this = in; } // forward to copy assignment
         BoneHierarchy(BoneHierarchy &&in) noexcept { *this = std::move(in); } // forward to move assignment
@@ -1852,6 +1895,9 @@ namespace King {
         BoneHierarchy & operator= (BoneHierarchy &&in) = default; // move assign
         // Conversions
         // Functionality
+        // I/O
+        virtual bool                        Read_v1(ifstream& dataFile);
+        virtual bool                        Write_v1(ofstream& dataFile);
         // Accessors
         auto                                GetBoneCount() const { return _skeleton._bones.size(); }
         // Assignments
@@ -1866,13 +1912,18 @@ namespace King {
 
         /* variables */
     public:
+        // begin file type v1
         std::unique_ptr<BoneHierarchy>      _boneHierarchy;
+        // end file type v1
+
         /* methods */
     public:
         // Creation/Life cycle
         static std::shared_ptr<SkinnedModel>Create() { return std::make_shared<SkinnedModel>(); }
         // Construction/Destruction
         SkinnedModel() { ; }
+        SkinnedModel(const Model& copyIn) : Model(copyIn) { ; }
+        SkinnedModel(Model&& moveIn) noexcept : Model(std::move(moveIn)) { ; }
         SkinnedModel(const SkinnedModel &in) { *this = in; } // forward to copy assignment
         SkinnedModel(SkinnedModel &&in) noexcept { *this = std::move(in); } // forward to move assignment
         virtual ~SkinnedModel() { Destroy(); }
@@ -1880,13 +1931,16 @@ namespace King {
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<SkinnedModel*>(p)); }
         inline SkinnedModel & operator= (const SkinnedModel &in) { Destroy(); Model::operator=(in); if (in._boneHierarchy) { _boneHierarchy = std::make_unique<BoneHierarchy>(); *_boneHierarchy = *in._boneHierarchy; } return *this; } // copy assignment
-        inline SkinnedModel & operator= (const Model &in) { Destroy(); Model::operator=(in); return *this; } // copy assignment
-        inline SkinnedModel & operator= (Model &in) { Destroy(); Model::operator=(std::move(in)); return *this; } // move assignment
+        inline SkinnedModel& operator= (const Model& in) { Destroy(); Model::operator=(in); return *this; } // copy assignment
+        inline SkinnedModel& operator= (Model&& in) noexcept { Destroy(); Model::operator=(std::move(in)); return *this; } // move assignment
         inline SkinnedModel & operator= (SkinnedModel &&in) noexcept { std::swap(_boneHierarchy, in._boneHierarchy); Model::operator=(std::move(in)); return *this; } // move assignment
         // Functionality
         virtual void                        Destroy() { delete _boneHierarchy.release(); Model::Destroy(); }
-    
+
         std::vector<float3>                 CalculateVertexSkinPositions(size_t meshIndex = 0);
+        // I/O
+        virtual bool                        Read_v1(ifstream& dataFile);
+        virtual bool                        Write_v1(ofstream& dataFile);
         // Accessors
         virtual std::size_t                 GetBoneCount() const { if (_boneHierarchy) return _boneHierarchy->GetBoneCount(); else return 0; }
         // Assignments

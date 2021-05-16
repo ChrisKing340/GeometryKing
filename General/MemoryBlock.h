@@ -195,14 +195,19 @@ public:
                     {
                         if (!dataFileIn.is_open()) return false;
 
-                        size_t readLength = _length;
+                        size_t readLength;
+                        size_t readStride;
+
                         dataFileIn.read(reinterpret_cast<char*>(&readLength), sizeof(size_t));
-                        dataFileIn.read(reinterpret_cast<char*>(&_stride), sizeof(size_t));
-                        if (dataFileIn.fail()) return false;
-                    
+                        dataFileIn.read(reinterpret_cast<char*>(&readStride), sizeof(size_t));
+
+                        if (dataFileIn.fail()) return false;                  
+                        
                         if(readLength != _length) Initialize(readLength);
                     
                         dataFileIn.read(reinterpret_cast<char*>(_data), readLength * sizeof(T));
+
+                        _stride = readStride;
 
                         if (dataFileIn.fail()) return false;
                         return true;
@@ -242,8 +247,9 @@ public:
     inline bool     WriteText(std::string fileNameIn) // readable format
                     {
                         std::ofstream outfile(fileNameIn, std::ofstream::trunc);
-                        outfile << "Length: " << std::to_string(static_cast<T>(_length)) << '\n';
-                        outfile << "Stride: " << std::to_string(static_cast<T>(_stride)) << '\n';
+                        outfile << "Length: " << std::to_string(_length) << '\n';
+                        outfile << "Stride: " << std::to_string(_stride) << '\n';
+                        outfile << "Elements: " << std::to_string(GetElements()) << '\n';
                         outfile << "Data:" << '\n';
 
                         for (size_t i = 0; i < _length; ++i)

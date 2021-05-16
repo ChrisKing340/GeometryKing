@@ -5,6 +5,113 @@ using namespace King;
 
 /******************************************************************************
 *    Class:    Model_IO
+*    Method:   Load_KNG
+*    Description:    Imports King::Model definitions from native format
+*
+*    Inputs:   fileNameIN        name to give file
+*    Outputs:  reads contents of meshes for each model from file
+*    Returns:  std::vector       array of models
+******************************************************************************/
+std::vector<shared_ptr<King::ModelScaffold>> King::Model_IO::Load_KNG(const std::string fileNameIN)
+{
+    bool good = true;
+    std::vector<shared_ptr<King::ModelScaffold>> models;
+
+    // v1 for only a King::ModelScaffold
+    struct KNG_v1 
+    {
+        uint32_t    version = 1;
+        uint32_t    numModels = 1;
+    } header;
+
+    ifstream dataFile;
+    dataFile.open(fileNameIN, std::ifstream::in | std::ifstream::binary);
+
+    if (!dataFile)
+    {
+        string str = "\nFile " + fileNameIN + " could not be opened.";
+        cout << str << '\n';
+        return models;
+    }
+
+    dataFile.read(reinterpret_cast<char*>(&header), sizeof(header));
+
+    while (dataFile && good && header.numModels)
+    {
+        auto model = ModelScaffold::Create();
+
+        good = model->Read_v1(dataFile);
+        models.push_back(model);
+
+        --header.numModels;
+    }
+    if (!dataFile)
+    {
+        string str = "\nFile " + fileNameIN + " error occurred during read.";
+        cout << str << '\n';
+        return models;
+    }
+
+    dataFile.close();
+
+    return models;
+}
+/******************************************************************************
+*    Class:    Model_IO
+*    Method:   Save_KNG
+*    Description:    Exports King::Model definitions from native format
+*
+*    Inputs:   fileNameIN        name to give file
+*    Outputs:  reads contents of meshes for each model from file
+*    Returns:  std::vector       array of models
+******************************************************************************/
+bool King::Model_IO::Save_KNG(const std::string fileNameIN, const std::vector<shared_ptr<King::ModelScaffold>>& modelsIN)
+{
+    bool good = true;
+
+    ofstream dataFile;
+    dataFile.open(fileNameIN, std::ofstream::out | std::ofstream::binary | std::ofstream::trunc);
+
+    if (!dataFile)
+    {
+        string str = "\nFile " + fileNameIN + " could not be opened.";
+        cout << str << '\n';
+        return false;
+    }
+
+    // v1 for only a King::ModelScaffold
+    struct KNG_v1
+    {
+        size_t    version = 1;
+        size_t    numModels;
+    } header;
+    header.numModels = modelsIN.size();
+
+    dataFile.write(reinterpret_cast<char*>(&header), sizeof(header));
+
+    for (const auto m : modelsIN)
+    {
+        if (dataFile && good && header.numModels)
+        {
+            good = m->Write_v1(dataFile);
+
+            --header.numModels;
+        }
+        if (!good) break;
+    }
+    if (!dataFile || !good)
+    {
+        string str = "\nFile " + fileNameIN + " error occurred during write.";
+        cout << str << '\n';
+        return false;
+    }
+
+    dataFile.close();
+
+    return true;
+}
+/******************************************************************************
+*    Class:    Model_IO
 *    Method:   Load_OBJ
 *    Description:    Imports King::Model definitions from .obj format
 *
@@ -138,7 +245,7 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
                 // if vertex are not grouped together, seek out the next one
                 while (f.NextWord() != obj.prop_vertexPosition && !f.IsLast()) {};
             } while (!f.IsLast());
-            cout << "numVertex " << numVertex << ", positions " << positions.size() << "\n";
+            cout << "  numVertex " << numVertex << "\n";
             //assert(numVertex == positions.size());
         }
         // Get texture UV
@@ -167,7 +274,7 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
                 // if vertexTextureCoord are not grouped together, seek out the next one
                 while (f.NextWord() != obj.prop_vertexTextureCoord && !f.IsLast()) {};
             } while (!f.IsLast());
-            cout << "numTextureCoords " << numTextureCoords << ", textureUV " << textureUV.size() << "\n";
+            cout << "  numTextureCoords " << numTextureCoords << "\n";
             //assert(numTextureCoords == textureUV.size());
         }
         else
@@ -200,7 +307,7 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
                 // if normals are not grouped together, seek out the next one
                 while (f.NextWord() != obj.prop_vertexNormal && !f.IsLast()) {};
             } while (!f.IsLast());
-            cout << "numNormals " << numNormals << ", normals " << normals.size() << "\n";
+            cout << "  numNormals " << numNormals << "\n";
             //assert(numNormals == normals.size());
         }
         else
@@ -210,11 +317,11 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
         vector<uint32_t> indicies;
         vector<vertexComposite> verticiesComposite;
 
-        uint32_t numFaces;
+        size_t numFaces;
         f.WordIndex(wpos_models); // reset position back to start of model
         if (numFaces = f.CountStringAndStopAtMarker(obj.prop_face, obj.prop_modelName))
         {
-            cout << "numFaces " << numFaces << "\n";
+            cout << "  numFaces " << numFaces << "\n";
             bool search = f.FindNext(obj.prop_face);
             while (!f.IsLast() && search)
             {
@@ -258,7 +365,7 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
                                 }
                                 else
                                 {
-                                    cout << "BAD vertex position read from file, index is " << index << '\n';
+                                    cout << "  BAD vertex position read from file, index is " << index << '\n';
                                     badFaceRead = true;
                                 }
                             }
@@ -273,7 +380,7 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
                                 }
                                 else
                                 {
-                                    cout << "BAD vertex texture coordinate read from file, index is " << index << '\n';
+                                    cout << "  BAD vertex texture coordinate read from file, index is " << index << '\n';
                                     badFaceRead = true;
                                 }
                             }
@@ -295,7 +402,7 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
                                 }
                                 else
                                 {
-                                    cout << "BAD vertex normal read from file, index is " << index << '\n';
+                                    cout << "  BAD vertex normal read from file, index is " << index << '\n';
                                     badFaceRead = true;
                                 }
                             }
@@ -382,7 +489,7 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
                                  // only 1 or 2 loaded so add this vertex
                                 {
                                     // new
-                                    v1.first = verticiesComposite.size();
+                                    v1.first = (uint32_t)verticiesComposite.size();
                                     verticiesComposite.push_back(v1.second);
                                 }
                             }
@@ -403,7 +510,7 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
                                     else if (CompareVertex(v1.second, verticiesComposite[vi - 5]))
                                         v1.first = vi - 5;
                                     else
-                                        cout << "vertex replace duplicate failed!" << '\n';
+                                        cout << "  vertex replace duplicate failed!" << '\n';
                                 }
                             }
 
@@ -464,7 +571,7 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
                     }
                     else
                     {
-                        cout << "Bad face read during load" << '\n';
+                        cout << "  Bad face read during load" << '\n';
                         for (unsigned long i = 0; i < numVertexThisFace; ++i)
                         {
                             // remove data if it was loaded
@@ -523,10 +630,10 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
         {
             auto fnFaceNormal = [](float3 a, float3 b, float3 c) {return Cross((b - a), (c - a)); };
             auto fnAveNormals = [](float3 a, float3 b, float3 c) {return Normalize(a + b + c); };
-            const unsigned int num = indicies.size();
-            unsigned int offset(0), index(0);
-            unsigned int numReversed = 0;
-            for (unsigned int i = 0; i < num; i += 3)
+            const uint32_t num = (uint32_t)indicies.size();
+            uint32_t offset(0), index(0);
+            uint32_t numReversed = 0;
+            for (uint32_t i = 0; i < num; i += 3)
             {
                 float3 v0 = verticiesComposite[indicies[i]].xyz;
                 float3 v1 = verticiesComposite[indicies[i + 1]].xyz;
@@ -547,7 +654,7 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
                     indicies[i + 2] = temp;
                 }
             }
-            cout << "Reversed winding to match average face normal: " << numReversed << '\n';
+            cout << "  Reversed winding to match average face normal: " << numReversed << '\n';
         }
 
         //..............................................................................
@@ -586,6 +693,8 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
         // append
         model->GetVertexBufferMaster() += vertexBufferRaw;
         model->GetIndexBufferMaster() += indexBufferRaw;
+        // all the model data is loaded, so this is done only once, so the pointer does not
+        // change and mesh loading is done next.
 
         //..............................................................................
         // Mesh loading (several per object separated by "g meshname" or "usemtl mtlname"
@@ -608,7 +717,7 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
         {
             meshNameDefined = f.FindFirst(obj.prop_meshName);
         }
-        cout << "numMeshes " << numMeshes << "\n";
+        cout << "  numMeshes " << numMeshes << " with " << indicies.size() << " indicies\n";
 
         for (int meshCount = 0; meshCount < numMeshes; ++meshCount)
         {
@@ -642,7 +751,7 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
             {
                 // jump in file to the mesh name, otherwise take the next set of face definitions
                 f.FindNext(meshName);
-                cout << "meshName " << meshName << '\n';
+                cout << "  meshName " << meshName << '\n';
             }
 
             // create the mesh
@@ -659,18 +768,15 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
 
         //model->_indexBufferMaster.WriteText("IB.txt");
 
+        model->CalculateBoundingBox();
+
+        if (!hasModelNormals) model->CalculateNormals();
+        if (hasModelUV) model->CalculateTangentsAndBiTangents();
+
         f.FindNextFrom(obj.prop_modelName, wpos_models);
 
     } // next model
 
-    // Calculate model information
-    for (auto & model : models)
-    {
-        model->CalculateBoundingBox();
-        //if (!hasModelNormals) // *** TO DO ***
-        //    model->CalculateNormals();
-        model->CalculateTangentsAndBiTangents();
-    }
     //
     // Get materials
     //
@@ -693,7 +799,7 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
         {
             for (auto & mtl : materials)
             {
-                if (mesh.Get_materialName() == mtl.second->Get_name())
+                if (mesh->Get_materialName() == mtl.second->Get_name())
                 {
                     model->AddMaterial(mtl.second); // add the mesh's material to the model master definitions
                     break;
@@ -725,7 +831,7 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
 ******************************************************************************/
 bool King::Model_IO::Save_OBJ(const std::string fileNameIN, const std::vector<shared_ptr<King::Model>> &modelsIN)
 {
-    bool extendExport = false; // custom file format (for tangents and bi-tangent saves) that extends the .obj file format to .objx.  Set to false for standard export.
+    bool extendExport = true; // custom file format (for tangents and bi-tangent saves) that extends the .obj file format to .objx.  Set to false for standard export.
     float3 epsilon(0.00005f); // difference in which two numbers are considered equal
 
     string ext;
@@ -789,7 +895,7 @@ bool King::Model_IO::Save_OBJ(const std::string fileNameIN, const std::vector<sh
         uint32_t numModelVerticies = 0;
         for (const auto & mesh : model->_meshes)
         {
-            numModelVerticies += mesh.GetNumVerticies();
+            numModelVerticies += mesh->GetNumVerticies();
         }
         of << '#' << " Verticies in model (o object) " << numModelVerticies << '\n';
 
@@ -909,13 +1015,15 @@ bool King::Model_IO::Save_OBJ(const std::string fileNameIN, const std::vector<sh
                     }
                     cout << '\n';
 
+
                     // now we need to create a new list of uniques values in the order of remapped indicies
                     size_t last = 0; // last substitution
                     uniqueLocations.push_back(locations[0]); // first always unique
                     const auto ls2 = locations.size();
                     for (size_t k = 1; k < ls2; ++k)
                     {
-                        cout << "  " << "Remapping position " << k+1 << " of " << ls2 << '\r';
+                        cout << "  " << "Remapping positions " << (k + 1) / ls2 * 100.f << "%" << '\r';
+                        //cout << "  " << "Remapping position " << k+1 << " of " << ls2 << '\r';
                         // unique test
                         auto u = indexLocations[k];
                         if (u > last)
@@ -931,6 +1039,7 @@ bool King::Model_IO::Save_OBJ(const std::string fileNameIN, const std::vector<sh
                         }
                     }
                     cout << '\n';
+                    cout << "  " << "Unique positions: " << uniqueLocations.size() << '\n';
                 }
                 // v
                 of << "#" << " " << "Unique positions: " << std::to_string(uniqueLocations.size()) << '\n';
@@ -973,7 +1082,8 @@ bool King::Model_IO::Save_OBJ(const std::string fileNameIN, const std::vector<sh
                     const auto tc2 = textureUV.size();
                     for (size_t k = 1; k < tc2; ++k)
                     {
-                        cout << "  " << "Remapping texture coordinate " << k+1 << " of " << tc2 << '\r';
+                        cout << "  " << "Remapping textures " << (k+1) / tc2 * 100.f << "%" << '\r';
+                        //cout << "  " << "Remapping texture coordinate " << k+1 << " of " << tc2 << '\r';
                         // unique test
                         auto u = indexTextureUV[k];
                         if (u > last)
@@ -989,6 +1099,7 @@ bool King::Model_IO::Save_OBJ(const std::string fileNameIN, const std::vector<sh
                         }
                     }
                     cout << '\n';
+                    cout << "  " << "Unique textures: " << uniqueTextureUV.size() << '\n';
                 }
                 // vt
                 of << "#" << " " << "Unique texture UV: " << std::to_string(uniqueTextureUV.size()) << '\n';
@@ -1031,7 +1142,8 @@ bool King::Model_IO::Save_OBJ(const std::string fileNameIN, const std::vector<sh
                     const auto ns2 = normals.size();
                     for (size_t k = 1; k < ns2; ++k)
                     {
-                        cout << "  " << "Remapping normal " << k + 1 << " of " << ns2 << '\r';
+                        cout << "  " << "Remapping normals " << (k + 1) / ns2 * 100.f<< "%" << '\r';
+                        //cout << "  " << "Remapping normal " << k + 1 << " of " << ns2 << '\r';
                         // unique test
                         auto u = indexNormals[k];
                         if (u > last)
@@ -1047,6 +1159,7 @@ bool King::Model_IO::Save_OBJ(const std::string fileNameIN, const std::vector<sh
                         }
                     }
                     cout << '\n';
+                    cout << "  " << "Unique normals: " << uniqueNormals.size() << '\n';
                 }
                 //vn
                 of << "#" << " " << "Unique normals: " << std::to_string(uniqueNormals.size()) << '\n';
@@ -1435,13 +1548,14 @@ bool King::Model_IO::Save_OBJ(const std::string fileNameIN, const std::vector<sh
 //    else return true;
 //}
 /******************************************************************************
-*    Class:    Model_IO
-*    Method:    Load_MTL
-*    Description:    Imports King::Model material definitions from .mtl format
+*    Class: Model_IO
+*    Method: Load_MTL
+*    Description: Imports King::Model material definitions from .mtl format
 *
-*    Inputs:        fileNameIN        name to give file
+*    Inputs:     fileNameIN        name to give file
 *    Outputs:    reads contents of materials for each model to file
 *    Returns:    map             of materials by name
+*   reference PBR extensions at http://exocortex.com/blog/extending_wavefront_mtl_to_support_pbr
 ******************************************************************************/
 std::map<std::string, std::shared_ptr<Material>> King::Model_IO::Load_MTL(const std::string fileNameIN)
 {
@@ -1460,7 +1574,10 @@ std::map<std::string, std::shared_ptr<Material>> King::Model_IO::Load_MTL(const 
         if (!loaded)
             loaded = mtlFile.Load("Resources/Models/" + fileNameIN);
         if (!loaded)
+        {
             cout << "Material file could not be located in defined paths: " << fileNameIN << '\n';
+            assert(false);
+        }
     }
     if (!mtlFile.FindFirst(obj.prop_defineMaterial))
         return materials;
@@ -1623,12 +1740,12 @@ std::map<std::string, std::shared_ptr<Material>> King::Model_IO::Load_MTL(const 
     return materials;
 }
 /******************************************************************************
-*    Class:    Model_IO
-*    Method:    Save_MTL
+*    Class:      Model_IO
+*    Method:     Save_MTL
 *    Description:    Exports King::Model material definitions in .mtl format
 *
-*    Inputs:        of                ofstream to save contents too
-*                materialsIN        vector of materials to save in this file
+*    Inputs:     of              ofstream to save contents too
+*                materialsIN     vector of materials to save in this file
 *    Outputs:    writes contents of materials for each material to file
 *    Returns:    bool            false if error writing file
 ******************************************************************************/
@@ -1647,6 +1764,7 @@ bool King::Model_IO::Save_MTL(ofstream & of, std::map<std::string, std::shared_p
             of << obj.prop_indexOfRefraction << " " << std::fixed << mtl.second->Get_properties().indexOfRefraction << '\n';
             of << obj.prop_dissolved << " " << std::fixed << mtl.second->Get_properties().dissolved << '\n';
             of << obj.prop_transmissionFilter << " " << std::fixed << mtl.second->Get_properties().transmissionFilter << '\n';
+            of << "# " << "NOTE: illum 1 is no specular & no alpha, 2 is specular on & no alpha, 4 is specular on & alpha on" << '\n';
             of << obj.shader_method << (mtl.second->Get_properties().isCutOut ? " 4" : " 2") << '\n';
             of << obj.map_diffuse << " " << mtl.second->Get_fileNames().diffuse << '\n';
             of << obj.map_specular << " " << mtl.second->Get_fileNames().specular << '\n';
@@ -1681,7 +1799,7 @@ bool King::Model_IO::Save_MTL(const std::string fileNameIN, std::map<std::string
     getline(ss, prefixName, '.');
     getline(ss, postfixName);
 
-    ofstream of(prefixName + ".mt", std::ofstream::trunc);
+    ofstream of(prefixName + ".mtlx", std::ofstream::trunc);
     if (of.fail()) return false;
 
     // stats
@@ -1723,7 +1841,7 @@ bool King::Model_IO::Save_MTL(const std::string fileNameIN, const std::vector<sh
     getline(ss, prefixName, '.');
     getline(ss, postfixName);
 
-    ofstream of(prefixName + ".mt", std::ofstream::trunc);
+    ofstream of(prefixName + ".mtlx", std::ofstream::trunc);
     if (of.fail()) return false;
 
     // stats

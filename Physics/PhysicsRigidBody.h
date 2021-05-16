@@ -104,10 +104,10 @@ namespace King {
         // Accessors
         // Assignments
         void Set(const std::shared_ptr<PhysicsMaterial> sp_material) { _sp_material = sp_material; }
-        void Set(const float& coefficientOfDrag) { _coefficientOfDrag = coefficientOfDrag; }
 
         void Set_volume(const float& volume) { _volume = volume; }
         void Set_crossSectionalArea(const float& crossSectionalArea) { _crossSectionalArea = crossSectionalArea; }
+        void Set_coefficientOfDrag(const float& coefficientOfDrag) { _coefficientOfDrag = coefficientOfDrag; }
         void Set_mass(const UnitOfMeasure::Mass& mass) { _mass = mass; }
         void Set_centerOfMassLocalSpace(const Position& centerOfMassLocalSpace) { _centerOfMassLocalSpace = centerOfMassLocalSpace; }
 
