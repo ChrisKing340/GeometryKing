@@ -1,7 +1,7 @@
 # GeometryKing
 Generic game engine foundation.  All the basics of 2D and 3D geometry and model IO.  C++ generic Classes with no rendering dependencies.
 
-GeometryKing contains the base SIMD data types class wrappers to seamlessly accelerate your code using the popular DirectXMath library (not dependent on DirectX). From this base, GeometryKing defines geometry types, classes and methods that make the basis of 2D and 3D games, simulators, and engineering applications.  Start with class SkinnedModel to dive into the high level functionality of the library.
+GeometryKing contains the base SIMD data types class wrappers to seamlessly accelerate your code using the popular DirectXMath library (not dependent on DirectX). From this base, GeometryKing defines geometry types, classes and methods that make the basis of 2D and 3D games, simulators, and engineering applications.
 
 Compiled with Visual Studio 2019, C++17, 64 Bit Windows 10
 
@@ -97,35 +97,61 @@ Ex: Length(10_ft)
 
     #include "Physics\UnitOfMeasure.h"
     namespace UnitOfMeasure;
-    class Mass; // scalar
-    class Length; // scalar
-    class Area; // scalar
-    class Volume; // scalar
-    class Energy; // scalar
-    class Power; // scalar
-    class Strength; // scalar part of a Force vector
-    class Accel; // scalar part of an Acceleration vector
-    class Speed; // scalar part of a Velocity vector
-    class Temperature; // scalar
-    class Time; // scalar
+    class Mass; // scalar in kg
+    class Length; // scalar in m
+    class Area; // scalar in m^2
+    class Volume; // scalar in m^3
+    class Energy; // scalar in Joules
+    class Power; // scalar Watts (J/s)
+    class Strength; // scalar part of a Force vector in N
+    class Accel; // scalar part of an Acceleration vector in m/s^2
+    class Speed; // scalar part of a Velocity vector in m/s
+    class Motion; // scalar part of Momentum vector in Joules
+    class Temperature; // scalar in degrees Celsius
+    class Time; // scalar in secounds
+    
+    class Inertia; // scalar in kg * m^2
+    class AngularMotion; // scalar part of angular momentum in radians
+    class Angle; // scalar in radians
+    class AngularStrength; // scalar part of torqe in N * m (J)
+    class AngularAccel; // scalar part of angular acceleration in radians
+    class AngularSpeed; // scalar part of angular velocity in radians
+    
     const Accel gravity;
     const Speed speedOfSoundInAir;
     
-    #include "Physics\Force.h"
+    #include "Physics.h"
     class Force ; // keeps a UnitOfMeasure::Strength and a unit direction vector
-    
-    #include "Physics\Acceleration.h"
-    class Acceleration ; // keeps a UnitOfMeasure::Accel and a unit direction vector
-    // operator for Acceleration = Force / Mass
-    
-    #include "Physics\Velocity.h"
-    class Velocity ; // keeps a UnitOfMeasure::Speed and a unit direction vector
-    // operator for Velocity = Acceleration * Time
-    
-    #include "Physics\Distance.h"
-    class Distance ; // keeps a UnitOfMeasure::Length and a unit direction vector
-    // operator for Distance = Velocity * Time
-
-    #include "Physics\Position.h"
+    // Linear
+    class Acceleration ; // keeps a scalar UnitOfMeasure::Accel and a unit direction vector // operator for Acceleration = Force / Mass
+    class Velocity ; // keeps a scalar UnitOfMeasure::Speed and a unit direction vector // operator for Velocity = Acceleration * Time
     class Position ; // keeps 3 floats for x,y,z and operators for arithmetic with Distance
+    class Distance ; // keeps a scalar UnitOfMeasure::Length and a unit direction vector // operator for Distance = Velocity * Time
+    // Rotational
+    class Torque ; // keeps a scalar UnitOfMeasure::AngularStrength and a unit direction vector that the torque acts to spin (axis of rotation)
+    class AngularAcceleration ; // keeps a scalar UnitOfMeasure::AngularAccel and a unit direction vector that the acceleration acts to spin (axis of rotation)
+    class AngularVelocity ; // keeps a scalar UnitOfMeasure::AngularSpeed and a unit direction vector that the velocity acts to spin (axis of rotation)
+    class Rotation ; // keeps a scalar UnitOfMeasure::Angle and a unit direction vector (axis of rotation) spun about
     
+    // Functions to solve physics cases
+    // Usesful to show how to use the scalars and classes in solving equations in physics that model the real world
+    #include "Physics.h"
+    namespace Physics;
+    
+    Case: Trajectories
+    Case 0: position along a trajectory, p = p0 + v0 t + 1/2 a t^2
+        Position    MechanicsKinematics_Trajectory(const Position& initialPosIn, const Velocity& initialVelIn, const Acceleration& constAccelIn, const UnitOfMeasure::Time& tIn);
+    Case 1: a = gravity, p = p0 + v0 t + 1/2 g t^2
+        Position    MechanicsKinematics_TrajectoryPositionAtTimeWithNegativeYGravity(const Position& initialPosIn, const Velocity& initialVelIn, const UnitOfMeasure::Time& tIn); 
+    Case 2: time to reach maximum height, t = v0y / g
+        Time        MechanicsKinematics_TrajectoryTimeAtMaximumHeightWithNegativeYGravity(const Velocity& initialVelIn);
+    Case 3: height at maximum reached, h = v0y^2 / (2g)
+        Length      MechanicsKinematics_TrajectoryHeightAtMaximumHeightWithNegativeYGravity(const Velocity& initialVelIn);
+    
+    Case: Springs
+    Case 0: work done on spring by displacement distance
+        Energy      MechanicsWork_SpringWorkFromDistance(const float& kSpringConstantIn, const float3& unitVectorSpringLineOfMotion, const Distance&);
+    Case 1: work done on spring by dispalcement from position p1 to p2
+        Energy      MechanicsWork_SpringWorkFromTwoPositions(const float& kSpringConstantIn, const float3& unitVectorSpringLineOfMotion, const Position& spring_p0In, const Position& p1In, const Position& p2In);
+    Case 2:  distance spring displaced from an applied force
+        Distance    MechanicsWork_SpringDistanceFromForce(const float& kSpringConstantIn, const float3& unitVectorSpringLineOfMotion, const Force&);
