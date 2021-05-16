@@ -91,7 +91,7 @@ Complex models require more than just simple geometry shapes.  Multiple meshes o
     
 ## Physics foundation
 
-Foundation classes to represent a unit of measure with a scalar.  The classes just keeps one value with internal storage as a SI unit of measure.  String literals implemented to allow definition with the unit of measure desired.  Operator overloading to act as a base type and also supports streams and json from/to;
+Physical measurement foundation classes stored as a scalar. Each has base math functionality, IO streaming, and json serialization.  The classes just keeps one value using SI unit of measure.  String literals implemented to allow definition with the unit of measure desired (SI, English, British Engineering). 
 Ex: Length(10_m)
 Ex: Length(10_ft)
 
@@ -119,6 +119,8 @@ Ex: Length(10_ft)
     
     const Accel gravity;
     const Speed speedOfSoundInAir;
+   
+Physical motion foundation classes stored as a measurement scalar and unit direction vector.  Describes both linear and rotational motion.
     
     #include "Physics.h"
     class Force ; // keeps a UnitOfMeasure::Strength and a unit direction vector
@@ -133,6 +135,8 @@ Ex: Length(10_ft)
     class AngularVelocity ; // keeps a scalar UnitOfMeasure::AngularSpeed and a unit direction vector that the velocity acts to spin (axis of rotation)
     class Rotation ; // keeps a scalar UnitOfMeasure::Angle and a unit direction vector (axis of rotation) spun about
     
+Functions for physic cases demonstrating how the foundational classes are used in practice.
+
     // Functions to solve physics cases
     // Usesful to show how to use the scalars and classes in solving equations in physics that model the real world
     #include "Physics.h"
