@@ -158,24 +158,36 @@ bool King::TextFileParse::FindFirst(const string &txt)
 }
 /*******************************************************************
 * Find the next instance of the word token
-*  Search only in the current group and any sub groupings
+*  Search only in the current group and any sub groupings using
+*  {} to define groups.  If an } is encountered before its { pair
+*  the routine stops and exits
 *******************************************************************/
-bool King::TextFileParse::FindNext(const string &txt)
+bool King::TextFileParse::FindNext(const string &txt, bool onlyWithInGroupBracketLimiters)
 {
     int temp = currentWord;
     long countOpenBrackets = 0;
 
-    // end of a group, skip and start next
-    if (NextWord() == groupStopDes) ++currentWord;
-    else --currentWord;
-
-    while(!IsLast() && (Word() != txt))
+    if (onlyWithInGroupBracketLimiters)
     {
-        if (Word() == groupStartDes) ++countOpenBrackets;
-        else if (Word() == groupStopDes) --countOpenBrackets;
+        // end of a group, skip and start next
+        if (NextWord() == groupStopDes) ++currentWord;
+        else --currentWord;
+    
+        while (!IsLast() && (Word() != txt))
+        {
+            if (Word() == groupStartDes) ++countOpenBrackets;
+            else if (Word() == groupStopDes) --countOpenBrackets;
 
-        if (countOpenBrackets < 0) break;
-        Next();
+            if (countOpenBrackets < 0) break;
+            Next();
+        }
+    }
+    else
+    {
+        while (!IsLast() && (Word() != txt))
+        {
+            Next();
+        }
     }
 
     if (Word() == txt)

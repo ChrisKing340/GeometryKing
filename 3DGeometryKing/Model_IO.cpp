@@ -628,6 +628,7 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
         // Check face winding matches face normals
         if (true)
         {
+            // NOTE: this was added to void King::ModelScaffold::ReverseWindingsToMatchNormals()
             auto fnFaceNormal = [](float3 a, float3 b, float3 c) {return Cross((b - a), (c - a)); };
             auto fnAveNormals = [](float3 a, float3 b, float3 c) {return Normalize(a + b + c); };
             const uint32_t num = (uint32_t)indicies.size();
@@ -807,6 +808,15 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
             }
         }
     }
+
+    // 
+    for (auto& model : models)
+    {
+        cout << "  duplicate verts ";
+        model->RemoveDuplicateVerticies();
+        model->RemoveUnusedVerticies();
+    }
+    
 
     // an advantage of .obj files is by their nature they are vertex order optimized
     bool optimize(false);

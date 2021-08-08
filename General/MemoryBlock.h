@@ -23,7 +23,9 @@ Remarks:        This class differs from std::vector<T> in that it supports strid
                 for storage within our engine (we make heavy use of this). An advatage
                 of this is file read/write code in one place (here) and extension 
                 into our memory pool class for the engine later on is simple since
-                it builds upone this class.
+                it builds upon this class.
+
+Revisions:      7/23/2021: Implemented MinMax(...), Min(), and Max() for efficient determination of the data pool
 
 Contact:        ChrisKing340@gmail.com
 
@@ -85,7 +87,7 @@ public:
     void * operator new (size_t size) { return _aligned_malloc(size, align); }
     void   operator delete (void *p) { _aligned_free(static_cast<MemoryBlock*>(p)); }
     
-    T operator [](size_t i) const { assert(i*_stride<_length); return _data[i*_stride]; } // accessor 
+    T const & operator [](size_t i) const { assert(i*_stride<_length); return _data[i*_stride]; } // accessor 
     T& operator [](size_t i) { assert(i*_stride<_length); return _data[i*_stride]; } // assignment
     
     T* operator->() { return _data; } // data pointer access
@@ -112,7 +114,7 @@ public:
         assert(_length > 0); // should be pre-initialized
         std::copy(other, other + _length, _data);
         return *this;
-    }
+    }    
     // copy assignment
     MemoryBlock & operator=(const MemoryBlock & other)
     {
@@ -123,12 +125,7 @@ public:
             _stride = other._stride;
             _length = other._length;
             _data = new T[_length]; // only aligned if T's new operator also aligns
-
-            // SIMD not working with index buffer (it is uint32_t, is that a problem??)
-            /*if ((0 == ((size_t)_data & (16 - 1))) && (0 == ((size_t)other._data & (16 - 1))))
-                SIMDMemCopy(_data, other._data, _length);
-            else*/
-                std::copy(other._data, other._data + _length, _data);
+            std::copy(other._data, other._data + _length, _data);
         }
         return *this;
     }
@@ -137,8 +134,10 @@ public:
     {
         if (this != &other)
         {
-            delete[] _data;
-
+            if (_data != nullptr)
+            {
+                delete[] _data;
+            }
             _data = other._data;
             _length = other._length;
             _stride = other._stride;
@@ -162,8 +161,34 @@ public:
     }
     // Functionality
     inline void     Initialize(size_t lengthIn) { Destroy(); _length = lengthIn; _data = new T[_length]; }
-    inline void     Destroy() { if (_data != nullptr) { delete[] _data;    _data = nullptr; _length = 0; _stride = 1; } }
+    inline void     Destroy() { if (_data != nullptr) { delete[] _data; _data = nullptr; _length = 0; _stride = 1; } }
     inline void     Fill(T valueIn) { for (size_t i = 0; i < _length; ++i) _data[i] = valueIn; }
+    inline void     Split(size_t elementIndex, MemoryBlock<T> *out)
+                    {
+                        assert (elementIndex * _stride != _length);
+                        if (!elementIndex) return;
+                        assert(_data != nullptr);
+                        assert(elementIndex * _stride < _length);
+                        assert(out != nullptr);
+
+                        out->_stride = _stride;
+                        // include elementIndex in the right side split [begin to elementIndex - 1 : elementIndex to end]
+                        out->_length = (GetElements() - elementIndex - 1) * _stride;
+                        _length -= out->_length;
+
+                        out->_data = new T[out->_length];
+                        out->Copy(0, _data, out->_length);
+                        
+                        // now we need to copy our remaining memory to a newly allocated buffer and then free the larger block
+                        T* _smallerBuffer = new T[_length];
+                        std::copy(_data, _data + _length, _smallerBuffer);
+
+                        if (_data != nullptr)
+                        {
+                            delete[] _data;
+                        }
+                        _data = _smallerBuffer;
+                    }
     inline void     Merge(MemoryBlock<T> & other) // destroys other after 
                     {
                         if (this != &other && other._length > 0)
@@ -194,6 +219,7 @@ public:
     inline bool     ReadMemoryBlock(std::ifstream &dataFileIn) // Memory block binary (length coded first, then stride, data last)
                     {
                         if (!dataFileIn.is_open()) return false;
+                        if (!dataFileIn.good()) return false;
 
                         size_t readLength;
                         size_t readStride;
@@ -203,9 +229,8 @@ public:
 
                         if (dataFileIn.fail()) return false;                  
                         
-                        if(readLength != _length) Initialize(readLength);
-                    
-                        dataFileIn.read(reinterpret_cast<char*>(_data), readLength * sizeof(T));
+                        if(readLength != _length) Initialize(readLength);                 
+                        dataFileIn.read(reinterpret_cast<char*>(_data), _length * sizeof(T));
 
                         _stride = readStride;
 
@@ -221,7 +246,7 @@ public:
                         if (outfileIn.fail()) return false;
                         return true;
                     }
-    inline bool     ReadRawBinary(std::string & fileNameIn) // data only, no length or strided.  Reads entire contents of file
+    inline bool     ReadRawBinary(std::string & fileNameIn) // data only, no length or stride.  Reads entire contents of file
                     {
                         std::ifstream infile(fileNameIn, std::ifstream::binary);
                         if (infile.fail()) return false;
@@ -236,7 +261,7 @@ public:
                         if (infile.fail()) return false;
                         return true;
                     }
-    inline bool     WriteRawBinary(std::string fileNameIn) // data only, no length or strided
+    inline bool     WriteRawBinary(std::string fileNameIn) // data only, no length or stride
                     {
                         std::ofstream outfile(fileNameIn, std::ofstream::binary | std::ofstream::trunc);
                         outfile.write(_data, _length);
@@ -271,135 +296,132 @@ public:
     const auto      GetElements() const { return _length / _stride; } // number of stride elements
     // Assignments
     void            SetStride(const size_t & strideIn) { _stride = strideIn; }
-    void            SetElementToValueByByteStride(const size_t & elementNumber, T* dataIn) 
+    [[deprecated("Use Copy(...) instead.")]] void SetElementToValueByByteStride(const size_t & elementNumber, T* dataIn)
                     {
                         T* dest = &Get(elementNumber);
                         std::copy(dataIn, dataIn + _stride, dest);
                     }
+    void            Copy(const size_t& startElementNumber, T* srcIn, size_t size = 0)
+                    {
+                        if (!size) size = _stride; // 1 element by default
+                        T* dest = &Get(startElementNumber);
+                        std::copy(srcIn, srcIn + size, dest);
+                    }
+    void            MinMax(T* minOut, T* maxOut)
+                    {
+                        // must have = and < operator defined
+                        auto e = GetElements();
+                        if (e == 1) return Get(0);
+                        assert(1 < e);
 
-    // reference Utility.h from Microsoft open source miniEngine project
-    inline void     SIMDMemCopy(void* __restrict _DestAligned16, const void* __restrict _SourceAligned16, size_t bufferSize)
-    {
-        assert (0 == ((size_t)_DestAligned16 & (16 - 1)));
-        assert (0 == ((size_t)_SourceAligned16 & (16 - 1)));
+                        size_t start;
+                        T s, l;
+                        s = l = Get(0);
+                        T mi, ma;
+                        // initial check so we can index by 2 in loop
+                        if (e % 2 != 0)
+                        {
+                            // odd
+                            mi = ma = Get(0);
+                            start = 1;
+                        }
+                        else
+                        {
+                            // even
+                            const T& e2 = Get(1);
+                            mi = s < e2 ? s : e2;
+                            ma = e2 < l ? l : e2;
+                            start = 2;
+                        }
 
-        size_t NumQuadwords = (bufferSize + 16 - 1) / 16;
+                        --e;
+                        for (size_t i = start; i < e; i += 2)
+                        {
+                            const T& e1 = Get(i);
+                            const T& e2 = Get(i + 1);
 
-        __m128i* __restrict Dest = (__m128i * __restrict)_DestAligned16;
-        const __m128i* __restrict Source = (const __m128i * __restrict)_SourceAligned16;
+                            if (e1 < e2) 
+                                { s = e1; l = e2; }
+                            else
+                                { s = e2; l = e1; }
+                            if (mi > s) mi = s;
+                            if (ma < l) ma = l;
+                        }
 
-        // Discover how many quadwords precede a cache line boundary.  Copy them separately.
-        size_t InitialQuadwordCount = (4 - ((size_t)Source >> 4) & 3) & 3;
-        if (InitialQuadwordCount > NumQuadwords)
-            InitialQuadwordCount = NumQuadwords;
+                        *minOut = mi;
+                        *maxOut = ma;
+                        return;
+                    }
+    T               Min()
+                    {
+                        // must have = and < operator defined
+                        auto e = GetElements();
+                        if (e == 1) return Get(0);
+                        assert(e > 1);
 
-        switch (InitialQuadwordCount)
-        {
-        case 3: _mm_stream_si128(Dest + 2, _mm_load_si128(Source + 2));     // Fall through
-        case 2: _mm_stream_si128(Dest + 1, _mm_load_si128(Source + 1));     // Fall through
-        case 1: _mm_stream_si128(Dest + 0, _mm_load_si128(Source + 0));     // Fall through
-        default:
-            break;
-        }
+                        size_t start;
+                        T s = Get(0);
+                        T mi;
+                        // initial check so we can index by 2 in loop
+                        if(e % 2 != 0) 
+                        { 
+                            // odd
+                            mi = s;
+                            start = 1;
+                        }
+                        else 
+                        {
+                            // even
+                            const T& e2 = Get(1);
+                            mi = s < e2 ? s : e2;
+                            start = 2;
+                        }
 
-        if (NumQuadwords == InitialQuadwordCount)
-            return;
+                        --e;
+                        for (size_t i = start; i < e; i += 2)
+                        {
+                            const T& e1 = Get(i);
+                            const T& e2 = Get(i + 1);
+                            s = e1 < e2 ? e1 : e2;
+                            if (mi > s) mi = s;
+                        }
+                        return mi;
+                    }
+    T               Max()
+                    {
+                        // must have = and > operator defined
+                        auto e = GetElements();
+                        if (e == 1) return Get(0);
+                        assert(1 < e);
 
-        Dest += InitialQuadwordCount;
-        Source += InitialQuadwordCount;
-        NumQuadwords -= InitialQuadwordCount;
+                        size_t start;
+                        T l = Get(0);
+                        T ma;
+                        // initial check so we can index by 2 in loop
+                        if (e % 2 != 0)
+                        {
+                            // odd
+                            ma = l;
+                            start = 1;
+                        }
+                        else
+                        {
+                            // even
+                            const T& e2 = Get(1);
+                            ma = e2 < l ? l : e2;
+                            start = 2;
+                        }
 
-        size_t CacheLines = NumQuadwords >> 2;
-
-        switch (CacheLines)
-        {
-        default:
-        case 10: _mm_prefetch((char*)(Source + 36), _MM_HINT_NTA);    // Fall through
-        case 9:  _mm_prefetch((char*)(Source + 32), _MM_HINT_NTA);    // Fall through
-        case 8:  _mm_prefetch((char*)(Source + 28), _MM_HINT_NTA);    // Fall through
-        case 7:  _mm_prefetch((char*)(Source + 24), _MM_HINT_NTA);    // Fall through
-        case 6:  _mm_prefetch((char*)(Source + 20), _MM_HINT_NTA);    // Fall through
-        case 5:  _mm_prefetch((char*)(Source + 16), _MM_HINT_NTA);    // Fall through
-        case 4:  _mm_prefetch((char*)(Source + 12), _MM_HINT_NTA);    // Fall through
-        case 3:  _mm_prefetch((char*)(Source + 8), _MM_HINT_NTA);    // Fall through
-        case 2:  _mm_prefetch((char*)(Source + 4), _MM_HINT_NTA);    // Fall through
-        case 1:  _mm_prefetch((char*)(Source + 0), _MM_HINT_NTA);    // Fall through
-
-            // Do four quadwords per loop to minimize stalls.
-            for (size_t i = CacheLines; i > 0; --i)
-            {
-                // If this is a large copy, start prefetching future cache lines.  This also prefetches the
-                // trailing quadwords that are not part of a whole cache line.
-                if (i >= 10)
-                    _mm_prefetch((char*)(Source + 40), _MM_HINT_NTA);
-
-                _mm_stream_si128(Dest + 0, _mm_load_si128(Source + 0));
-                _mm_stream_si128(Dest + 1, _mm_load_si128(Source + 1));
-                _mm_stream_si128(Dest + 2, _mm_load_si128(Source + 2));
-                _mm_stream_si128(Dest + 3, _mm_load_si128(Source + 3));
-
-                Dest += 4;
-                Source += 4;
-            }
-
-        case 0:    // No whole cache lines to read
-            break;
-        }
-
-        // Copy the remaining quadwords
-        switch (NumQuadwords & 3)
-        {
-        case 3: _mm_stream_si128(Dest + 2, _mm_load_si128(Source + 2));     // Fall through
-        case 2: _mm_stream_si128(Dest + 1, _mm_load_si128(Source + 1));     // Fall through
-        case 1: _mm_stream_si128(Dest + 0, _mm_load_si128(Source + 0));     // Fall through
-        default:
-            break;
-        }
-
-        _mm_sfence();
-    }
-
-    void SIMDMemFill(void* __restrict _DestAligned16, __m128 FillVector, size_t bufferSize)
-    {
-        assert(0 == ((size_t)_DestAligned16 & (16 - 1)));
-
-        size_t NumQuadwords = (bufferSize + 16 - 1) / 16;
-
-        register const __m128i Source = _mm_castps_si128(FillVector);
-        __m128i* __restrict Dest = (__m128i * __restrict)_DestAligned16;
-
-        switch (((size_t)Dest >> 4) & 3)
-        {
-        case 1: _mm_stream_si128(Dest++, Source); --NumQuadwords;     // Fall through
-        case 2: _mm_stream_si128(Dest++, Source); --NumQuadwords;     // Fall through
-        case 3: _mm_stream_si128(Dest++, Source); --NumQuadwords;     // Fall through
-        default:
-            break;
-        }
-
-        size_t WholeCacheLines = NumQuadwords >> 2;
-
-        // Do four quadwords per loop to minimize stalls.
-        while (WholeCacheLines--)
-        {
-            _mm_stream_si128(Dest++, Source);
-            _mm_stream_si128(Dest++, Source);
-            _mm_stream_si128(Dest++, Source);
-            _mm_stream_si128(Dest++, Source);
-        }
-
-        // Copy the remaining quadwords
-        switch (NumQuadwords & 3)
-        {
-        case 3: _mm_stream_si128(Dest++, Source);     // Fall through
-        case 2: _mm_stream_si128(Dest++, Source);     // Fall through
-        case 1: _mm_stream_si128(Dest++, Source);     // Fall through
-        default:
-            break;
-        }
-
-        _mm_sfence();
-    }
+                        --e;
+                        for (size_t i = start; i < e; i += 2)
+                        {
+                            const T& e1 = Get(i);
+                            const T& e2 = Get(i + 1);
+                            l = e2 < e1 ? e1 : e2;
+                            if (ma < l) ma = l;
+                        }
+                        return ma;
+                    }
 };
 
 

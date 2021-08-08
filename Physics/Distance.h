@@ -67,6 +67,8 @@ namespace King {
     class Distance;
     Distance operator*(const UnitOfMeasure::Time &t, const Velocity & velIn); // d = t * v
     Distance operator*(const Velocity & velIn, const UnitOfMeasure::Time &t); // d = v * t 
+    Distance operator*(const Quaternion& qIn, const Distance& dIn);
+    Distance operator*(const Distance& dIn, const Quaternion& qIn);
     UnitOfMeasure::Energy operator*(const Force& fIn, const Distance& dIn);
     UnitOfMeasure::Energy operator*(const Distance& dIn, const Force& fIn);
 
@@ -123,7 +125,8 @@ namespace King {
         auto&                               Get_magnitude() { return _magnitude; }
         const auto&                         Get_unit_direction() const { return _unit_direction; }
         auto&                               Get_unit_direction() { return _unit_direction; }
-        const float3                        GetVector() const { return _unit_direction * _magnitude; }
+        
+        float3                              GetVector() const { return _unit_direction * _magnitude; }
         float                               GetValueEN() const { return UnitOfMeasure::mToft * _magnitude; }
         float                               GetValueSI() const { return UnitOfMeasure::m * _magnitude; }
         // Assignments

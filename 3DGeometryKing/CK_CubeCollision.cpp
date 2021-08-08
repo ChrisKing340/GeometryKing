@@ -613,13 +613,14 @@ namespace King {
 
         float3 q = box0.m_c;
 
+        // *** TO DO *** likely does not work, look at another source or modify the below dist.xyz compare vs component wise extent (for a non-uniformed box)
 
         for (int i = 0; i < 3; i++)
         {
-            float dist = Dot(d, box0.m_u[i]);
+            auto dist = float3(Dot(d, box0.m_u[i]));
 
-            if (dist > box0.m_e[i]) dist = box0.m_e[i];
-            if (dist < -box0.m_e[i]) dist = -box0.m_e[i];
+            if (dist > box0.m_e) dist = box0.m_e;
+            if (dist < -box0.m_e) dist = -box0.m_e;
 
             q += dist * box0.m_u[i];
         }

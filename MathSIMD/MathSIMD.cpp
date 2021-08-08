@@ -9,9 +9,9 @@ using namespace std;
 std::ostream& King::operator<< (std::ostream& os, const King::UIntPoint2& in) { return os << "{ " << "x: " << in.GetX() << " y: " << in.GetY() << " }"; }
 std::ostream& King::operator<< (std::ostream& os, const King::IntPoint2& in) { return os << "{ " << "x: " << in.GetX() << " y: " << in.GetY() << " }"; }
 std::ostream& King::operator<< (std::ostream& os, const King::IntPoint3& in) { return os << "{ " << "x: " << in.GetX() << " y: " << in.GetY() << " z: " << in.GetZ() << " }"; }
-std::ostream& King::operator<< (std::ostream& os, const King::FloatPoint2& in) { return os << "{ " << "x: " << setw(9) << in.f[0] << " y: " << setw(9) << in.f[1] << " }"; }
-std::ostream& King::operator<< (std::ostream& os, const King::FloatPoint3& in) { return os << "{ " << "x: " << setw(9) << in.f[0] << " y: " << setw(9) << in.f[1] << " z: " << setw(9) << in.f[2] << " }"; }
-std::ostream& King::operator<< (std::ostream& os, const King::FloatPoint4& in) { return os << "{ " << "x: " << setw(9) << in.f[0] << " y: " << setw(9) << in.f[1] << " z: " << setw(9) << in.f[2] << " w: " << setw(9) << in.f[3] << " }"; }
+std::ostream& King::operator<< (std::ostream& os, const King::FloatPoint2& in) { return os << "{ " << "x: " << setw(9) << std::setprecision( 6 ) << in.f[0] << " y: " << setw(9) << in.f[1] << " }"; }
+std::ostream& King::operator<< (std::ostream& os, const King::FloatPoint3& in) { return os << "{ " << "x: " << setw(9) << std::setprecision( 6 ) << in.f[0] << " y: " << setw(9) << in.f[1] << " z: " << setw(9) << in.f[2] << " }"; }
+std::ostream& King::operator<< (std::ostream& os, const King::FloatPoint4& in) { return os << "{ " << "x: " << setw(9) << std::setprecision( 6 ) << in.f[0] << " y: " << setw(9) << in.f[1] << " z: " << setw(9) << in.f[2] << " w: " << setw(9) << in.f[3] << " }"; }
 
 std::ostream& King::operator<<(std::ostream& os, const DirectX::XMMATRIX& in)
 {
@@ -198,59 +198,30 @@ void __vectorcall King::Quaternion::SetAxisAngle(float3 vector, float angleRadia
     }
 }
 
-void King::Quaternion::Set(const float3 vFrom, const float3 vTo)
+//https://stackoverflow.com/questions/1171849/finding-quaternion-representing-the-rotation-from-one-vector-to-another
+void King::Quaternion::Set(const float3 &vFrom, const float3 &vTo)
 {
-    float3 ave = (vFrom + vTo)/2.f;
-    bool success = (float3::Magnitude(ave) > 1.192092896e-7f); // minimum float value
-    if (success)
+    float t = vFrom.DotProduct(vTo);
+
+    if (t > 0.999999)
     {
-        ave.MakeNormalize();
-        *this = vFrom * ave;
-        v = float3::Normal(float3::CrossProduct(vFrom, vTo));
-        SetAxis(v);
-        // Angle
-        auto a = float3::Magnitude(vFrom);
-        auto b = float3::Magnitude(vTo);
-        SetW(sqrt((a*a) * (b*b)) + float3::DotProduct(vFrom, vTo).GetX());
+        // parallel
+        v = DirectX::XMQuaternionIdentity(); // 0 degrees
+    }
+    if (t < -0.999999)
+    {
+        // parallel and opposite
+        v = float3::Normal(vFrom); // axis
+        SetW(0.f); // 180 degree.
     }
     else
     {
-        // angle is either 0 or 180 degrees
-        if (vFrom == vTo)
-            v = DirectX::XMQuaternionIdentity(); // 0 degrees
-        else
-        {
-            v = float3::Normal(vFrom); // axis
-            SetW(0.f); // 180 degree.
-        }
+        // axis
+        v = float3::CrossProduct(vFrom, vTo);
+        // angle
+        SetW(1.f + t);
+
+        v = DirectX::XMQuaternionNormalize(v);
     }
 
-    /*
-    * Quaternion q;
-vector a = crossproduct(v1, v2);
-q.xyz = a;
-q.w = sqrt((v1.Length ^ 2) * (v2.Length ^ 2)) + dotproduct(v1, v2);
-    * 
-            var dot = vec3.dot(a, b);
-        if (dot < -0.999999) {
-            vec3.cross(tmpvec3, xUnitVec3, a);
-            if (vec3.length(tmpvec3) < 0.000001)
-                vec3.cross(tmpvec3, yUnitVec3, a);
-            vec3.normalize(tmpvec3, tmpvec3);
-            quat.setAxisAngle(out, tmpvec3, Math.PI);
-        } else if (dot > 0.999999) {
-            out[0] = 0;
-            out[1] = 0;
-            out[2] = 0;
-            out[3] = 1;
-        } else {
-            vec3.cross(tmpvec3, a, b);
-            out[0] = tmpvec3[0];
-            out[1] = tmpvec3[1];
-            out[2] = tmpvec3[2];
-            out[3] = 1 + dot;
-            return quat.normalize(out, out);
-        }
-    };
-    */
 }
