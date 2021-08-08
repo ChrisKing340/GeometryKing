@@ -164,6 +164,16 @@ Distance King::operator*(const UnitOfMeasure::Time& t, const Velocity& velIn)
 {
     return Distance(velIn.Get_magnitude() * t, velIn.Get_unit_direction());
 }
+Distance King::operator*(const King::Quaternion& qIn, const King::Distance& dIn)
+{
+    auto dir = qIn * dIn.Get_unit_direction().GetVecConst();
+    return Distance(dIn.Get_magnitude(), dir);
+}
+Distance King::operator*(const King::Distance& dIn, const King::Quaternion& qIn)
+{
+    auto dir = FloatPoint3(DirectX::XMVector3InverseRotate(dIn.Get_unit_direction(), qIn.GetVecConst()));
+    return Distance(dIn.Get_magnitude(), dir);
+}
 UnitOfMeasure::Energy King::operator*(const Force& fIn, const Distance& dIn)
 {
     UnitOfMeasure::Energy e(fIn.Get_magnitude() * fIn.Get_magnitude()); // N * m = J

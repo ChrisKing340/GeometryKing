@@ -77,7 +77,7 @@ public:
 	int							CountStringAndStopAtMarker(const std::string &txt, const std::string marker);
 
 	bool						FindFirst(const std::string &txt);
-	bool						FindNext(const std::string &txt);
+	bool						FindNext(const std::string &txt, bool onlyWithInGroupBracketLimiters = true);
 	bool						FindNextFrom(const std::string &txt, const int wordPositionIN) { currentWord = wordPositionIN; return FindNext(txt); }
 	
 	std::wstring				HelperStringToWString(const std::string strIn) { _bstr_t	bstr1(strIn.c_str()); std::wstring wstr(bstr1); return wstr; }
