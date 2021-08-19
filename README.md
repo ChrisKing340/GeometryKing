@@ -4,13 +4,13 @@ Generic, render independent, geometric game engine foundation. Intended as the f
 
 Compiled with Visual Studio 2019, C\+\+17, 64 Bit Windows 10
 
-This code is a small part of a fully functional DirectX 12 game engine and physics simulator. Dependencies are on only two external sources (DirextXMath already with the Windows SDK when using Visual Studio):
-
 For the latest version of DirectXMath, visit:
 [https://github.com/Microsoft/DirectXMath](https://github.com/Microsoft/DirectXMath)
 
 For the latest version of json visit:
 [https://github.com/nlohmann/json](https://github.com/nlohmann/json)
+
+This code is the foundation of a fully functional DirectX 12 game engine and physics simulator.
 
 ## Geometry foundation
    
@@ -37,7 +37,7 @@ For the latest version of json visit:
 
 ## Geometry Mesh and Models
 
-Complex models require more than just simple geometry shapes.  Multiple meshes of triangles with different properties for the faces and each vertex must be stored, read, and manipulated for more complex shapes and actions to occur.  Also, for efficiency, indexed buffers allow for removal of duplicate data.  In our system, Models classes own the data and all other classes reference into it.  Our MemoryBlock buffers are therefore allocated in Model and then passed by pointer to other objects.  We also allow for wire frame by building line meshes and not just triangle meshes.  SkinnedModel is our high level object class for use in your engine.
+Complex models require more than just simple geometry shapes.  Multiple meshes of triangles with different properties for the faces and each vertex must be stored, read, and manipulated for more complex shapes and actions to occur.  Also, for efficiency, indexed buffers allow for removal of duplicate data.  In our system, Models classes own the data and all other classes reference into it.  Our MemoryBlock buffers are therefore allocated in Model and then passed by pointer to other objects.  We also allow for wire frame by building line meshes and not just triangle meshes.
 
     // 3D Models containing meshes.  Models own the master data that is shared by different meshes. 
     class HeightGrid; // initalized using a TriangleMesh, keeps a rectangular grid of float heights in the XZ domain
