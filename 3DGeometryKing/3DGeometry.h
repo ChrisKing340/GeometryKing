@@ -71,16 +71,18 @@ SOFTWARE.
     REVISION HISTORY:
     7/25/2021 - Version 2 - Functionality added in many different classes between minor releases and major code
     merged in to expand the usefulness of the library to make models. For example, Model received the ability to
-    Optimize vertex order, reverse normals, reverse triangle windings to match normals, and create meshes from
+    optimize vertex order, reverse normals, reverse triangle windings to match normals, and create meshes from
     other objects such as lines, paths, boxes, and sphere objects.  Previous minor releases added classes such
-    as capsules, collision detection in all classes, and interection code between all of the objects. Some 
-    functionality from object on object and transforms into a meshe for display is in the works but since the 
+    as capsules, collision detection in all classes, and intersection code between all of the objects. Some 
+    functionality from object on object and transforms into a mesh for display is in the works but since the 
     code is three times larger than the version one release, thought a major increment was warranted and anyone
     still on version one will want to take advantage of the many increases in functionality in version 2.
+
+    11/28/2021 - Version 2.1 - Classes Model & SkinnedModel gained method CreateMeshFrom(const Path& p)
 */
 
 #define KING_3DGEOMETRY_VERSION_MAJOR 2
-#define KING_3DGEOMETRY_VERSION_MINOR 0
+#define KING_3DGEOMETRY_VERSION_MINOR 1
 #define KING_3DGEOMETRY_VERSION_PATCH 0
 
 #include <DirectXCollision.h>
@@ -99,6 +101,7 @@ using json = nlohmann::json;
 // Basis of physical properties
 #include "..\Physics\UnitOfMeasure.h"
 #include "..\Physics\Physics.h"
+
 // WIP: Collsision testing, these are TEMPORARIES for experimentation
 #include "CK_Cube.h"
 #include "CK_CubeCollision.h"
@@ -974,6 +977,7 @@ namespace King {
 
         auto &                              GetVertex(const int vertNumber_0_1_2) const { return pt[vertNumber_0_1_2]; }
         // Assignments
+        inline void _vectorcall             Set(const FloatPoint3 pt1In, const FloatPoint3 pt2In, const FloatPoint3 pt3In) { pt[0] = pt1In; pt[1] = pt2In; pt[2] = pt3In; }
     };
     /******************************************************************************
     *    Quad
@@ -1750,7 +1754,7 @@ namespace King {
         ModelScaffold & operator= (ModelScaffold &&in) = default; // move assignment
         // Functionality
         virtual void                        Initalize(const VertexFormat &vertexFormatIn, size_t verticiesIn, size_t indiciesIn) { _vertexFormat = vertexFormatIn; _vertexBufferMaster.Initialize(verticiesIn * _vertexFormat.GetByteSize()); _indexBufferMaster.Initialize(indiciesIn); }
-        void                                Destroy() { _indexBufferMaster.Destroy(); _vertexBufferMaster.Destroy(); _vertexFormat.Destroy(); _boundingBox.SetZero(); }
+        virtual void                        Destroy() { _indexBufferMaster.Destroy(); _vertexBufferMaster.Destroy(); _vertexFormat.Destroy(); _boundingBox.SetZero(); }
 
         virtual bool                        Load(std::string fileNameIN) { return false; }
         virtual bool                        Save(std::string fileNameIN) { return false; }
@@ -1847,7 +1851,7 @@ namespace King {
         LineModel & operator= (const LineModel &in); // copy assignment
         LineModel & operator= (LineModel &&in) = default; // move assignment
         // Functionality
-        void                                Destroy() { _meshes.clear(); King::ModelScaffold::Destroy(); }
+        virtual void                        Destroy() override { _meshes.clear(); King::ModelScaffold::Destroy(); }
 
         virtual Box                         CalculateBoundingBox() override;
         // Accessors
@@ -1863,7 +1867,7 @@ namespace King {
     ******************************************************************************/
     class alignas(16) Model : public ModelScaffold
     {
-        friend class Model_IO; // separate the loading/saving functionality so it can be overridded easily with a new class and operate on Model
+        friend class Model_IO; // separate the loading/saving functionality so it can be overridden easily with a new class and operate on Model
 
         /* variables */
     protected:
@@ -1880,6 +1884,7 @@ namespace King {
         // Construction/Destruction
         Model() { /*_vertexFormat.SetNext(VertexAttrib::enumDesc::position, VertexAttrib::enumFormat::format_float32x3); _vertexBufferMaster.SetStride(_vertexFormat.GetByteSize()); AddMaterial(Material::Create("default"));*/ }
         Model(const VertexFormat& vfIn) { _vertexFormat = vfIn; _vertexBufferMaster.SetStride(_vertexFormat.GetByteSize()); AddMaterial(Material::Create("default")); }
+        Model(const Path& pathIn) { *this = pathIn; } // forward to copy assignment
         Model(const Box& boxIn) { *this = boxIn; } // forward to copy assignment
         Model(const Sphere& sphereIn) { *this = sphereIn; } // forward to copy assignment
         Model(const Model &in) { *this = in; } // forward to copy assignment
@@ -1890,13 +1895,15 @@ namespace King {
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<Model*>(p)); }
+
+        Model& operator= (const Path& pathIn) { Destroy(); CreateMeshFrom(pathIn); return *this; }
         Model& operator= (const Box& boxIn) { Destroy(); CreateMeshFrom(boxIn); return *this; }
         Model& operator= (const Sphere& sphereIn) { Destroy(); CreateMeshFrom(sphereIn); return *this; }
         Model& operator= (const Model &in); // copy assignment
         Model& operator= (Model &&in) = default; // move assignment
 
         // Functionality
-        void                                Destroy() { _meshes.clear(); King::ModelScaffold::Destroy(); }
+        virtual void                        Destroy() override { _meshes.clear(); _materials.clear(); King::ModelScaffold::Destroy(); }
         
         virtual bool                        Load(std::string fileNameIN) override;
         virtual bool                        Save(std::string fileNameIN) override;
@@ -1937,9 +1944,10 @@ namespace King {
         void                                AddMaterial(std::shared_ptr<Material> mtl_IN);
 
         std::shared_ptr<TriangleMesh>       CreateMesh(const uint32_t numTrianglesIn, const uint32_t vbStartIn = 0, const uint32_t ibStartIn = 0); // empty mesh
-        int                                 CreateMeshFrom(const Line& l, Distance d);
-        int                                 CreateMeshFrom(const Path& p, Distance d);
-        int                                 CreateMeshFrom(const Path& pFrom, const Path& pTo);
+        int                                 CreateMeshFrom(const Path& p); // closed path in ccw ordering, RHS as a triangle fan of path(first, second, last) then path(last, second, last-1), etc
+        int                                 CreateMeshFrom(const Line& l, Distance d); // extrude d away from l as a quad
+        int                                 CreateMeshFrom(const Path& p, Distance d); // extrude d away from p as a series of perpendicular quads
+        int                                 CreateMeshFrom(const Path& pFrom, const Path& pTo); // extrude pFrom to pTo as a series of connected quads
         int                                 CreateMeshFrom(const Box& b); // presently, takes over all the data for the model, *** TO DO ** add mesh
         int                                 CreateMeshFrom(const Sphere& s, const uint32_t segmentsIn = 16); 
     };                                                     
@@ -1958,7 +1966,7 @@ namespace King {
         };
         struct Skeleton
         {
-            std::vector<Bone>                _bones; // sort such that a child bone never comes before a parent bone
+            std::vector<Bone>               _bones; // sort such that a child bone never comes before a parent bone
             std::vector<DirectX::XMFLOAT4X4> _toParentTransform; // 1 to 1 size with bones, contains the hiearchy of the bone structure
             // also note that toParentTransform[0] is alway identity as the top most node of the structure
         };
@@ -1976,13 +1984,14 @@ namespace King {
         // Creation/Life cycle
         static std::shared_ptr<BoneHierarchy>   Create() { return std::make_shared<BoneHierarchy>(); }
         static std::unique_ptr<BoneHierarchy>   CreateUnique() { return std::make_unique<BoneHierarchy>(); }
-        BoneHierarchy() { ; }
+        BoneHierarchy() = default
         BoneHierarchy(const BoneHierarchy &in) { *this = in; } // forward to copy assignment
         BoneHierarchy(BoneHierarchy &&in) noexcept { *this = std::move(in); } // forward to move assignment
         virtual ~BoneHierarchy() = default;
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<BoneHierarchy*>(p)); }
+
         BoneHierarchy & operator= (const BoneHierarchy &in) = default; // copy assign
         BoneHierarchy & operator= (BoneHierarchy &&in) = default; // move assign
         // Conversions
@@ -2013,7 +2022,11 @@ namespace King {
         // Creation/Life cycle
         static std::shared_ptr<SkinnedModel>Create() { return std::make_shared<SkinnedModel>(); }
         // Construction/Destruction
-        SkinnedModel() { ; }
+        SkinnedModel() = default;
+        SkinnedModel(const VertexFormat& vfIn) : Model(vfIn) { ; }
+        SkinnedModel(const Path& pathIn) { *this = pathIn; } // forward to copy assignment
+        SkinnedModel(const Box& boxIn) { *this = boxIn; } // forward to copy assignment
+        SkinnedModel(const Sphere& sphereIn) { *this = sphereIn; } // forward to copy assignment
         SkinnedModel(const Model& copyIn) : Model(copyIn) { ; }
         SkinnedModel(Model&& moveIn) noexcept : Model(std::move(moveIn)) { ; }
         SkinnedModel(const SkinnedModel &in) { *this = in; } // forward to copy assignment
@@ -2022,12 +2035,16 @@ namespace King {
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<SkinnedModel*>(p)); }
-        inline SkinnedModel & operator= (const SkinnedModel &in) { Destroy(); Model::operator=(in); if (in._boneHierarchy) { _boneHierarchy = std::make_unique<BoneHierarchy>(); *_boneHierarchy = *in._boneHierarchy; } return *this; } // copy assignment
-        inline SkinnedModel& operator= (const Model& in) { Destroy(); Model::operator=(in); return *this; } // copy assignment
-        inline SkinnedModel& operator= (Model&& in) noexcept { Destroy(); Model::operator=(std::move(in)); return *this; } // move assignment
-        inline SkinnedModel & operator= (SkinnedModel &&in) noexcept { std::swap(_boneHierarchy, in._boneHierarchy); Model::operator=(std::move(in)); return *this; } // move assignment
+
+        inline SkinnedModel& operator= (const Path& pathIn) { Model::operator=(pathIn); return *this; }
+        inline SkinnedModel& operator= (const Box& boxIn) { Model::operator=(boxIn); return *this; }
+        inline SkinnedModel& operator= (const Sphere& sphereIn) { Model::operator=(sphereIn); return *this; }
+        inline SkinnedModel& operator= (const SkinnedModel& in) { Model::operator=(in); if (in._boneHierarchy) { _boneHierarchy = std::make_unique<BoneHierarchy>(); *_boneHierarchy = *in._boneHierarchy; } return *this; } // copy assignment
+        inline SkinnedModel& operator= (const Model& in) { Model::operator=(in); return *this; } // copy assignment
+        inline SkinnedModel& operator= (Model&& in) noexcept { Model::operator=(std::move(in)); return *this; } // move assignment
+        inline SkinnedModel& operator= (SkinnedModel &&in) noexcept { std::swap(_boneHierarchy, in._boneHierarchy); Model::operator=(std::move(in)); return *this; } // move assignment
         // Functionality
-        virtual void                        Destroy() { delete _boneHierarchy.release(); Model::Destroy(); }
+        virtual void                        Destroy() override { delete _boneHierarchy.release(); Model::Destroy(); }
 
         std::vector<float3>                 CalculateVertexSkinPositions(size_t meshIndex = 0);
         // I/O
