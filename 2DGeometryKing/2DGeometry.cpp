@@ -3,6 +3,27 @@
 using namespace King;
 using namespace std;
 
+
+// Output streams
+std::ostream& King::operator<<(std::ostream& os, const King::Line2DF& in) { return os << "{ pt0" << in.pt[0] << " pt1" << in.pt[1] << " }"; }
+std::ostream& King::operator<<(std::ostream& os, const King::Triangle2DF& in) { return os << "{ pt0" << in.pt[0] << " pt1" << in.pt[1] << " pt2" << in.pt[2] << " }"; }
+std::ostream& King::operator<<(std::ostream& os, const King::Rectangle2DF& in) { return os << "{ LT" << in.lt << " RB" << in.rb << " }"; }
+std::ostream& King::operator<<(std::ostream& os, const King::Rectangle2D& in) { return os << "{ LT" << in.lt << " RB" << in.rb << " }"; }
+std::ostream& King::operator<<(std::ostream& os, const King::Circle2DF& in) { return os << "{ Center" << in.GetCenter() << " Radius" << in.GetRadius() << " }"; }
+// Input streams
+std::istream& King::operator>>(std::istream& is, King::Line2DF& out) { return is >> out.pt[0] >> out.pt[1]; } // binary in
+std::istream& King::operator>>(std::istream& is, King::Triangle2DF& out) { return is >> out.pt[0] >> out.pt[1] >> out.pt[2]; }// binary in
+std::istream& King::operator>>(std::istream& is, King::Rectangle2DF& out) { return is >> out.lt >> out.rb; } // binary in
+std::istream& King::operator>>(std::istream& is, King::Rectangle2D& out) { return is >> out.lt >> out.rb; } // binary in
+std::istream& King::operator>>(std::istream& is, King::Circle2DF& out) 
+{
+    float2 c;
+    float r;
+    is >> c >> r; // binary in
+    out.SetCenter(c);
+    out.SetRadius(r);
+    return is;
+}
 /******************************************************************************
 *   json
 ******************************************************************************/
@@ -16,7 +37,7 @@ void King::from_json(const json& j, Line2DF & to) { j.at("pt0").get_to(to.pt[0])
 void King::from_json(const json& j, Triangle2DF & to) { j.at("pt0").get_to(to.pt[0]); j.at("pt1").get_to(to.pt[1]); j.at("pt2").get_to(to.pt[2]); }
 void King::from_json(const json& j, Rectangle2DF & to) { j.at("lt").get_to(to.lt); j.at("rb").get_to(to.rb); }
 void King::from_json(const json& j, Rectangle2D & to) { j.at("lt").get_to(to.lt); j.at("rb").get_to(to.rb); }
-void King::from_json(const json& j, Circle2DF& to) { j.at("centerXYRadiusZ").get_to(to.centerXYradiusZ); }
+void King::from_json(const json& j, Circle2DF& to) { j.at("centerXYRadiusZ").get_to(to._centerXYradiusZ); }
 
 /******************************************************************************
 *   Line2DF::Intersects
@@ -262,3 +283,5 @@ inline King::IntPoint2 King::Rectangle2D::FindNearestPoint(const King::IntPoint2
 {
     return Max(lt, Min(pt2In, rb));
 }
+
+

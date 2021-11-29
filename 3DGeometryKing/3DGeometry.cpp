@@ -63,10 +63,10 @@ std::wistream& King::operator>> (std::wistream& is, King::Box& out)
 
 std::ostream& King::operator<<(std::ostream& os, const King::Frustum& in)
 {
-    os << "{ corners{";
-    for (unsigned int i = 0; i < 8; ++i)
-        os << " [" << i << "]:" << in._FrustumCorners[i];
-    os << "} planes{";
+    //os << "{ corners{";
+    //for (unsigned int i = 0; i < 8; ++i)
+    //    os << " [" << i << "]:" << in._FrustumCorners[i] << os << "} ";
+    os << "planes{";
     for (unsigned int i = 0; i < 6; ++i)
         os << " [" << i << "]:" << in._FrustumPlanes[i];
     os << "} }";
@@ -76,8 +76,8 @@ std::ostream& King::operator<<(std::ostream& os, const King::Frustum& in)
 
 std::istream& King::operator>>(std::istream& is, King::Frustum& out)
 {
-    for (unsigned int i = 0; i < 8; ++i)
-        is >> out._FrustumCorners[i];
+    //for (unsigned int i = 0; i < 8; ++i)
+    //    is >> out._FrustumCorners[i];
     for (unsigned int i = 0; i < 6; ++i)
         is >> out._FrustumPlanes[i];
     return is; // binary in
@@ -846,6 +846,19 @@ bool King::Sphere::Intersects(const Sphere & rhs) const
 
     return  dsq <= rsq;
 }
+/******************************************************************************
+*    Method:    Intersects Orientated Box
+*       Sphere vs. Sphere
+******************************************************************************/
+bool King::Sphere::Intersects(const Box& boxIn, const Quaternion& orientationIn) const
+{
+    if (DirectX::XMQuaternionEqual(orientationIn, DirectX::XMQuaternionIdentity()))
+        return boxIn.Intersects(*this);
+
+    //*** TO DO ***
+    // https://gamedev.stackexchange.com/questions/163873/separating-axis-theorem-obb-vs-sphere
+    return false;
+}
 
 bool King::Sphere::Collision(Point const & pointIn) const { return Contains(pointIn); }
 bool King::Sphere::Collision(Ray const & rayIn) const { float3 ptOut; return Intersects(rayIn, &ptOut); }
@@ -854,6 +867,7 @@ inline bool King::Sphere::Collision(Plane const& planeIn) const { return Interse
 bool King::Sphere::Collision(Sphere const & sphereIn) const { return Intersects(sphereIn); }
 inline bool King::Sphere::Collision(Capsule const& capsuleIn) const { return capsuleIn.Collision(*this); }
 bool King::Sphere::Collision(Box const & boxIn) const { return boxIn.Intersects(*this); }
+inline bool King::Sphere::Collision(Frustum const& frustumIn) const { return frustumIn.Collision(*this); }
 /******************************************************************************
 *    Method:    Merge Sphere
 *       grow the sphere to match the min and max extents of each sphere
@@ -890,7 +904,7 @@ inline void King::Box::Merge(const Box & bIn)
 
     pt_min = Min(temp1, bIn.pt_min);
     pt_max = Max(temp2, bIn.pt_max);
-    assert(pt_min <= pt_max);
+    //assert(pt_min <= pt_max);
 }
 /******************************************************************************
 *    Method:    Merge Point
@@ -1065,6 +1079,7 @@ inline bool King::Box::Collision(Plane const& planeIn) const { return Intersects
 inline bool King::Box::Collision(Sphere const & sphereIn) const { return Intersects(sphereIn); }
 inline bool King::Box::Collision(Capsule const& capsuleIn) const { return capsuleIn.Intersects(*this); }
 inline bool King::Box::Collision(Box const & boxIn) const { return Intersects(boxIn); }
+inline bool King::Box::Collision(Frustum const& frustumIn) const { return frustumIn.Collision(*this); }
 /******************************************************************************
 *    Method:    CollisionVolume
 *       Assumption:  Collision detection has already occured and is true
@@ -1432,7 +1447,33 @@ void King::Box::GetCornersLowest4(DirectX::XMFLOAT3 * pArrayOut, const Quaternio
     // |1.---.2
     // ----------> +X
 }
+/******************************************************************************
+*   Method:    operator= ; copy assignment
+ ******************************************************************************/
+King::ModelScaffold& King::ModelScaffold::operator= (const King::Line& lineIn)
+{
+    _modelName = "Line";
+    // position is added as default
+    // uses the vertx format already set in class
+    _vertexBufferMaster.SetStride(_vertexFormat.GetByteSize());
 
+    // initialize vertex buffer
+    _vertexBufferMaster.Initialize(2 * _vertexBufferMaster.GetStride());
+    auto size = _vertexBufferMaster.GetElements();
+    assert(size == 2);
+
+    auto pos = lineIn.GetVertex(0).Get_XMFLOAT3();
+    SetVertexElement(0, VertexAttrib::enumDesc::position, reinterpret_cast<uint8_t*>(&pos));
+
+    pos = lineIn.GetVertex(1).Get_XMFLOAT3();
+    SetVertexElement(1, VertexAttrib::enumDesc::position, reinterpret_cast<uint8_t*>(&pos));
+
+    _indexBufferMaster = { 0,1 };
+
+    CalculateBoundingBox();
+
+    return *this;
+}
 /******************************************************************************
 *    Method:    operator= ; copy assignment
 *           4-------7
@@ -1509,10 +1550,10 @@ King::LineModel& King::LineModel::operator= (const King::Box& boxIn)
 {
     _modelName = "Box";
     // position is added as default
-    //_vertexFormat.SetNext(VertexAttrib::enumDesc::position, VertexAttrib::enumFormat::format_float32x3);
+    _vertexFormat.SetNext(VertexAttrib::enumDesc::position, VertexAttrib::enumFormat::format_float32x3);
     _vertexFormat.SetNext(VertexAttrib::enumDesc::color, VertexAttrib::enumFormat::format_float32x4);
 
-    _vertexBufferMaster.Initialize(8 * _vertexFormat.GetByteSize()); 
+    _vertexBufferMaster.Initialize((uint32_t)8 * _vertexFormat.GetByteSize()); 
     _vertexBufferMaster.SetStride(_vertexFormat.GetByteSize());
 
     _boundingBox = boxIn;
@@ -1522,7 +1563,7 @@ King::LineModel& King::LineModel::operator= (const King::Box& boxIn)
     _boundingBox.GetCorners8(vp);
 
     // initialize vertex buffer
-    auto size = _vertexBufferMaster.GetElements(); // 8
+    //auto size = _vertexBufferMaster.GetElements(); // 8
     auto color = float4(0.f, 1.0f, 1.0f, 1.0f).Get_XMFLOAT4(); // yellow opaque
 
     for (size_t i = 0; i < 8; ++i)
@@ -1561,6 +1602,76 @@ King::LineModel& King::LineModel::operator= (const King::Box& boxIn)
         m->SetIB(&_indexBufferMaster.GetData());
     }
     return *this;
+}
+/******************************************************************************
+*    Method:    CreateMeshFrom
+******************************************************************************/
+int King::LineModel::CreateMeshFrom(const King::Line& lineIn, float4 colorIn)
+{
+    // check that the format is correct
+    if (!_vertexFormat.Has(VertexAttrib::enumDesc::position))
+        _vertexFormat.SetNext(VertexAttrib::enumDesc::position, VertexAttrib::enumFormat::format_float32x3);
+    if (!_vertexFormat.Has(VertexAttrib::enumDesc::color))
+        _vertexFormat.SetNext(VertexAttrib::enumDesc::color, VertexAttrib::enumFormat::format_float32x4);
+    // encase we changed one above
+    _vertexBufferMaster.SetStride(_vertexFormat.GetByteSize());
+    assert(_vertexFormat.GetByteSize() == 12+16);
+
+    auto color = colorIn.Get_XMFLOAT4();
+
+    // Create our new mesh and add to model
+    auto vbStart = _vertexBufferMaster.GetElements();
+    auto ibStart = _indexBufferMaster.GetElements();
+
+    if (!(bool)(_vertexBufferMaster))
+    {
+        // empty vertex buffer, so create a new one using the _vertexFormat already set in our model
+        // scaffold code only adds position data
+        // note, this operator also resets the indexbuffer
+        ModelScaffold::operator=(lineIn); 
+
+        auto size = _vertexBufferMaster.GetElements();
+        assert(size == 2);
+
+        for (size_t i = 0; i < size; ++i)
+        {
+            SetVertexElement(i, VertexAttrib::enumDesc::color, reinterpret_cast<uint8_t*>(&color));
+        }
+    }
+    else
+    {
+        MemoryBlock<uint8_t> vb(2, _vertexFormat.GetByteSize());
+        _vertexBufferMaster += vb;
+
+        auto size = vb.GetElements();
+        assert(size == 2); // since it is one line
+        for (size_t i = 0; i < size; ++i)
+        {
+            auto pos = lineIn.GetVertex(i).Get_XMFLOAT3();
+            // modifies _vertexBufferMaster 
+            SetVertexElement(vbStart + i, VertexAttrib::enumDesc::position, reinterpret_cast<uint8_t*>(&pos));
+            SetVertexElement(vbStart + i, VertexAttrib::enumDesc::color, reinterpret_cast<uint8_t*>(&color));
+        }
+
+        MemoryBlock<uint32_t> ib;
+        ib = { 0,1 }; // refers to vertex buffer start
+        _indexBufferMaster += ib;
+    }
+    auto mesh = CreateMesh(1, vbStart, ibStart);
+    auto index = _meshes.size() - 1;
+    mesh->Set_name("lineMesh"s + std::to_string(index));
+
+    // since we created a mesh or append data to our master we will reset the pointer addresses in each mesh
+    for (auto& m : _meshes)
+    {
+        m->SetVB(&_vertexBufferMaster.GetData());
+        m->SetIB(&_indexBufferMaster.GetData());
+    }
+
+    // model
+    CalculateBoundingBox();
+
+    return index;
 }
 /******************************************************************************
 *    Method:    operator= ; copy assignment
@@ -1690,7 +1801,7 @@ int King::Model::CreateMeshFrom(const King::Box& boxIn)
         m->SetIB(&_indexBufferMaster.GetData());
     }
 
-    return _meshes.size() - 1;
+    return (int)_meshes.size() - 1;
 }
 /******************************************************************************
 *    Method:    CreateMeshFrom
@@ -1717,10 +1828,10 @@ int King::Model::CreateMeshFrom(const King::Sphere& sphereIn, const uint32_t seg
     // create our sphere by rotating a path around an axis
     Model &m = *this;
 
-    const int radius = sphereIn.GetRadius();
+    const float radius = sphereIn.GetRadius();
     float theta = XM_2PI / (float)segmentsIn;
     Path p;
-    for (int j = 0; j < segmentsIn / 2 + 1; ++j)
+    for (size_t j = 0; j < segmentsIn / 2 + 1; ++j)
     {
         const float cosTheta = cos(theta * (float)j);
         const float sinTheta = sin(theta * (float)j);
@@ -1731,7 +1842,7 @@ int King::Model::CreateMeshFrom(const King::Sphere& sphereIn, const uint32_t seg
 
     auto firstIndex = _meshes.size();
 
-    for (int i = 0; i < segmentsIn; ++i)
+    for (size_t i = 0; i < segmentsIn; ++i)
     {
         quat rotQ(float3(0.f, 1.f, 0.f), theta);
         Path p2 = p * rotQ;
@@ -1754,7 +1865,7 @@ int King::Model::CreateMeshFrom(const King::Sphere& sphereIn, const uint32_t seg
 
     Translate(sphereIn.GetCenter());
 
-    return firstIndex;
+    return (int)firstIndex;
 }
 /******************************************************************************
 *    Method:    operator= ; copy assignment
@@ -2048,14 +2159,18 @@ bool King::Model::Write_v1(ofstream& outfileIn)
 ******************************************************************************/
 Box King::LineModel::CalculateBoundingBox()
 {
-    _boundingBox.SetZero();
-    if (!_meshes.size()) return _boundingBox;
-    else _boundingBox.SetCenter(_meshes[0]->GetVertexPosition(0));
+    if (!_meshes.size())
+    {
+        _boundingBox.SetZero();
+        return _boundingBox;
+    }
 
-    for (auto & mesh : _meshes)
+    _boundingBox = _meshes[0]->CalculateBoundingBox();
+    for (auto& mesh : _meshes)
     {
         _boundingBox.Merge(mesh->CalculateBoundingBox());
     }
+
     return _boundingBox;
 }
 /******************************************************************************
@@ -2074,14 +2189,18 @@ inline std::shared_ptr<LineMesh> King::LineModel::CreateMesh(uint32_t numLinesIn
 ******************************************************************************/
 Box King::Model::CalculateBoundingBox() 
 {
-    _boundingBox.SetZero();
-    if (!_meshes.size()) return _boundingBox;
-    else _boundingBox.SetCenter(_meshes[0]->GetVertexPosition(0));
+    if (!_meshes.size())
+    {
+        _boundingBox.SetZero();
+        return _boundingBox;
+    }
 
+    _boundingBox = _meshes[0]->CalculateBoundingBox();
     for (auto & mesh : _meshes)
     {
         _boundingBox.Merge(mesh->CalculateBoundingBox());
     }
+
     return _boundingBox;
 }
 /******************************************************************************
@@ -2319,7 +2438,7 @@ void King::Model::MergeMeshes(const size_t meshIndex1, const size_t meshIndex2)
     // starting with the first mesh and ending with the last index of the model
     // copy the data into a temporary buffer
     uint32_t splitSizeLHS(0);
-    for (int i = 0; i < firstMesh; ++i)
+    for (size_t i = 0; i < firstMesh; ++i)
         splitSizeLHS += _meshes[i]->GetNumIndicies();
 
     // merge the meshes by moving the indicies around
@@ -2339,7 +2458,7 @@ void King::Model::MergeMeshes(const size_t meshIndex1, const size_t meshIndex2)
 
             // copy data occurring after firstMesh
             uint32_t splitSizeRHS(0);
-            for (int i = firstMesh + 1; i < _meshes.size(); ++i)
+            for (size_t i = firstMesh + 1; i < _meshes.size(); ++i)
                 splitSizeRHS += _meshes[i]->GetNumIndicies();
 
             MemoryBlock<uint32_t> tempBuffer1(splitSizeRHS);
@@ -2348,7 +2467,7 @@ void King::Model::MergeMeshes(const size_t meshIndex1, const size_t meshIndex2)
             // how many elements are between meshF and meshS? 
             const uint32_t meshesToSkip = secondMesh - firstMesh - 1;
             uint32_t elementsToSkipIntempBuffer1(0);
-            for (int i = 0; i < meshesToSkip; ++i)
+            for (size_t i = 0; i < meshesToSkip; ++i)
                 elementsToSkipIntempBuffer1 += _meshes[firstMesh + 1 + i]->GetNumIndicies();
 
             // copy from tempBuffer1 into split to move meshS next to meshF
@@ -2382,6 +2501,111 @@ void King::Model::MergeMeshes(const size_t meshIndex1, const size_t meshIndex2)
     mesh1->SetIBStart(meshF->GetIBStart());
     mesh1->SetVBStart(meshF->GetVBStart());
     mesh1->Set_materialName(meshF->Get_materialName());
+    mesh1->Set_name(meshF->Get_name());
+    mesh1->CalculateBoundingBox();
+    // remove meshS to finish
+    _meshes.erase(std::next(_meshes.begin(), meshIndex2));
+}
+/******************************************************************************
+*    Method:    MergeMeshes
+*       Re-order indicies such that the two buffers are next to one another
+*       and then set their start position (zero base) the same, changing the
+*       index values as necessary.
+*       0   1   2...5   6   7   0   1   2   0   1   0   1   2
+*       -----------------------------------------------------
+*       |       mesh0        |    mesh1   | mesh2 |  mesh3  |
+*
+*       Ex: Merge mesh1 & mesh 3 with elements in mesh2 < mesh3
+*       -----------------------------------------------------
+*       |       mesh0        |    mesh1+mesh3       | mesh2 |
+*       Procedure is this then:
+* /*      -----------------------------------------------------
+*       |                  _indexBufferMaster               |
+*       | _indexBufferMaster |              split           |
+*       |       mesh0        |    meshF   | mesh2 |  meshS  |
+*       |       mesh0        |    meshF   |   tempBuffer1   |
+*       |       mesh0        |    meshF   |  meshS  | mesh2 |
+*       |       mesh0        |    mesh1 + mesh3     | mesh2 |
+*       |                  _indexBufferMaster               |
+* 
+* NOTE: THIS IS IDENTICAL TO Model::MergeMeshes except no materials to handle
+******************************************************************************/
+void King::LineModel::MergeMeshes(const size_t meshIndex1, const size_t meshIndex2)
+{
+    if (meshIndex1 == meshIndex2) return;
+    assert(meshIndex1 < _meshes.size());
+    assert(meshIndex2 < _meshes.size());
+
+    size_t firstMesh = min(meshIndex1, meshIndex2);
+    size_t secondMesh = max(meshIndex1, meshIndex2);
+    auto meshF = GetMesh(firstMesh);
+    auto meshS = GetMesh(secondMesh);
+
+    // starting with the first mesh and ending with the last index of the model
+    // copy the data into a temporary buffer
+    uint32_t splitSizeLHS(0);
+    for (size_t i = 0; i < firstMesh; ++i)
+        splitSizeLHS += _meshes[i]->GetNumIndicies();
+
+    // merge the meshes by moving the indicies around
+    {
+        // split [_indexBufferMaster] into [_indexBufferMaster] + [split]
+        MemoryBlock<uint32_t> split;
+        _indexBufferMaster.Split(splitSizeLHS, &split);
+
+        if (split)
+        {
+            // the split reallocates, adjust mesh references
+            for (auto ea : _meshes)
+            {
+                ea->SetIB(&_indexBufferMaster.GetData());
+                ea->SetVB(&_vertexBufferMaster.GetData());
+            }
+
+            // copy data occurring after firstMesh
+            uint32_t splitSizeRHS(0);
+            for (size_t i = firstMesh + 1; i < _meshes.size(); ++i)
+                splitSizeRHS += _meshes[i]->GetNumIndicies();
+
+            MemoryBlock<uint32_t> tempBuffer1(splitSizeRHS);
+            tempBuffer1.Copy(0, &split.GetData() + meshF->GetNumIndicies(), splitSizeRHS);
+
+            // how many elements are between meshF and meshS? 
+            const uint32_t meshesToSkip = secondMesh - firstMesh - 1;
+            uint32_t elementsToSkipIntempBuffer1(0);
+            for (size_t i = 0; i < meshesToSkip; ++i)
+                elementsToSkipIntempBuffer1 += _meshes[firstMesh + 1 + i]->GetNumIndicies();
+
+            // copy from tempBuffer1 into split to move meshS next to meshF
+            split.Copy(meshF->GetNumIndicies(), &tempBuffer1.GetData() + elementsToSkipIntempBuffer1, meshS->GetNumIndicies());
+
+            // copy from tempBuffer1 the skipped meshs to after meshS
+            if (elementsToSkipIntempBuffer1)
+                split.Copy(meshF->GetNumIndicies() + meshS->GetNumIndicies(), &tempBuffer1.GetData(), elementsToSkipIntempBuffer1);
+
+            _indexBufferMaster.Merge(split);
+            // the merge reallocates, adjust mesh references
+            for (auto ea : _meshes)
+            {
+                ea->SetIB(&_indexBufferMaster.GetData());
+                ea->SetVB(&_vertexBufferMaster.GetData());
+            }
+        }
+    }
+    // add the vertex start delta offset (between the first and second mesh) to the moved second mesh indicies
+    int adj(0);
+    if (meshF->GetVBStart() != meshS->GetVBStart())
+        adj += meshS->GetVBStart() - meshF->GetVBStart();
+    const auto offset = splitSizeLHS + meshF->GetNumIndicies();
+    const auto items = meshS->GetNumIndicies();
+    for (uint32_t i = offset; i < offset + items; ++i)
+        _indexBufferMaster[i] += adj;
+
+    // adjust cobined mesh to match the merge
+    auto mesh1 = GetMesh(meshIndex1);
+    mesh1->SetNumIndicies(meshF->GetNumIndicies() + meshS->GetNumIndicies());
+    mesh1->SetIBStart(meshF->GetIBStart());
+    mesh1->SetVBStart(meshF->GetVBStart());
     mesh1->Set_name(meshF->Get_name());
     mesh1->CalculateBoundingBox();
     // remove meshS to finish
@@ -2568,48 +2792,71 @@ void King::Model::ReverseNormals()
     }
 }
 /******************************************************************************
-*    Method:    ReverseNormals
+*    Method:    ReverseWindingsToMatchNormals
 ******************************************************************************/
 void King::Model::ReverseWindingsToMatchNormals()
 {
-    {
-        auto fnFaceNormal = [](float3 a, float3 b, float3 c) {return Cross((b - a), (c - a)); };
-        auto fnAveNormals = [](float3 a, float3 b, float3 c) {return Normalize(a + b + c); };
 
-        auto startP = GetVertexFormat().GetAttributeByteStart(GetVertexFormat().GetAttributeIndexFromDescription(VertexAttrib::enumDesc::position));
-        auto startN = GetVertexFormat().GetAttributeByteStart(GetVertexFormat().GetAttributeIndexFromDescription(VertexAttrib::enumDesc::normal));
+    auto fnFaceNormal = [](float3 a, float3 b, float3 c) {return Cross((b - a), (c - a)); };
+    auto fnAveNormals = [](float3 a, float3 b, float3 c) {return Normalize(a + b + c); };
+
+    auto startP = GetVertexFormat().GetAttributeByteStart(GetVertexFormat().GetAttributeIndexFromDescription(VertexAttrib::enumDesc::position));
+    auto startN = GetVertexFormat().GetAttributeByteStart(GetVertexFormat().GetAttributeIndexFromDescription(VertexAttrib::enumDesc::normal));
         
-        auto stride = GetVertexBufferMaster().GetStride();
-        auto* p = (reinterpret_cast<char*>(&GetVertexBufferMaster().GetData()) + startP);
-        auto* n = (reinterpret_cast<char*>(&GetVertexBufferMaster().GetData()) + startN);
+    auto stride = GetVertexBufferMaster().GetStride();
+    auto* p = (reinterpret_cast<char*>(&GetVertexBufferMaster().GetData()) + startP);
+    auto* n = (reinterpret_cast<char*>(&GetVertexBufferMaster().GetData()) + startN);
 
-        auto* indicies = reinterpret_cast<uint32_t*>(reinterpret_cast<char*>(&GetIndexBufferMaster().GetData()));
-        const uint32_t numElements = (uint32_t)GetIndexBufferMaster().GetElements();
+    auto* indicies = reinterpret_cast<uint32_t*>(reinterpret_cast<char*>(&GetIndexBufferMaster().GetData()));
+    const uint32_t numElements = (uint32_t)GetIndexBufferMaster().GetElements();
 
-        uint32_t numReversed = 0;
+    uint32_t numReversed = 0;
+
+    for (uint32_t i = 0; i < numElements; i += 3)
+    {
+        float3 v0 = *reinterpret_cast<XMFLOAT3*>(p + indicies[i] * stride);
+        float3 v1 = *reinterpret_cast<XMFLOAT3*>(p + indicies[i + 1] * stride);
+        float3 v2 = *reinterpret_cast<XMFLOAT3*>(p + indicies[i + 2] * stride);
+        auto faceNormal = fnFaceNormal(v0, v1, v2);
+
+        float3 n0 = *reinterpret_cast<XMFLOAT3*>(n + indicies[i] * stride);
+        float3 n1 = *reinterpret_cast<XMFLOAT3*>(n + indicies[i + 1] * stride);
+        float3 n2 = *reinterpret_cast<XMFLOAT3*>(n + indicies[i + 2] * stride);
+        auto aveNormal = fnAveNormals(n0, n1, n2);
+
+        float mustBePositive = Dot(faceNormal, aveNormal);
+        if (abs(mustBePositive) != mustBePositive)
+        {
+            ++numReversed;
+            auto temp = indicies[i + 1];
+            indicies[i + 1] = indicies[i + 2];
+            indicies[i + 2] = temp;
+        }
+    }
+    //cout << "ReverseWindingsToMatchNormals: " << numReversed << '\n';
+
+}
+/******************************************************************************
+*    Method:    ReverseWindings
+*       Flip the winding order so that CCW becomes CW and CW becomes CCW
+*       Operates on the indicies of the index buffer
+******************************************************************************/
+void King::Model::ReverseWindings()
+{
+    if (HasPositions())
+    {
+        auto* indicies = &GetIndexBufferMaster().GetData();
+        const auto numElements = (uint32_t)GetIndexBufferMaster().GetElements();
+
+        // Triangles
+        assert(GetIndexBufferMaster().GetElements() % 3 == 0);
 
         for (uint32_t i = 0; i < numElements; i += 3)
         {
-            float3 v0 = *reinterpret_cast<XMFLOAT3*>(p + indicies[i] * stride);
-            float3 v1 = *reinterpret_cast<XMFLOAT3*>(p + indicies[i + 1] * stride);
-            float3 v2 = *reinterpret_cast<XMFLOAT3*>(p + indicies[i + 2] * stride);
-            auto faceNormal = fnFaceNormal(v0, v1, v2);
-
-            float3 n0 = *reinterpret_cast<XMFLOAT3*>(n + indicies[i] * stride);
-            float3 n1 = *reinterpret_cast<XMFLOAT3*>(n + indicies[i + 1] * stride);
-            float3 n2 = *reinterpret_cast<XMFLOAT3*>(n + indicies[i + 2] * stride);
-            auto aveNormal = fnAveNormals(n0, n1, n2);
-
-            float mustBePositive = Dot(faceNormal, aveNormal);
-            if (abs(mustBePositive) != mustBePositive)
-            {
-                ++numReversed;
-                auto temp = indicies[i + 1];
-                indicies[i + 1] = indicies[i + 2];
-                indicies[i + 2] = temp;
-            }
+            auto temp = indicies[i + 1];
+            indicies[i + 1] = indicies[i + 2];
+            indicies[i + 2] = temp;
         }
-        //cout << "ReverseWindingsToMatchNormals: " << numReversed << '\n';
     }
 }
 /******************************************************************************
@@ -2867,9 +3114,9 @@ bool King::ModelScaffold::Read_v1(ifstream& dataFileIn)
         strOut = temp;
         delete[] temp;
     };
-
+    // text
     ReadString(_modelName);
-
+    // binary vertex format
     for (int i = 0; i < 8; ++i)
     {
         dataFileIn.read(reinterpret_cast<char*>(&_vertexFormat.attributes[i]._offset), sizeof(uint16_t));
@@ -2882,11 +3129,12 @@ bool King::ModelScaffold::Read_v1(ifstream& dataFileIn)
         _vertexFormat.attributes[i]._desc = (enum VertexAttrib::enumDesc)temp;;
     }
     dataFileIn.read(reinterpret_cast<char*>(&_vertexFormat.nextAttribute), sizeof(_vertexFormat.nextAttribute));
-
     dataFileIn.read(reinterpret_cast<char*>(&_indexFormat), sizeof(_indexFormat));
+    // binary model bounding box
     dataFileIn.read(reinterpret_cast<char*>(&_boundingBox), sizeof(_boundingBox));
-
+    // binary vetex data
     rtn = _vertexBufferMaster.ReadMemoryBlock(dataFileIn);
+    // binary index data
     if (rtn) rtn = _indexBufferMaster.ReadMemoryBlock(dataFileIn);        
 
     if (dataFileIn.fail() || !rtn) return false;
@@ -3138,7 +3386,7 @@ int King::Model::CreateMeshFrom(const Line& l, Distance d)
     CalculateBoundingBox();
     // OptimizeMeshVertexBuffer(*tm); // commented out only because it is not tested (modified to accomodate non-zero based indicies and vertex)
     // return the mesh index
-    return _meshes.size() - 1;
+    return (int)_meshes.size() - 1;
 }
 /******************************************************************************
 *    Method:    CreateMeshFrom
@@ -3262,8 +3510,8 @@ int King::Model::CreateMeshFrom(const Path& p, Distance d)
     for (size_t i = 0; i < quads.size(); ++i)
     {
         auto c = i * 4;
-        ib[0] = c + 0; ib[1] = c + 1; ib[2] = c + 2;
-        ib[3] = c + 2; ib[4] = c + 1; ib[5] = c + 3;
+        ib[0] = c + 0ull; ib[1] = c + 1ull; ib[2] = c + 2ull;
+        ib[3] = c + 2ull; ib[4] = c + 1ull; ib[5] = c + 3ull;
 
         _indexBufferMaster.Copy(ibStart + i * 6, &ib.GetData(), ib.GetElements());
     }
@@ -3331,7 +3579,7 @@ int King::Model::CreateMeshFrom(const Path& p, Distance d)
     CalculateBoundingBox();
     // OptimizeMeshVertexBuffer(*tm); // commented out only because it is not tested (modified to accomodate non-zero based indicies and vertex)
     // return the mesh index
-    return _meshes.size() - 1;
+    return (int)_meshes.size() - 1;
 }
 /******************************************************************************
 *    Method:    CreateMeshFrom
@@ -3433,8 +3681,8 @@ int King::Model::CreateMeshFrom(const Path& pFrom, const Path& pTo)
     }
     
     // start where the last mesh left off
-    const uint32_t vbStart(_vertexBufferMaster.GetElements()); // zero based to this start position for mesh
-    const uint32_t ibStart(_indexBufferMaster.GetElements()); // zero based to this start position for mesh
+    const uint32_t vbStart((uint32_t)_vertexBufferMaster.GetElements()); // zero based to this start position for mesh
+    const uint32_t ibStart((uint32_t)_indexBufferMaster.GetElements()); // zero based to this start position for mesh
     // create our mesh and allocate memory
     {
         // total vertex and indicies for our mesh matching our model's master format
@@ -3484,7 +3732,7 @@ int King::Model::CreateMeshFrom(const Path& pFrom, const Path& pTo)
     const auto offsetUVBytes = _vertexFormat.GetAttributeByteStart(indexUV);
     const auto offsetNormBytes = _vertexFormat.GetAttributeByteStart(indexNorm);
 
-    for (int i = 0; i < verts.size(); ++i) 
+    for (size_t i = 0; i < verts.size(); ++i)
     {
         // positions
         assert(indexPos != UINT16_MAX);
@@ -3550,7 +3798,7 @@ int King::Model::CreateMeshFrom(const Path& pFrom, const Path& pTo)
     CalculateBoundingBox();
 
     // return the mesh index
-    return _meshes.size() - 1;
+    return (int)_meshes.size() - 1;
 }
 /******************************************************************************
 *    Method:    SetIndex
@@ -3604,6 +3852,7 @@ void King::ModelScaffold::SetVertexElement(const size_t & vertexIndexIn, const V
 {
     assert((bool)_vertexBufferMaster);
     auto index = _vertexFormat.GetAttributeIndexFromDescription(propertyIn);
+    assert(index != UINT16_MAX); // error
     auto offset = _vertexFormat.GetAttribute(index).GetOffset();
     assert(index < 8);
 
@@ -3638,15 +3887,22 @@ uint16_t King::VertexFormat::GetAttributeIndexFromDescription(VertexAttrib::enum
 ******************************************************************************/
 Box King::LineMesh::CalculateBoundingBox()
 {
-    Box rtn(GetVertexPosition(0));
+    Box rtn;
 
     if (_vb && _vertexFormat.Has(VertexAttrib::enumDesc::position))
     {
+        rtn.Setpt_min(GetVertexPosition(0));
+        rtn.Setpt_max(GetVertexPosition(0));
+
         const auto to = GetNumIndicies();
         for (uint32_t i = 1; i < to; ++i)
         {
             rtn.Merge(GetVertexPosition(i));
         }
+    }
+    else
+    {
+        rtn.SetZero();
     }
     _boundingBox = rtn;
     return rtn;
@@ -3983,42 +4239,6 @@ void King::HeightGrid::Save(const string& nameIn)
     //cout << "  _boundingBox " << _boundingBox << '\n';
 }
 
-inline Frustum & King::Frustum::operator*=(const DirectX::XMMATRIX & m)
-{
-    DirectX::XMMATRIX xForm = DirectX::XMMatrixTranspose(DirectX::XMMatrixInverse(nullptr, m));
-
-    for (int i = 0; i < 8; ++i)
-        _FrustumCorners[i] = DirectX::XMVector3Transform(_FrustumCorners[i], m);
-
-    for (int i = 0; i < 6; ++i)
-        _FrustumPlanes[i] = DirectX::XMVector4Transform(_FrustumPlanes[i], xForm);
-}
-
-bool __vectorcall King::Frustum::Intersect(const Box &boxIn) const
-{
-    float3 zero;
-    for (int i = 0; i < 6; ++i)
-    {
-        // if normal component is (+), use max otherwise min
-        FloatPoint3 mask(_FrustumPlanes[i].GetNormal() > zero);
-        FloatPoint3 farCorner = DirectX::XMVectorSelect(boxIn.GetMin(), boxIn.GetMax(), mask);
-        if (_FrustumPlanes[i].DistanceFromPoint(farCorner) < 0.0f)
-            return false;
-    }
-    return true;
-}
-
-bool __vectorcall King::Frustum::Intersect(const Sphere &sphereIn) const
-{
-    float3 c(sphereIn.GetCenter());
-    float radius = sphereIn.GetRadius();
-    for (int i = 0; i < 6; ++i)
-    {
-        if (_FrustumPlanes[i].DistanceFromPoint(c) + radius < 0.0f)
-            return false;
-    }
-    return true;
-}
 /******************************************************************************
 *    Method:    ConstructPerspectiveFrustum
 ******************************************************************************/
@@ -4109,20 +4329,20 @@ King::Frustum::Frustum(const DirectX::XMMATRIX &projectionMatrixIn)
 {
     const float* ProjMatF = (const float*)&projectionMatrixIn;
 
-    const float RcpXX = 1.0f / ProjMatF[0];
-    const float RcpYY = 1.0f / ProjMatF[5];
-    const float RcpZZ = 1.0f / ProjMatF[10];
+    const float HTan = 1.0f / ProjMatF[0]; // Horz.Tangent
+    const float VTan = 1.0f / ProjMatF[5]; // Vert.Tangent
+    const float DTan = 1.0f / ProjMatF[10]; // Depth.Tangent
 
     // Identify if the projection is perspective or orthographic by looking at the 4th row.
     if (ProjMatF[3] == 0.0f && ProjMatF[7] == 0.0f && ProjMatF[11] == 0.0f && ProjMatF[15] == 1.0f)
     {
         // Orthographic
-        float Left = (-1.0f - ProjMatF[12]) * RcpXX;
-        float Right = (1.0f - ProjMatF[12]) * RcpXX;
-        float Top = (1.0f - ProjMatF[13]) * RcpYY;
-        float Bottom = (-1.0f - ProjMatF[13]) * RcpYY;
-        float Front = (0.0f - ProjMatF[14]) * RcpZZ;
-        float Back = (1.0f - ProjMatF[14]) * RcpZZ;
+        float Left = (-1.0f - ProjMatF[12]) * HTan;
+        float Right = (1.0f - ProjMatF[12]) * HTan;
+        float Top = (1.0f - ProjMatF[13]) * VTan;
+        float Bottom = (-1.0f - ProjMatF[13]) * VTan;
+        float Front = (0.0f - ProjMatF[14]) * DTan;
+        float Back = (1.0f - ProjMatF[14]) * DTan;
 
         // Check for reverse Z here.  The bounding planes need to point into the frustum.
         if (Front < Back)
@@ -4135,17 +4355,17 @@ King::Frustum::Frustum(const DirectX::XMMATRIX &projectionMatrixIn)
         // Perspective
         float NearClip, FarClip;
 
-        if (RcpZZ > 0.0f)    // Reverse Z
+        if (DTan > 0.0f)    // Reverse Z
         {
-            FarClip = ProjMatF[14] * RcpZZ;
-            NearClip = FarClip / (RcpZZ + 1.0f);
+            FarClip = ProjMatF[14] * DTan;
+            NearClip = FarClip / (DTan + 1.0f);
         }
         else
         {
-            NearClip = ProjMatF[14] * RcpZZ;
-            FarClip = NearClip / (RcpZZ + 1.0f);
+            NearClip = ProjMatF[14] * DTan;
+            FarClip = NearClip / (DTan + 1.0f);
         }
-        ConstructPerspectiveFrustum(RcpXX, RcpYY, NearClip, FarClip);
+        ConstructPerspectiveFrustum(HTan, VTan, NearClip, FarClip);
     }
 }
 /******************************************************************************
@@ -4538,7 +4758,7 @@ bool King::Plane::Intersects(const Line& lineIn, float3* ptOut) const
         {
             // P0 is on the plane and the line is parallel to the plane
             // so all points intersects, return the mid point of the line
-            *ptOut = lineIn.GetMidPoint();
+            *ptOut = lineIn.GetCenter();
             return true;
         }
         return false;
@@ -4571,7 +4791,7 @@ inline bool __vectorcall King::Plane::Intersects(const Line& lineIn, Point* ptOu
         {
             // P0 is on the plane and the line is parallel to the plane
             // so all points intersects, return the mid point of the line
-            *ptOut = lineIn.GetMidPoint();
+            *ptOut = lineIn.GetCenter();
             return true;
         }
         return false;
@@ -4699,7 +4919,59 @@ inline bool __vectorcall King::Plane::Intersects(const Box& boxIn) const
     // intersecting plane
     return true;
 }
+/******************************************************************************
+*   Class Frustum
+******************************************************************************/
+// Streams
+// json
+// operators
+// methods
+// Positive normals indicate which side of the face the box is on
+bool __vectorcall King::Frustum::Intersect(const Sphere sphereIn) const
+{
+    float3 c(sphereIn.GetCenter());
+    float radius = sphereIn.GetRadius();
 
+    for (int i = kNearPlane; i < kINVALID; ++i)
+    {
+        Plane p = GetFrustumPlane((PlaneID)i);
+
+        if (p.DistanceFromPoint(c) + radius < 0.0f)
+            return false;
+    }
+    return true;
+}
+bool King::Frustum::Intersect(Box const& boxIn) const
+{
+    const auto& pt_min = boxIn.GetMin();
+    const auto& pt_max = boxIn.GetMax();
+    const auto zero = float3();
+
+    for (int i = kNearPlane; i < kINVALID; ++i)
+    {
+        Plane p = GetFrustumPlane((PlaneID)i);
+        float3 mask = DirectX::XMVectorGreater(p.GetNormal(), zero);
+
+        auto furthestCorner =  DirectX::XMVectorSelect(pt_min, pt_max, mask);
+
+        if (p.DistanceFromPoint(furthestCorner) < 0.0f)
+            return false;
+    }
+
+    return true;
+}
+King::Frustum& King::Frustum::operator*=(const DirectX::XMMATRIX& m)
+{
+    //DirectX::XMMATRIX xForm = DirectX::XMMatrixTranspose(DirectX::XMMatrixInverse(nullptr, m));
+
+    for (int i = 0; i < 8; ++i)
+        _FrustumCorners[i] = DirectX::XMVector3Transform(_FrustumCorners[i], m);
+
+    for (int i = 0; i < 6; ++i)
+        _FrustumPlanes[i] = DirectX::XMVector4Transform(_FrustumPlanes[i], m);
+
+    return *this;
+}
 /******************************************************************************
 *   Class Contact
 ******************************************************************************/
@@ -5199,9 +5471,9 @@ inline vector<float3> King::Contact::ClosestPointsToFaces(vector<float3>* contac
     // Remove verts which are very close to each other
 
     auto n(temp.size());
-    for (int i = 0; i < n; i++)
+    for (size_t i = 0; i < n; i++)
     {
-        for (int j = i; j < n; j++)
+        for (size_t j = i; j < n; j++)
         {
             if (i != j)
             {
@@ -5211,7 +5483,7 @@ inline vector<float3> King::Contact::ClosestPointsToFaces(vector<float3>* contac
                 if (dist < 0.05f)
                 {
 
-                    for (int k = j; k < n-1; k++)
+                    for (size_t k = j; k < n-1; k++)
                     {
                         temp[k] = temp[k + 1];
                     }
@@ -5234,8 +5506,8 @@ inline float3 King::Contact::ClosestPointEdgeEdge(const vector<float3>& contactV
     Line lAB(contactVertsA[0], contactVertsB[1]);
     Line lBA(contactVertsB[0], contactVertsA[1]);
 
-    auto pt1 = lA.FindNearestPointOnLineSegment(lBA.GetMidPoint());
-    auto pt2 = lB.FindNearestPointOnLineSegment(lAB.GetMidPoint());
+    auto pt1 = lA.FindNearestPointOnLineSegment(lBA.GetCenter());
+    auto pt2 = lB.FindNearestPointOnLineSegment(lAB.GetCenter());
 
     return (pt1 + pt2) * 0.5f;
 }
@@ -5248,7 +5520,7 @@ inline bool King::Contact::VertInsideFace(const vector<float3>& contactVerts, co
     float3 n = Cross(v1, v0);
     n = Normalize(n);
 
-    for (int i = 0; i < contactVerts.size(); i++)
+    for (size_t i = 0; i < contactVerts.size(); i++)
     {
         float3 s0 = contactVerts[i];
         float3 s1 = contactVerts[(i + 1) % 4];

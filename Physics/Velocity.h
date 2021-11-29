@@ -81,6 +81,7 @@ namespace King {
     class Velocity;
     Velocity operator*(const UnitOfMeasure::Time &t, const Acceleration & accIn); // dv = ͢vf - ͢vi = 𝛥t * ͢a 
     Velocity operator*(const Acceleration & accIn, const UnitOfMeasure::Time &t); // dv = ͢vf - ͢vi = ͢a * 𝛥t
+    // also refer to angular acceleration for more tangential Velocity functions
 
     class alignas(16) Velocity
     {
@@ -104,7 +105,10 @@ namespace King {
         Velocity(const Velocity &in) { *this = in; } // forward to copy assignment
         Velocity(Velocity &&in) noexcept { *this = std::move(in); } // forward to move assignment
 
-        virtual ~Velocity() { ; }
+        ~Velocity() { ; }
+
+        static const std::string Unit() { return UnitOfMeasure::Speed::_unit; }
+        static const std::wstring UnitW() { return UnitOfMeasure::Speed::_wunit; }
 
         // Conversions
         inline explicit operator float() const { return _magnitude; }
@@ -121,17 +125,17 @@ namespace King {
         inline Velocity operator- () const { return Velocity(-_unit_direction); }
         inline Velocity operator+ (const Velocity & in) const { return Velocity(GetVector() + in.GetVector()); }
         inline Velocity operator- (const Velocity & in) const { return Velocity(GetVector() - in.GetVector()); }
-        inline Velocity operator* (const Velocity & in) const { return Velocity(GetVector() * in.GetVector()); } // SpeedSq
-        inline Velocity operator/ (const Velocity & in) const { return Velocity(GetVector() / in.GetVector()); } // unitless
+        UnitOfMeasure::SpeedSq operator* (const Velocity& in) const;
+        float operator/ (const Velocity& in) const; // unitless, ratio
         inline Velocity & operator+= (const Velocity & in) { *this = *this + in; return *this; } 
         inline Velocity & operator-= (const Velocity & in) { *this = *this - in; return *this; }
-        inline Velocity & operator*= (const Velocity & in) { *this = *this * in; return *this; }
-        inline Velocity & operator/= (const Velocity & in) { *this = *this / in; return *this; }
-        inline Velocity operator* (const float & in) const { return Velocity(_magnitude * in, _unit_direction); }
+        inline UnitOfMeasure::SpeedSq operator* (const float& in) const { return UnitOfMeasure::SpeedSq(_magnitude * in); }
         
 
         // Init/Start/Stop/Destroy
         // Functionality
+        bool                                IsZero() const { return _magnitude == 0.f; }
+        bool                                IsOrNearZero() const { return _magnitude <= 1.0e-5f; }
         // Accessors
         const auto&                         Get_magnitude() const { return _magnitude; }
         auto&                               Get_magnitude() { return _magnitude; }

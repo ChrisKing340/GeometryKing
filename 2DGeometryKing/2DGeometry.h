@@ -16,7 +16,7 @@ Usage:          Use the typedef keywords in your applications as a generic
                                 
 Contact:        https://chrisking340.github.io/GeometryKing/
 
-Copyright (c) 2019 Christopher H. King
+Copyright (c) 2019 - 2021 Christopher H. King
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -52,8 +52,16 @@ SOFTWARE.
 #endif
 
 #define KING_2DGEOMETRY_VERSION_MAJOR 1
-#define KING_2DGEOMETRY_VERSION_MINOR 0
+#define KING_2DGEOMETRY_VERSION_MINOR 2
 #define KING_2DGEOMETRY_VERSION_PATCH 0
+
+/*
+    History:
+        KING_2DGEOMETRY_VERSION_MINOR 1 Release:
+            Authored circle 2D class
+        KING_2DGEOMETRY_VERSION_MINOR 2 Release:
+            Authored std:cout functionality with ostream and istream to all 2D classes
+*/
 
 #include "..\MathSIMD\MathSIMD.h"
 
@@ -254,10 +262,10 @@ namespace King {
         inline const auto                   GetLB() const { return FloatPoint2(lt.GetX(), rb.GetY()); }
         inline const auto                   GetRT() const { return FloatPoint2(rb.GetX(), lt.GetY()); }
         inline RECT                         Get_RECT() const { RECT r; r.left = (long)GetLeft(); r.top = (long)GetTop(); r.right = (long)GetRight(); r.bottom = (long)GetBottom(); return r; }
-        inline auto                         Get_Triangle2DF_LB_CCW() const { Triangle2DF(GetLT(), GetLB(), GetRB()); } // CCW winding
-        inline auto                         Get_Triangle2DF_RT_CCW() const { Triangle2DF(GetRB(), GetRT(), GetLT()); } // CCW winding
-        inline auto                         Get_Triangle2DF_LT_CW() const { Triangle2DF(GetLB(), GetLT(), GetRT()); } // CW winding
-        inline auto                         Get_Triangle2DF_RB_CW() const { Triangle2DF(GetRT(), GetRB(), GetLB()); } // CW winding
+        inline auto                         Get_Triangle2DF_LB_CCW() const { return Triangle2DF(GetLT(), GetLB(), GetRB()); } // CCW winding
+        inline auto                         Get_Triangle2DF_RT_CCW() const { return Triangle2DF(GetRB(), GetRT(), GetLT()); } // CCW winding
+        inline auto                         Get_Triangle2DF_LT_CW() const { return Triangle2DF(GetLB(), GetLT(), GetRT()); } // CW winding
+        inline auto                         Get_Triangle2DF_RB_CW() const { return Triangle2DF(GetRT(), GetRB(), GetLB()); } // CW winding
         // Assignments
         inline void __vectorcall            Set(const Rectangle2DF &rIn) { *this = rIn; }
         inline void __vectorcall            Set(const Triangle2DF &triIn) { Set(Min(Min(triIn.GetVertex(0), triIn.GetVertex(1)), triIn.GetVertex(2)), Max(Max(triIn.GetVertex(0), triIn.GetVertex(1)), triIn.GetVertex(2))); }
@@ -349,12 +357,10 @@ namespace King {
         inline void                         MoveTo(const IntPoint2 &pt2In) { auto wh = GetSize(); lt = pt2In; rb = lt + wh; }
         inline bool                         MoveTo(const long &xIn, const long &yIn) { MoveTo(IntPoint2(xIn, yIn)); }
 
-        inline void __vectorcall            Grow(const FloatPoint2 scale3In) { auto s = scale3In * GetSize(); SetWH(s); }
+        inline void __vectorcall            Grow(const FloatPoint2 scale3In) { auto s = scale3In * GetSize().Get_XMFLOAT2(); SetWH(s); }
 
         inline bool                         Intersects(const Rectangle2D &rectIn) const { return (rectIn.lt.GetX() < rb.GetX()) && (lt.GetX() < rectIn.rb.GetX()) && (rectIn.lt.GetY() < rb.GetY()) && (lt.GetY() < rectIn.rb.GetY()); }
-        inline bool                         Intersects(const RECT &rectIn) const { return (rectIn.left < rb.GetX()) && (lt.GetX() < rectIn.right) && (rectIn.top < rb.GetY()) && (lt.GetY() < rectIn.bottom); }
         inline bool                         Contains(const IntPoint2 pt2In) const { return (lt.GetX() <= pt2In.GetX()) && (pt2In.GetX() < rb.GetX()) && (lt.GetY() <= pt2In.GetY()) && (pt2In.GetY() < rb.GetY()); }
-        inline bool                         Contains(const long &xIn, const long &yIn) const { return (lt.GetX() <= xIn) && (xIn < rb.GetX()) && (lt.GetY() <= yIn) && (yIn < rb.GetY()); }
         
         inline void                         ClipTo(const Rectangle2D& rectIn) { SetLT(Max(GetLT(), rectIn.GetLT())); SetRB(Min(GetRB(), rectIn.GetRB()));}
 
@@ -397,7 +403,7 @@ namespace King {
     {
         /* variables */
     public:
-        FloatPoint3 centerXYradiusZ;
+        FloatPoint3 _centerXYradiusZ;
 
         /* methods */
     public:
@@ -408,7 +414,7 @@ namespace King {
         Circle2DF() = default;
         Circle2DF(const Circle2DF &in) { *this = in; } // copy, involk operator=(&int)
         Circle2DF(Circle2DF &&in) { *this = std::move(in); } // move, involk operator=(&&in)
-        Circle2DF(const FloatPoint2 &centerIn, const float &radiusIn) { centerXYradiusZ = DirectX::XMVectorSet(centerIn.GetX(), centerIn.GetY(), radiusIn, 0.0f); }
+        Circle2DF(const FloatPoint2 &centerIn, const float &radiusIn) { _centerXYradiusZ = DirectX::XMVectorSet(centerIn.GetX(), centerIn.GetY(), radiusIn, 0.0f); }
 
         virtual ~Circle2DF() = default;
 
@@ -424,12 +430,29 @@ namespace King {
         
         inline FloatPoint2                  FindNearestPoint(const FloatPoint2 &pt2In) const;
         // Accessors
-        const FloatPoint2                   GetCenter() const { return FloatPoint2(centerXYradiusZ); }
-        const float                         GetRadius() const { return centerXYradiusZ.GetZ(); }
-        const FloatPoint3 &                 GetXYradiusZ() const { return centerXYradiusZ; }
+        const FloatPoint2                   GetCenter() const { return FloatPoint2(_centerXYradiusZ.GetVecConst()); }
+        const float                         GetRadius() const { return _centerXYradiusZ.GetZ(); }
+        const FloatPoint3 &                 GetXYradiusZ() const { return _centerXYradiusZ; }
         // Assignments
-        inline void __vectorcall            Set(const Circle2DF &in) { centerXYradiusZ = in.centerXYradiusZ; }
+        inline void __vectorcall            Set(const Circle2DF in) { _centerXYradiusZ = in._centerXYradiusZ; }
+        inline void __vectorcall            SetCenter(const FloatPoint3 c) { _centerXYradiusZ.SetX(c.GetX());  _centerXYradiusZ.SetY(c.GetY()); }
+        inline void __vectorcall            SetRadius(const float r) { _centerXYradiusZ.SetZ(r); }
+        inline void __vectorcall            Set_centerXYradiusZ(const FloatPoint3 in) { _centerXYradiusZ = in; }
     };
+    /******************************************************************************
+    *   streams to enable std::cout and std::cin
+    ******************************************************************************/
+    std::ostream& operator<< (std::ostream& os, const King::Line2DF& in);
+    std::ostream& operator<< (std::ostream& os, const King::Triangle2DF& in);
+    std::ostream& operator<< (std::ostream& os, const King::Rectangle2DF& in);
+    std::ostream& operator<< (std::ostream& os, const King::Rectangle2D& in);
+    std::ostream& operator<< (std::ostream& os, const King::Circle2DF& in);
+
+    std::istream& operator>> (std::istream& is, King::Line2DF& out);
+    std::istream& operator>> (std::istream& is, King::Triangle2DF& out);
+    std::istream& operator>> (std::istream& is, King::Rectangle2DF& out);
+    std::istream& operator>> (std::istream& is, King::Rectangle2D& out);
+    std::istream& operator>> (std::istream& is, King::Circle2DF& out);
     /******************************************************************************
     *   json
     ******************************************************************************/

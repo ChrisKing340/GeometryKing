@@ -83,7 +83,10 @@ namespace King {
         Force(const Force &in) { *this = in; } // forward to copy assignment
         Force(Force &&in) noexcept { *this = std::move(in); } // forward to move assignment
 
-        virtual ~Force() { ; }
+        ~Force() { ; }
+
+        static const std::string Unit() { return UnitOfMeasure::Strength::_unit; }
+        static const std::wstring UnitW() { return UnitOfMeasure::Strength::_wunit; }
 
         // Conversions
         inline explicit operator float() const { return _magnitude; }
@@ -116,19 +119,21 @@ namespace King {
         inline Force & operator/= (const Force & in) { *this = *this / in; return *this; }
         // Init/Start/Stop/Destroy
         // Functionality
+        bool                                IsZero() const { return _magnitude == 0.f; }
+        bool                                IsOrNearZero() const { return _magnitude <= 1.0e-5f; }
         // Accessors
         const auto &                        Get_magnitude() const { return _magnitude; }
         auto &                              Get_magnitude() { return _magnitude; }
         const auto &                        Get_unit_direction() const { return _unit_direction; }
         auto &                              Get_unit_direction() { return _unit_direction; }
         const float3                        GetVector() const { return _unit_direction * _magnitude; }
-        float                               GetValueEN() const { return UnitOfMeasure::Ntolbf * _magnitude; }
-        float                               GetValueSI() const { return UnitOfMeasure::N * _magnitude; }
+        float                               GetValueEN() const { return UnitOfMeasure::Ntolbf * (float)_magnitude; }
+        float                               GetValueSI() const { return UnitOfMeasure::N * (float)_magnitude; }
         // Assignments
         // Note: set unit direction before magnitude in case sign of magnitude is switched
         void __vectorcall                   SetVector(const float3& vecotrIN) { _magnitude = float3::Magnitude(vecotrIN); _unit_direction = float3::Normal(vecotrIN); }
         void                                Set_magnitude(const float &_magnitude_IN) { _magnitude = abs(_magnitude_IN); if (_magnitude != _magnitude_IN) { _unit_direction = -_unit_direction; }; }
-        void __vectorcall                   Set_unit_direction(const float3 &_unit_direction_IN) { _unit_direction = float3::Normal(_unit_direction_IN); }
+        void __vectorcall                   Set_unit_direction(const float3 &_unit_direction_IN) { _unit_direction = _unit_direction_IN; } // assumes it is normalized on input
     
         // Input & Output functions that can have access to protected & private data
         friend std::ostream& operator<< (std::ostream& os, const Force& in);

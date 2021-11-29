@@ -71,9 +71,9 @@ namespace King {
         bool                                    _stationary = false;
 
         std::shared_ptr<PhysicsMaterial>        _sp_material;
-        float                                   _coefficientOfDrag;
-        float                                   _crossSectionalArea; // in direction of motion
-        float                                   _volume; // m^3
+        float                                   _coefficientOfDrag = 0.f;
+        float                                   _crossSectionalArea = 1.f; // in direction of motion
+        float                                   _volume = 0.f; // m^3
         UnitOfMeasure::Mass                     _mass; // kg
         Position                                _centerOfMassLocalSpace;  // affinity transform, set Pose rotation center *** TO DO ***
 

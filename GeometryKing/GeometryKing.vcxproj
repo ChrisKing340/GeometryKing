@@ -171,6 +171,7 @@
     <ClInclude Include="..\3DGeometryKing\3DGeometry.h" />
     <ClInclude Include="..\General\MemoryBlock.h" />
     <ClInclude Include="..\General\TextFileParse.h" />
+    <ClInclude Include="..\GeometryKing.h" />
     <ClInclude Include="..\MathSIMD\MathSIMD.h" />
     <ClInclude Include="..\Physics\Acceleration.h" />
     <ClInclude Include="..\Physics\AngularAcceleration.h" />
@@ -178,6 +179,7 @@
     <ClInclude Include="..\Physics\Distance.h" />
     <ClInclude Include="..\Physics\Force.h" />
     <ClInclude Include="..\Physics\PhysicsMaterial.h" />
+    <ClInclude Include="..\Physics\PhysicsObject.h" />
     <ClInclude Include="..\Physics\PhysicsRigidBody.h" />
     <ClInclude Include="..\Physics\PhysicsState.h" />
     <ClInclude Include="..\Physics\Position.h" />

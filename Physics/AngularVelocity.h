@@ -82,8 +82,6 @@ namespace King {
     class Distance;
     AngularVelocity operator*(const UnitOfMeasure::Time &t, const AngularAcceleration & accIn); 
     AngularVelocity operator*(const AngularAcceleration & accIn, const UnitOfMeasure::Time &t); 
-    Acceleration operator*(const Distance& rIn, const AngularVelocity& angularVelIn); // normal acceleration
-    Acceleration operator*(const AngularVelocity& angularVelIn, const Distance& rIn); // normal acceleration
 
     class alignas(16) AngularVelocity
     {
@@ -100,14 +98,18 @@ namespace King {
         AngularVelocity() = default;
         explicit AngularVelocity(const float &magIn, const float3 &axisIn) { _magnitude = abs(magIn); _unit_direction = float3::Normal(axisIn); if (_magnitude != magIn) { _unit_direction = -_unit_direction; }; }
         explicit AngularVelocity(const UnitOfMeasure::AngularSpeed&s, const float3 & axisIn) { _magnitude = abs(s); _unit_direction = float3::Normal(axisIn); if (_magnitude != s) { _unit_direction = -_unit_direction; }; }
-        AngularVelocity(const float3 &vectorIn) { _magnitude = float3::Magnitude(vectorIn); _unit_direction = float3::Normal(vectorIn); }
+        AngularVelocity(const float3 vectorIn) { _magnitude = float3::Magnitude(vectorIn); _unit_direction = float3::Normal(vectorIn); }
+        AngularVelocity(const Quaternion aVelIn) { _magnitude = aVelIn.GetAngle(); _unit_direction = aVelIn.GetAxis(); } // must be less than one rotation / sec (or Quaternion overflows)
         explicit AngularVelocity(const AngularAcceleration& accIn, const UnitOfMeasure::Time &t) { _magnitude = accIn.Get_magnitude() * t; _unit_direction = accIn.Get_unit_direction(); }
         explicit AngularVelocity(const std::vector<AngularAcceleration> & accelIn, const UnitOfMeasure::Time &t) { float3 sum; for (const auto & e : accelIn) sum += e.GetVector(); *this = AngularAcceleration(sum) * t; }
         explicit AngularVelocity(const float& x, const float& y, const float& z) : AngularVelocity(float3(x, y, z)) { ; }
         AngularVelocity(const AngularVelocity &in) { *this = in; } // forward to copy assignment
         AngularVelocity(AngularVelocity &&in) noexcept { *this = std::move(in); } // forward to move assignment
 
-        virtual ~AngularVelocity() { ; }
+        ~AngularVelocity() { ; }
+
+        static const std::string Unit() { return UnitOfMeasure::AngularSpeed::_unit; }
+        static const std::wstring UnitW() { return UnitOfMeasure::AngularSpeed::_wunit; }
 
         // Conversions
         inline explicit operator float() const { return _magnitude; }
@@ -138,6 +140,15 @@ namespace King {
         inline AngularVelocity operator* (const float & in) const { return AngularVelocity(_magnitude * in, _unit_direction); }
         // Init/Start/Stop/Destroy
         // Functionality
+        bool                                IsZero() const { return _magnitude == 0.f; }
+        bool                                IsOrNearZero() const { return _magnitude <= 1.0e-5f; }
+
+        // circular motion, total linear acceleration of a point on a rigid body is:
+        Acceleration                        CalculateLinearAccelerationFrom(const Acceleration& a0In, const AngularAcceleration& alphaIn, const Distance& rIn); // ͢a = ͢a0 + 𝛼 x ͢r + ͢𝜔 x ( ͢𝜔 x ͢r )
+        Acceleration                        CalculateNormalAccelerationAlong_radius(const Distance& rIn) const; // ͢an = r • 𝜔 ^ 2 ; with direction along radius (and opposite) to maintain curviture
+        // circular motion, center of mass at rest, linear velocity of a point on a rigid body is:
+        Velocity                            CalculateTangentialVelocityAtEndOf_radius(const Distance& rIn) const; // v = ͢𝜔 x ͢r ; 
+        
         // Accessors
         const auto&                         Get_magnitude() const { return _magnitude; }
         auto&                               Get_magnitude() { return _magnitude; }

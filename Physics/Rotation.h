@@ -74,16 +74,19 @@ namespace King {
         // Creation/Life cycle
         static std::shared_ptr<Rotation> Create() { return std::make_shared<Rotation>(); }
         Rotation() = default;
+        explicit Rotation(const AngularAcceleration alphaIn, const UnitOfMeasure::TimeSq dtSqIn) { SetFrom(alphaIn, dtSqIn); }
+        explicit Rotation(const AngularVelocity omegaIn, const UnitOfMeasure::Time dtIn) { SetFrom(omegaIn, dtIn); }
         explicit Rotation(const Quaternion& quatIn) { Set(quatIn); }
-        explicit Rotation(const float& magIn, const float3& dirIn) { _magnitude = abs(magIn); _unit_direction = float3::Normal(dirIn); if (_magnitude != magIn) { _unit_direction = -_unit_direction; }; _rotation = Quaternion(float3(_magnitude * _unit_direction).Get_XMFLOAT3()); }
-        explicit Rotation(const UnitOfMeasure::Angle& l, const float3& eulerIn) { _magnitude = abs(l); _unit_direction = float3::Normal(eulerIn); if (_magnitude != l) { _unit_direction = -_unit_direction; }; _rotation = Quaternion(float3(_magnitude * _unit_direction).Get_XMFLOAT3()); }
-        Rotation(const float3 &vectorIn) { _magnitude = float3::Magnitude(vectorIn); _unit_direction = float3::Normal(vectorIn); }
-        explicit Rotation(const AngularAcceleration& accIn, const UnitOfMeasure::Time &t) { _magnitude = UnitOfMeasure::Angle(static_cast<float>(accIn.Get_magnitude()) * 0.5f * (float)t * (float)t); _unit_direction = accIn.Get_unit_direction(); }
-        explicit Rotation(const AngularVelocity & velIn, const UnitOfMeasure::Time &t) { _magnitude = UnitOfMeasure::Angle(static_cast<float>(velIn.Get_magnitude()) * t); _unit_direction = velIn.Get_unit_direction(); }
+        explicit Rotation(const float& magIn, const float3& dirIn) { _magnitude = abs(magIn); _unit_direction = float3::Normal(dirIn); if (_magnitude != magIn) { _unit_direction = -_unit_direction; }; CalculateQuat(); }
+        explicit Rotation(const UnitOfMeasure::Angle& l, const float3& eulerIn) { _magnitude = abs(l); _unit_direction = float3::Normal(eulerIn); if (_magnitude != l) { _unit_direction = -_unit_direction; }; CalculateQuat(); }
+        Rotation(const float3& vectorIn) { _magnitude = float3::Magnitude(vectorIn); _unit_direction = float3::Normal(vectorIn); CalculateQuat(); }
         Rotation(const Rotation &in) { *this = in; } // forward to copy assignment
         Rotation(Rotation &&in) noexcept { *this = std::move(in); } // forward to move assignment
 
-        virtual ~Rotation() { ; }
+        ~Rotation() { ; }
+
+        static const std::string Unit() { return UnitOfMeasure::Angle::_unit; }
+        static const std::wstring UnitW() { return UnitOfMeasure::Angle::_wunit; }
 
         // Conversions
         inline explicit operator float() const { return _magnitude; }
@@ -95,8 +98,8 @@ namespace King {
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<Rotation*>(p)); }
-        inline Rotation & operator= (const Rotation &other) { _magnitude = other._magnitude; _unit_direction = other._unit_direction; return *this; } // copy assign
-        inline Rotation & operator= (Rotation &&other) noexcept { std::swap(_magnitude, other._magnitude); std::swap(_unit_direction, other._unit_direction); return *this; } // move assign
+        inline Rotation& operator= (const Rotation& other) { _magnitude = other._magnitude; _unit_direction = other._unit_direction; _rotation = other._rotation; return *this; } // copy assign
+        inline Rotation & operator= (Rotation &&other) noexcept { std::swap(_magnitude, other._magnitude); std::swap(_unit_direction, other._unit_direction); std::swap(_rotation, other._rotation); return *this; } // move assign
         explicit operator bool() const { return (bool)_magnitude && (bool)_unit_direction; } // valid
         bool operator !() const { return !(bool)_magnitude || !(bool)_unit_direction; } // invalid
         // Math Operators
@@ -105,6 +108,8 @@ namespace King {
         inline Rotation operator- (const Rotation & in) const { return Rotation(GetQuaternion() - in.GetQuaternion()); }
         inline Rotation operator* (const Rotation & in) const { return Rotation(GetQuaternion() * in.GetQuaternion()); }
         inline Rotation operator/ (const Rotation & in) const { return Rotation(GetQuaternion() / in.GetQuaternion()); }
+        inline Rotation operator+ (const Quaternion& in) const { return Rotation(GetQuaternion() + in); }
+        inline Rotation operator* (const Quaternion& in) const { return Rotation(GetQuaternion() * in); }
         inline Rotation & operator+= (const Rotation & in) { *this = *this + in; return *this; }
         inline Rotation & operator-= (const Rotation & in) { *this = *this - in; return *this; }
         inline Rotation & operator*= (const Rotation & in) { *this = *this * in; return *this; } // Rotation squared; we added an operator 4/18 to return Area, so delete the * operator here?
@@ -115,6 +120,8 @@ namespace King {
         inline bool operator!= (const Rotation& rhs) const { return DirectX::XMVector4NotEqual(_rotation, rhs._rotation); }
         // Init/Start/Stop/Destroy
         // Functionality
+        bool                                IsZero() const { return _magnitude == 0.f; }
+        bool                                IsOrNearZero() const { return _magnitude <= 1.0e-5f; }
         // Accessors
         const auto&                         Get_magnitude() const { return _magnitude; }
         auto&                               Get_magnitude() { return _magnitude; }
@@ -128,8 +135,12 @@ namespace King {
         // Assignments
         // Note: set unit direction before magnitude in case sign of magnitude is switched
         void                                Set(const Quaternion& quatIn) { _rotation = quatIn; float3 eulerXYZ(quatIn.GetEulerAngles()); _magnitude = float3::Magnitude(eulerXYZ); _unit_direction = float3::Normal(eulerXYZ); }
-        void                                Set_magnitude(const float& _magnitude_IN_m) { _magnitude = abs(_magnitude_IN_m); if (_magnitude != _magnitude_IN_m) { _unit_direction = -_unit_direction; }; _rotation = Quaternion(float3(_magnitude * _unit_direction).Get_XMFLOAT3()); }
-        void __vectorcall                   Set_unit_direction(const float3& _unit_direction_IN) { _unit_direction = float3::Normal(_unit_direction_IN); _rotation = Quaternion(float3(_magnitude * _unit_direction).Get_XMFLOAT3()); }
+        void                                Set_magnitude(const float& _magnitude_IN_m) { _magnitude = abs(_magnitude_IN_m); if (_magnitude != _magnitude_IN_m) { _unit_direction = -_unit_direction; }; CalculateQuat(); }
+        void __vectorcall                   Set_unit_direction(const float3& _unit_direction_IN) { _unit_direction = float3::Normal(_unit_direction_IN); CalculateQuat(); }
+        
+        void                                SetFrom(const AngularAcceleration alphaIn, const UnitOfMeasure::TimeSq tSqIn); // double integration
+        void                                SetFrom(const AngularVelocity omegaIn, const UnitOfMeasure::Time tIn); // single integration
+
         // Input & Output functions that can have access to protected & private data
         friend std::ostream& operator<< (std::ostream& os, const Rotation& in);
         friend std::istream& operator>> (std::istream& is, Rotation& out);
@@ -137,6 +148,8 @@ namespace King {
         friend std::wistream& operator>> (std::wistream& is, Rotation& out);
         friend void to_json(json& j, const Rotation& from);
         friend void from_json(const json& j, Rotation& to);
+    private:
+        inline void                         CalculateQuat() { _rotation = Quaternion(float3(_magnitude * _unit_direction).Get_XMFLOAT3()); }
     };
     // Input & Output Function forward declarations
     std::ostream& operator<< (std::ostream& os, const Rotation& in);

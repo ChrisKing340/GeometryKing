@@ -68,6 +68,8 @@ namespace King {
     ******************************************************************************/
     class Acceleration;
     Acceleration operator/(const Force & f, const UnitOfMeasure::Mass & m); // a = ∑ ͢F / m
+    Force operator*(const UnitOfMeasure::Mass& m, const Acceleration& a); // ͢F = m * ͢a
+    Force operator*(const Acceleration& a, const UnitOfMeasure::Mass& m); // ͢F = m * ͢a
 
     class alignas(16) Acceleration
     {
@@ -92,7 +94,10 @@ namespace King {
         Acceleration(const Acceleration &in) { *this = in; } // forward to copy assignment
         Acceleration(Acceleration &&in) noexcept { *this = std::move(in); } // forward to move assignment
 
-        virtual ~Acceleration() { ; }
+        ~Acceleration() { ; }
+
+        static const std::string Unit() { return UnitOfMeasure::Accel::_unit; }
+        static const std::wstring UnitW() { return UnitOfMeasure::Accel::_wunit; }
 
         // Conversions
         inline explicit operator float() const { return _magnitude; }
@@ -101,25 +106,27 @@ namespace King {
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<Acceleration*>(p)); }
-        inline Acceleration & operator= (const Acceleration &other) { _magnitude = other._magnitude; _unit_direction = other._unit_direction; return *this; } // copy assign
-        inline Acceleration & operator= (Acceleration &&other) noexcept { std::swap(_magnitude, other._magnitude); std::swap(_unit_direction, other._unit_direction); return *this; } // move assign
+        inline Acceleration& operator= (const Acceleration &other) { _magnitude = other._magnitude; _unit_direction = other._unit_direction; return *this; } // copy assign
+        inline Acceleration& operator= (Acceleration &&other) noexcept { std::swap(_magnitude, other._magnitude); std::swap(_unit_direction, other._unit_direction); return *this; } // move assign
         explicit operator bool() const { return (bool)_magnitude && (bool)_unit_direction; } // valid
         bool operator !() const { return !(bool)_magnitude || !(bool)_unit_direction; } // invalid
         // Math Operators
         inline Acceleration operator- () const { return Acceleration(-_unit_direction); }
-        inline Acceleration operator+ (const Acceleration & in) const { return Acceleration(GetVector() + in.GetVector()); }
-        inline Acceleration operator- (const Acceleration & in) const { return Acceleration(GetVector() - in.GetVector()); }
-        inline Acceleration operator* (const Acceleration & in) const { return Acceleration(GetVector() * in.GetVector()); }
-        inline Acceleration operator/ (const Acceleration & in) const { return Acceleration(GetVector() / in.GetVector()); }
-        inline Acceleration & operator+= (const Acceleration & in) { *this = *this + in; return *this; } 
-        inline Acceleration & operator-= (const Acceleration & in) { *this = *this - in; return *this; }
-        inline Acceleration & operator*= (const Acceleration & in) { *this = *this * in; return *this; }
-        inline Acceleration & operator/= (const Acceleration & in) { *this = *this / in; return *this; }
-        inline Acceleration operator* (const float & in) const { return Acceleration(_magnitude * in, _unit_direction); }
+        inline Acceleration operator+ (const Acceleration& in) const { return Acceleration(GetVector() + in.GetVector()); }
+        inline Acceleration operator- (const Acceleration& in) const { return Acceleration(GetVector() - in.GetVector()); }
+        inline Acceleration operator* (const Acceleration& in) const { return Acceleration(GetVector() * in.GetVector()); }
+        inline Acceleration operator/ (const Acceleration& in) const { return Acceleration(GetVector() / in.GetVector()); }
+        inline Acceleration& operator+= (const Acceleration& in) { *this = *this + in; return *this; } 
+        inline Acceleration& operator-= (const Acceleration& in) { *this = *this - in; return *this; }
+        inline Acceleration& operator*= (const Acceleration& in) { *this = *this * in; return *this; }
+        inline Acceleration& operator/= (const Acceleration& in) { *this = *this / in; return *this; }
+        inline Acceleration operator* (const float& in) const { return Acceleration(_magnitude * in, _unit_direction); }
         inline Acceleration operator/ (const float& in) const { return Acceleration(_magnitude / in, _unit_direction); }
 
         // Init/Start/Stop/Destroy
         // Functionality
+        bool                                IsZero() const { return _magnitude == 0.f; }
+        bool                                IsOrNearZero() const { return _magnitude <= 1.0e-5f; }
         // Accessors
         const auto&                         Get_magnitude() const { return _magnitude; }
         auto&                               Get_magnitude() { return _magnitude; }
@@ -132,6 +139,7 @@ namespace King {
         // Note: set unit direction before magnitude in case sign of magnitude is switched
         void                                Set_magnitude(const float &_magnitude_IN) { _magnitude = abs(_magnitude_IN); if (_magnitude != _magnitude_IN) { _unit_direction = -_unit_direction; }; }
         void __vectorcall                   Set_unit_direction(const float3 &_unit_direction_IN) { _unit_direction = float3::Normal(_unit_direction_IN); }
+        
         // Input & Output functions that can have access to protected & private data
         friend std::ostream& operator<< (std::ostream& os, const Acceleration& in);
         friend std::istream& operator>> (std::istream& is, Acceleration& out);

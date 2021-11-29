@@ -8,8 +8,8 @@ using namespace Physics;
 *   Force
 ******************************************************************************/
 // Streams
-std::ostream& King::operator<< (std::ostream& os, const Force& in) { return os << "{" << " Dir: " << in.Get_unit_direction() << " Mag: " << in.Get_magnitude() << " }"; } // text out
-std::wostream& King::operator<< (std::wostream& os, const Force& in) { return os << L"{" << L" Dir: " << in.Get_unit_direction() << L" Mag: " << in.Get_magnitude() << L" }"; } // text out
+std::ostream& King::operator<< (std::ostream& os, const Force& in)   { return os << "{"<< in.Get_magnitude() << " * Dir:" << in.Get_unit_direction() << " }"; } // text out
+std::wostream& King::operator<< (std::wostream& os, const Force& in) { return os << L"{"<< in.Get_magnitude() << L" * Dir:" << in.Get_unit_direction() << L" }"; } // text out
 std::istream& King::operator>> (std::istream& is, Force& out) { return is >> out._magnitude >> out._unit_direction; } // binary in
 std::wistream& King::operator>> (std::wistream& is, Force& out) { return is >> out._magnitude >> out._unit_direction; } // binary in
 // json
@@ -22,8 +22,8 @@ void King::from_json(const json& j, Force& to) { j.at("Mag").get_to(to.Get_magni
 *   Torque
 ******************************************************************************/
 // Streams
-std::ostream& King::operator<< (std::ostream& os, const Torque& in) { return os << "{" << " Dir: " << in.Get_unit_direction() << " Mag: " << in.Get_magnitude() << " }"; } // text out
-std::wostream& King::operator<< (std::wostream& os, const Torque& in) { return os << L"{" << L" Dir: " << in.Get_unit_direction() << L" Mag: " << in.Get_magnitude() << L" }"; } // text out
+std::ostream& King::operator<< (std::ostream& os, const Torque& in) { return os << "{" <<in.Get_magnitude() << " * Dir:" << in.Get_unit_direction() << " }"; } // text out
+std::wostream& King::operator<< (std::wostream& os, const Torque& in) { return os << L"{" <<in.Get_magnitude() << L" * Dir:" << in.Get_unit_direction() << L" }"; } // text out
 std::istream& King::operator>> (std::istream& is, Torque& out) { return is >> out._magnitude >> out._unit_direction; } // binary in
 std::wistream& King::operator>> (std::wistream& is, Torque& out) { return is >> out._magnitude >> out._unit_direction; } // binary in
 // json
@@ -36,8 +36,8 @@ void King::from_json(const json& j, Torque& to) { j.at("Mag").get_to(to.Get_magn
 *   Acceleration
 ******************************************************************************/
 // Streams
-std::ostream& King::operator<< (std::ostream& os, const Acceleration& in) { return os << "{" << " Dir: " << in.Get_unit_direction() << " Mag: " << in.Get_magnitude() << " }"; } // text out
-std::wostream& King::operator<< (std::wostream& os, const Acceleration& in) { return os << L"{" << L" Dir: " << in.Get_unit_direction() << L" Mag: " << in.Get_magnitude() << L" }"; } // text out
+std::ostream& King::operator<< (std::ostream& os, const Acceleration& in) { return os << "{" << in.Get_magnitude() << " * Dir:" << in.Get_unit_direction() << " }"; } // text out
+std::wostream& King::operator<< (std::wostream& os, const Acceleration& in) { return os << L"{" << in.Get_magnitude() << L" * Dir:" << in.Get_unit_direction() << L" }"; } // text out
 std::istream& King::operator>> (std::istream& is, Acceleration& out) { return is >> out._magnitude >> out._unit_direction; } // binary in
 std::wistream& King::operator>> (std::wistream& is, Acceleration& out) { return is >> out._magnitude >> out._unit_direction; } // binary in
 // json
@@ -48,14 +48,24 @@ Acceleration King::operator/(const King::Force& f, const UnitOfMeasure::Mass& m)
 {
     return Acceleration(static_cast<float>(f.Get_magnitude()) / static_cast<float>(m), f.Get_unit_direction());
 }
+Force King::operator*(const UnitOfMeasure::Mass& m, const Acceleration& a)
+{
+    // ͢F = m * ͢a
+    return Force(static_cast<float>(m) * static_cast<float>(a.Get_magnitude()), a.Get_unit_direction());
+}
+Force King::operator*(const Acceleration& a, const UnitOfMeasure::Mass& m) 
+{
+    // ͢F = ͢a * m
+    return Force(static_cast<float>(m) * static_cast<float>(a.Get_magnitude()), a.Get_unit_direction());
+}
 // methods
 // functions
 /******************************************************************************
 *   AngularAcceleration
 ******************************************************************************/
 // Streams
-std::ostream& King::operator<< (std::ostream& os, const AngularAcceleration& in) { return os << "{" << " EulerXYZ: " << in.Get_unit_direction() << " AngleMag: " << in.Get_magnitude() << " }"; } // text out
-std::wostream& King::operator<< (std::wostream& os, const AngularAcceleration& in) { return os << L"{" << L" EulerXYZ: " << in.Get_unit_direction() << L" AngleMag: " << in.Get_magnitude() << L" }"; } // text out
+std::ostream& King::operator<< (std::ostream& os, const AngularAcceleration& in) { return os << "{" << in.Get_magnitude() << " * About:" << in.Get_unit_direction() << " }"; } // text out
+std::wostream& King::operator<< (std::wostream& os, const AngularAcceleration& in) { return os << L"{" << in.Get_magnitude() << L" * About:" << in.Get_unit_direction() << L" }"; } // text out
 std::istream& King::operator>> (std::istream& is, AngularAcceleration& out) { return is >> out._magnitude >> out._unit_direction; } // binary in
 std::wistream& King::operator>> (std::wistream& is, AngularAcceleration& out) { return is >> out._magnitude >> out._unit_direction; } // binary in
 // json
@@ -74,7 +84,37 @@ Torque King::operator*(const AngularAcceleration& angAccelIn, const UnitOfMeasur
 {
     return Torque(static_cast<float3>(angAccelIn)* static_cast<float>(inertiaIn));
 }
+Acceleration King::operator*(const AngularAcceleration& alphaIn, const Distance& rIn)
+{
+    // acceleration of a point on a rigid body has three components:
+    // 1. Linear acceleration due to the acceleration of the centre of mass
+    // 2. Linear acceleration due to centrifugal force
+    // 3. Linear acceleration due to a change in angular velocity
+    // ͢a = ͢a0 + 𝛼 x ͢r + ͢𝜔 x ͢v
+    // v = ͢𝜔 x ͢r
+   
+    // ͢a is tangential to the rotation, thus:
+    // at = 𝛼 x ͢r ; tangential
+    Acceleration at;
+    auto alpha = alphaIn.GetVector();
+    auto radius = rIn.GetVector();
+    at = Cross(alpha, radius);
+
+    return at;
+}
+Acceleration King::operator*(const Distance& rIn, const AngularAcceleration& alphaIn)
+{
+    // ͢a is tangential to the rotation, thus:
+    // at = 𝛼 x ͢r ; tangential
+    Acceleration at;
+    auto alpha = alphaIn.GetVector();
+    auto radius = rIn.GetVector();
+    at = Cross(alpha, radius);
+
+    return at;
+}
 // methods
+
 // functions
 /******************************************************************************
 *   AngularVelocity
@@ -97,36 +137,51 @@ AngularVelocity King::operator*(const AngularAcceleration& accIn, const UnitOfMe
 {
     return AngularVelocity(static_cast<float>(accIn.Get_magnitude())* static_cast<float>(t), accIn.Get_unit_direction());
 }
-Acceleration King::operator*(const Distance& rIn, const AngularVelocity& angularVelIn)
-{
-    // normal acceleration is along r
-    auto dir = -rIn.Get_unit_direction();
-
-    auto mag = angularVelIn.Get_magnitude();
-    auto magSq = mag * mag; // rad^2/s^2
-
-    Acceleration an(static_cast<float>(magSq) * rIn.Get_magnitude(), dir ); // m/s^2
-    return an;
-}
-Acceleration King::operator*(const AngularVelocity& angularVelIn, const Distance& rIn)
-{
-    // normal acceleration is along r
-    auto dir = -rIn.Get_unit_direction();
-
-    auto mag = angularVelIn.Get_magnitude();
-    auto magSq = mag * mag; // rad^2/s^2
-
-    Acceleration an(static_cast<float>(magSq)* rIn.Get_magnitude(), dir); // m/s^2
-    return an;
-}
 // methods
+// v = ͢𝜔 x ͢r ; tangential velocity
+Velocity King::AngularVelocity::CalculateTangentialVelocityAtEndOf_radius(const Distance& rIn) const
+{
+    // v = ͢𝜔 x ͢r ; tangential velocity
+    Velocity v = GetVector().CrossProduct(rIn.GetVector());
+    return v;
+}
+
+Acceleration King::AngularVelocity::CalculateNormalAccelerationAlong_radius(const Distance& rIn) const
+{
+    // normal acceleration is along r
+    // ͢an = r • 𝜔 ^ 2; normal acceleration in m / s ^ 2
+    auto dir = -rIn.Get_unit_direction();
+
+    auto omega = Get_magnitude();
+    auto magSq = omega * omega; // rad^2/s^2
+
+    Acceleration an(static_cast<float>(magSq) * rIn.Get_magnitude(), dir); // m/s^2
+    return an;
+}
+Acceleration King::AngularVelocity::CalculateLinearAccelerationFrom(const Acceleration& a0In, const AngularAcceleration& alphaIn, const Distance& rIn) //, const AngularVelocity& omegaIn
+{
+    // acceleration of a point on a rigid body has three components:
+    // 1. Linear acceleration due to the acceleration of the centre of mass
+    // 2. Linear acceleration due to centrifugal force
+    // 3. Linear acceleration due to a change in angular velocity
+    // ͢a = ͢a0 + 𝛼 x ͢r + ͢𝜔 x ͢v
+    // v = ͢𝜔 x ͢r
+
+    auto alpha = alphaIn.GetVector();
+    auto r = rIn.GetVector();
+    auto omega = GetVector();
+
+    Acceleration a = a0In + Cross(alpha, r) + Cross(omega, Cross(omega, r));
+
+    return a;
+}
 // functions
 /******************************************************************************
 *   Velocity
 ******************************************************************************/
 // Streams
-std::ostream& King::operator<< (std::ostream& os, const Velocity& in) { return os << "{" << " Dir: " << in.Get_unit_direction() << " Mag: " << in.Get_magnitude() << " }"; } // text out
-std::wostream& King::operator<< (std::wostream& os, const Velocity& in) { return os << L"{" << L" Dir: " << in.Get_unit_direction() << L" Mag: " << in.Get_magnitude() << L" }"; } // text out
+std::ostream& King::operator<< (std::ostream& os, const Velocity& in) { return os << "{" << in.Get_magnitude() << " * Dir:" << in.Get_unit_direction() << " }"; } // text out
+std::wostream& King::operator<< (std::wostream& os, const Velocity& in) { return os << L"{" << in.Get_magnitude() << L" * Dir:" << in.Get_unit_direction() << L" }"; } // text out
 std::istream& King::operator>> (std::istream& is, Velocity& out) { return is >> out._magnitude >> out._unit_direction; } // binary in
 std::wistream& King::operator>> (std::wistream& is, Velocity& out) { return is >> out._magnitude >> out._unit_direction; } // binary in
 // json
@@ -143,13 +198,22 @@ Velocity King::operator*(const Acceleration & accIn, const UnitOfMeasure::Time &
     return Velocity(static_cast<float>(accIn.Get_magnitude()) * static_cast<float>(t), accIn.Get_unit_direction());
 }
 // methods
+UnitOfMeasure::SpeedSq Velocity::operator* (const Velocity& in) const
+{ 
+    return Get_magnitude() * in.Get_magnitude(); 
+}
+
+float Velocity::operator/ (const Velocity& in) const 
+{ 
+    return Get_magnitude() / in.Get_magnitude(); // unitless, ratio
+} 
 // functions
 /******************************************************************************
 *   Distance
 ******************************************************************************/
 // Streams
-std::ostream& King::operator<< (std::ostream& os, const Distance& in) { return os << "{" << " Dir: " << in.Get_unit_direction() << " Mag: " << in.Get_magnitude() << " }"; } // text out
-std::wostream& King::operator<< (std::wostream& os, const Distance& in) { return os << L"{" << L" Dir: " << in.Get_unit_direction() << L" Mag: " << in.Get_magnitude() << L" }"; } // text out
+std::ostream& King::operator<< (std::ostream& os, const Distance& in) { return os << "{" << in.Get_magnitude() << " * Dir:" << in.Get_unit_direction() << " }"; } // text out
+std::wostream& King::operator<< (std::wostream& os, const Distance& in) { return os << L"{" << in.Get_magnitude() << L" * Dir:" << in.Get_unit_direction() << L" }"; } // text out
 std::istream& King::operator>> (std::istream& is, Distance& out) { return is >> out._magnitude >> out._unit_direction; } // binary in
 std::wistream& King::operator>> (std::wistream& is, Distance& out) { return is >> out._magnitude >> out._unit_direction; } // binary in
 // json
@@ -190,8 +254,8 @@ UnitOfMeasure::Energy King::operator*(const Distance& dIn, const Force& fIn)
 *   Rotation
 ******************************************************************************/
 // Streams
-std::ostream& King::operator<< (std::ostream& os, const Rotation& in) { return os << "{" << " EulerXYZ: " << in.Get_unit_direction() << " AngleMag: " << in.Get_magnitude() << " }"; } // text out
-std::wostream& King::operator<< (std::wostream& os, const Rotation& in) { return os << L"{" << L" EulerXYZ: " << in.Get_unit_direction() << L" AngleMag: " << in.Get_magnitude() << L" }"; } // text out
+std::ostream& King::operator<< (std::ostream& os, const Rotation& in) { return os << "{" << in.Get_magnitude() << " * About:" << in.Get_unit_direction() << " }"; } // text out
+std::wostream& King::operator<< (std::wostream& os, const Rotation& in) { return os << L"{" << in.Get_magnitude() << L" * About:" << in.Get_unit_direction() << L" }"; } // text out
 std::istream& King::operator>> (std::istream& is, Rotation& out) { return is >> out._magnitude >> out._unit_direction; } // binary in
 std::wistream& King::operator>> (std::wistream& is, Rotation& out) { return is >> out._magnitude >> out._unit_direction; } // binary in
 // json
@@ -200,13 +264,29 @@ void King::from_json(const json& j, Rotation& to) { j.at("AngleMag").get_to(to.G
 // operators
 Rotation King::operator*(const AngularVelocity& velIn, const UnitOfMeasure::Time& t)
 {
-    return Rotation(velIn.Get_magnitude() * t, velIn.Get_unit_direction());
+    return Rotation(velIn, t);
 }
 Rotation King::operator*(const UnitOfMeasure::Time& t, const AngularVelocity& velIn)
 {
-    return Rotation(velIn.Get_magnitude() * t, velIn.Get_unit_direction());
+    return Rotation(velIn, t);
 }
 // methods
+void King::Rotation::SetFrom(AngularAcceleration alphaIn, UnitOfMeasure::TimeSq tSqIn)
+{
+    // |𝛥𝜃| = 1/2 * |𝛼| * t^2  ; rotation
+    float change_theta = 0.5f * alphaIn.Get_magnitude() * tSqIn;
+    Set_magnitude(change_theta);
+    Set_unit_direction(alphaIn.Get_unit_direction());
+    CalculateQuat();
+}
+void King::Rotation::SetFrom(AngularVelocity omegaIn, UnitOfMeasure::Time tIn)
+{
+    // |𝛥𝜃| = |𝜔| * t ; rotation
+    float change_theta = omegaIn.Get_magnitude() * tIn;
+    Set_magnitude(change_theta);
+    Set_unit_direction(omegaIn.Get_unit_direction());
+    CalculateQuat();
+}
 // functions
 /******************************************************************************
 *   Position
@@ -221,6 +301,30 @@ void King::to_json(json& j, const Position& from) { j = json{ {"Pos", from.Get_p
 void King::from_json(const json& j, Position& to) { j.at("Pos").get_to(to.Get_position()); }
 // operators
 // methods
+float3 Position::To_SphericalCoordinates(void) const
+{
+    // rho: distance to the origin
+    // theta: counter-clockwise rotation about the z-axis
+    // phi: altitude signed angle from the xy plane, 0 to pi/2 above the plane, 0 to -pi/2 below the plane.
+    float rho = float3(_position).GetMagnitude();
+    float theta = std::atan2f(_position.GetY(), _position.GetX());
+    float phi = std::acosf(_position.GetZ() / rho) - DirectX::XM_PIDIV2;
+
+    return float3(rho, theta, phi);
+}
+void Position::Set_SphericalCoordinates(const float& rhoIn, const float& thetaIn, const float& phiIn)
+{
+    float phi = phiIn + DirectX::XM_PIDIV2;
+    float sinPhi = std::sinf(phi);
+    // unit vector
+    float x = std::cosf(thetaIn) * sinPhi;
+    float y = std::sinf(thetaIn) * sinPhi;
+    float z = std::cosf(phi);
+    float3 cartesian(x, y, z);
+    // magnitude
+    cartesian *= rhoIn;
+    _position.Set(cartesian, 1.0f);
+}
 // functions
 Position King::Physics::MechanicsKinematics_Trajectory(const Position& initialPosIn, const Velocity& initialVelIn, const Acceleration& constAccelIn, const UnitOfMeasure::Time& tIn)
 {
@@ -299,11 +403,11 @@ void King::to_json(json& j, const PhysicsState& from)
         {"_productsOfInertia", from._productsOfInertia},
         {"_linearAcceleration", from._linearAcceleration},
         {"_linearVelocity", from._linearVelocity},
-        {"_linearMomentum", from._linearMomentum},
+        {"_linearMomentum", from._linearMomentum}/*,
         {"_positionWorldSpace", from._positionWorldSpace},
         {"_linearKineticEnergy", from._linearKineticEnergy},
         {"_angularKineticEnergy", from._angularKineticEnergy},
-        {"_potentialEnergy", from._potentialEnergy}
+        {"_potentialEnergy", from._potentialEnergy}*/
         }; 
 }
 void King::from_json(const json& j, PhysicsState& to)
@@ -318,10 +422,10 @@ void King::from_json(const json& j, PhysicsState& to)
     j.at("_linearAcceleration").get_to(to._linearAcceleration);
     j.at("_linearVelocity").get_to(to._linearVelocity);
     j.at("_linearMomentum").get_to(to._linearMomentum);
-    j.at("_positionWorldSpace").get_to(to._positionWorldSpace);
-    j.at("_linearKineticEnergy").get_to(to._linearKineticEnergy);
-    j.at("_angularKineticEnergy").get_to(to._angularKineticEnergy);
-    j.at("_potentialEnergy").get_to(to._potentialEnergy);
+    //j.at("_positionWorldSpace").get_to(to._positionWorldSpace);
+    //j.at("_linearKineticEnergy").get_to(to._linearKineticEnergy);
+    //j.at("_angularKineticEnergy").get_to(to._angularKineticEnergy);
+    //j.at("_potentialEnergy").get_to(to._potentialEnergy);
 }
 // operators
 // methods
@@ -376,14 +480,16 @@ void King::PhysicsRigidBody::Update(const UnitOfMeasure::Time& dtIn)
     }
 
     // Momentum
-    f._linearMomentum = f._linearVelocity * _mass; // g * m/s
-    //f._angularMomentum = f._angularVelocity * f._principalMomentsOfInertia; // g * rad/s *** TODO *** implement momentum classes math operators
+    // *** TODO *** implement momentum classes math operators
+    // scalars already made: Motion lMotion; AngularMotion aMotion;
+    //f._linearMomentum = f._linearVelocity * _mass; // g * m/s
+    //f._angularMomentum = f._angularVelocity * f._principalMomentsOfInertia; // g * rad/s 
     // Newton's 1st law is conservation of momentum
 
     // Energy
-    f._potentialEnergy = f._positionWorldSpace.Get_position().GetY() * _mass * gravity; // kg m^2 /s^2 = 1 joule
-    f._linearKineticEnergy = f._linearVelocity.Get_magnitude() * f._linearVelocity.Get_magnitude() * _mass * 0.5f;
-    f._angularKineticEnergy;
+    //f._potentialEnergy = f._positionWorldSpace.Get_position().GetY() * _mass * gravity; // kg m^2 /s^2 = 1 joule
+    //f._linearKineticEnergy = f._linearVelocity.Get_magnitude() * f._linearVelocity.Get_magnitude() * _mass * 0.5f;
+    //f._angularKineticEnergy;
 }
 
 

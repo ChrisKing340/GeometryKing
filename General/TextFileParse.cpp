@@ -54,14 +54,14 @@ void King::TextFileParse::WordParse()
 {
     auto str = storage.str();
     char* psource = str.data();
-    std::streamsize characters;
+    size_t characters;
     characters = str.size();
     textBuffer = make_unique<char[]>(characters);
     auto ptextBuffer = textBuffer.get();
     memcpy(ptextBuffer, psource, characters);
 
     // parse out separators into separate lines
-    for(int i=0;i<characters;i++)
+    for(size_t i=0;i<characters;i++)
     {
         if( ptextBuffer[i] == ',' || ptextBuffer[i] == '\t' || ptextBuffer[i] == ' ' || ptextBuffer[i] == '\n' || ptextBuffer[i] == customSeparator )
             ptextBuffer[i] = '\0';
@@ -170,8 +170,10 @@ bool King::TextFileParse::FindNext(const string &txt, bool onlyWithInGroupBracke
     if (onlyWithInGroupBracketLimiters)
     {
         // end of a group, skip and start next
-        if (NextWord() == groupStopDes) ++currentWord;
-        else --currentWord;
+        if (NextWord() == groupStopDes) 
+            Next();
+        else 
+            Back();
     
         while (!IsLast() && (Word() != txt))
         {
@@ -185,19 +187,62 @@ bool King::TextFileParse::FindNext(const string &txt, bool onlyWithInGroupBracke
     else
     {
         while (!IsLast() && (Word() != txt))
-        {
             Next();
-        }
     }
 
     if (Word() == txt)
     {
         findPosition = currentWord;
+        return true;
     }
     else 
     { 
         findPosition = currentWord = temp; 
         return false; 
+    }
+}
+/*******************************************************************
+* Find the previous instance of the word token
+*  Search only in the current group and any sub groupings using
+*  {} to define groups.  If an { is encountered before its } pair
+*  to open a new one the routine stops and exits
+*******************************************************************/
+bool King::TextFileParse::FindPrevious(const string& txt, bool onlyWithInGroupBracketLimiters)
+{
+    int temp = currentWord;
+    long countOpenBrackets = 0;
+
+    if (onlyWithInGroupBracketLimiters)
+    {
+        // end of a group, one time only skip and start next
+        if (PreviousWord() == groupStartDes)
+            Back();
+        else 
+            Next();
+
+        while (!IsFirst() && (Word() != txt))
+        {
+            if (Word() == groupStopDes) ++countOpenBrackets;
+            else if (Word() == groupStartDes) --countOpenBrackets;
+
+            if (countOpenBrackets < 0) break;
+            Back();
+        }
+    }
+    else
+    {
+        while (!IsFirst() && (Word() != txt))
+            Back();
+    }
+
+    // was it found?
+    if (Word() == txt)
+        findPosition = currentWord;
+    else
+    {
+        // return to where we started
+        findPosition = currentWord = temp;
+        return false;
     }
     return true;
 }

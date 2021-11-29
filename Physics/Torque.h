@@ -11,7 +11,7 @@ Description:    torque = radius x force
 
 Symbol:         𝜏 =  ͢r ⨯ ͢F 
 
- Usage:               / projected angle of ͢F from point of application
+Usage:                / projected angle of ͢F from point of application
                      /
                     /
                    /
@@ -110,7 +110,10 @@ namespace King {
         Torque(const Torque &in) { *this = in; } // forward to copy assignment
         Torque(Torque &&in) noexcept { *this = std::move(in); } // forward to move assignment
 
-        virtual ~Torque() { ; }
+        ~Torque() { ; }
+
+        static const std::string Unit() { return UnitOfMeasure::AngularStrength::_unit; }
+        static const std::wstring UnitW() { return UnitOfMeasure::AngularStrength::_wunit; }
 
         // Conversions
         inline explicit operator float() const { return _magnitude; }
@@ -143,6 +146,8 @@ namespace King {
         inline Torque & operator/= (const Torque & in) { *this = *this / in; return *this; }
         // Init/Start/Stop/Destroy
         // Functionality
+        bool                                IsZero() const { return _magnitude == 0.f; }
+        bool                                IsOrNearZero() const { return _magnitude <= 1.0e-5f; }
         // Accessors
         const auto &                        Get_magnitude() const { return _magnitude; }
         auto &                              Get_magnitude() { return _magnitude; }

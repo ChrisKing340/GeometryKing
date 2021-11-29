@@ -84,6 +84,9 @@ namespace King {
     // torque about an axis
     Torque operator*(const UnitOfMeasure::Inertia& inertiaIn, const AngularAcceleration& angAccelIn);
     Torque operator*(const AngularAcceleration& angAccelIn, const UnitOfMeasure::Inertia& inertiaIn);
+    // linear acceleration normal (in the direction of) the radius, rotation about an axis
+    Acceleration operator*(const AngularAcceleration& alphaIn, const Distance& rIn); 
+    Acceleration operator*(const Distance& rIn, const AngularAcceleration& alphaIn);
 
     class alignas(16) AngularAcceleration
     {
@@ -106,7 +109,10 @@ namespace King {
         AngularAcceleration(const AngularAcceleration &in) { *this = in; } // forward to copy assignment
         AngularAcceleration(AngularAcceleration &&in) noexcept { *this = std::move(in); } // forward to move assignment
 
-        virtual ~AngularAcceleration() { ; }
+        ~AngularAcceleration() { ; }
+
+        static const std::string Unit() { return UnitOfMeasure::AngularAccel::_unit; }
+        static const std::wstring UnitW() { return UnitOfMeasure::AngularAccel::_wunit; }
 
         // Conversions
         inline explicit operator float() const { return _magnitude; }
@@ -134,6 +140,8 @@ namespace King {
 
         // Init/Start/Stop/Destroy
         // Functionality
+        bool                                IsZero() const { return _magnitude == 0.f; }
+        bool                                IsOrNearZero() const { return _magnitude <= 1.0e-5f; }
         // Accessors
         const auto&                         Get_magnitude() const { return _magnitude; }
         auto&                               Get_magnitude() { return _magnitude; }

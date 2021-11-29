@@ -70,17 +70,17 @@ namespace King {
         Velocity                        _linearVelocity;
         Velocity                        _linearMomentum; // g * m/s
 
+        Rotation                        _rotation; // passes through the center of mass.
         AngularAcceleration             _angularAcceleration; // net of all forces
         AngularVelocity                 _angularVelocity;
         AngularVelocity                 _angularMomentum; // I * rad/s
         Position                        _pointOnAxisOfRotationLocalSpace; // when a free body, will be the center of mass
-        Rotation                        _rotation; // passes through the center of mass.
         float3                          _principalMomentsOfInertia; // depends on geometry, use alone when symetry along principal axis and rotation through the principal axis
         float3                          _productsOfInertia; // depends on geometry and axis; vector component x is xy, y is yz, and z is zx;
     private:
-        UnitOfMeasure::Energy           _linearKineticEnergy;
-        UnitOfMeasure::Energy           _angularKineticEnergy;
-        UnitOfMeasure::Energy           _potentialEnergy;
+        //UnitOfMeasure::Energy           _linearKineticEnergy;
+        //UnitOfMeasure::Energy           _angularKineticEnergy;
+        //UnitOfMeasure::Energy           _potentialEnergy;
         /* methods */
     public:
         // Creation/Life cycle
@@ -106,13 +106,13 @@ namespace King {
         float3 GetAxisOfRotation() const { return _rotation.GetQuaternion().GetAxis(); }
         // Assignments
         void Set_angularVelocity(const AngularVelocity& angularVelocity) { _angularVelocity = angularVelocity; }
-        void Set_angularMomentum(const AngularVelocity& angularMomentum) { _angularMomentum = angularMomentum; }
+        //void Set_angularMomentum(const AngularVelocity& angularMomentum) { _angularMomentum = angularMomentum; }
         void Set_rotation(const Rotation& rotation) { _rotation = rotation; }
         void Set_principalMomentsOfInertia(const float3& principalMomentsOfInertia) { _principalMomentsOfInertia = principalMomentsOfInertia; }
         void Set_productsOfInertia(const float3& productsOfInertia) { _productsOfInertia = productsOfInertia; }
 
         void Set_linearVelocity(const Velocity& linearVelocity) { _linearVelocity = linearVelocity; }
-        void Set_linearMomentum(const Velocity& linearMomentum) { _linearMomentum = linearMomentum; }
+        //void Set_linearMomentum(const Velocity& linearMomentum) { _linearMomentum = linearMomentum; }
         void Set_positionWorldSpace(const Position& positionWorldSpace) { _positionWorldSpace = positionWorldSpace; }
 
         friend void to_json(json& j, const PhysicsState& from);

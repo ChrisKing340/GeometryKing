@@ -92,7 +92,10 @@ namespace King {
         Position(const Position &in) { *this = in; } // forward to copy assignment
         Position(Position &&in) noexcept { *this = std::move(in); } // forward to move assignment
 
-        virtual ~Position() { ; }
+        ~Position() { ; }
+
+        static const std::string Unit() { return UnitOfMeasure::Length::_unit; }
+        static const std::wstring UnitW() { return UnitOfMeasure::Length::_wunit; }
 
         // Conversions
         inline explicit operator float() const { return King::FloatPoint3::Magnitude(_position); }
@@ -150,13 +153,21 @@ namespace King {
 
         // Init/Start/Stop/Destroy
         // Functionality
+        bool                                IsZero() { return DirectX::XMVector3Equal(GetVector(), DirectX::XMVectorZero()); }
+        bool                                IsOrNearZero() { return DirectX::XMVector3NearEqual(GetVector(), DirectX::XMVectorZero(), DirectX::XMVectorReplicate(1.e-5f)); }
+        
         // Accessors
         auto&                               Get_position() { return _position; }
         const auto &                        Get_position() const { return _position; }
+        float3                              To_SphericalCoordinates() const; // converts to rho, theta, phi
+        [[deprecated("Use GetVector() instead to match other physics classes.")]]
         DirectX::XMVECTOR                   GetVec() { return _position.GetVec(); }
+        DirectX::XMVECTOR                   GetVector() { return _position.GetVec(); }
         DirectX::XMVECTOR                   GetVecConst() const { return _position.GetVecConst(); }
         // Assignments
         inline void __vectorcall            Set(const float3& positionIn) { _position = positionIn; _position.SetW(1.0f); }
+        void __vectorcall                   Set_SphericalCoordinates(float3 rhoThetaPhiIn) { DirectX::XMFLOAT3 rtp(rhoThetaPhiIn); Set_SphericalCoordinates(rtp.x, rtp.y, rtp.z); }
+        void                                Set_SphericalCoordinates(const float& rhoIn, const float& thetaIn, const float& phiIn);
         // Input & Output functions that can have access to protected & private data
         friend std::ostream& operator<< (std::ostream& os, const Position& in);
         friend std::istream& operator>> (std::istream& is, Position& out);

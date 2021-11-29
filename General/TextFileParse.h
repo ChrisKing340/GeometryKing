@@ -56,18 +56,24 @@ public:
 	
 	int							GoBegin() { currentWord=0; return currentWord;}
 	int							GoEnd() { if(wordCount) currentWord=wordCount-1; return currentWord;}
+
+    std::string 				Word(int index = -1) const;
+    std::wstring 				WordW(int index = -1) { if (index < 0) index = currentWord; return HelperStringToWString(words[index]); }
+
+    std::string 				NextWord() { if (words) return words[Next()]; else return ""; }
+    std::wstring				NextWordW() { if (words) return HelperStringToWString(words[Next()]); else return L""; }
+
+    std::string 				PreviousWord() { if (words) return words[Back()]; else return ""; }
+    std::wstring				PreviousWordW() { if (words) return HelperStringToWString(words[Next()]); else return L""; }
 	// trial
+    bool						IsFirst() const { if (!currentWord) return true; return false; }
 	bool						IsLast() const { if(currentWord >= wordCount-1) return true; return false;}
 	// access or assign
 	int							WordIndex(int indexSet = -1) { if (indexSet > -1) currentWord = indexSet; if (currentWord > wordCount - 1) currentWord= wordCount - 1; return currentWord; }
 	// access
 	const std::string &		    GetFileName() const { return nameOfFile; }
 	const int &					GetWordCount() const { return wordCount; }
-    std::string 				Word(int index = -1) const;
-	std::wstring 				WordW(int index = -1) { if (index < 0) index = currentWord; return HelperStringToWString(words[index]); }
-	std::string 				NextWord() { if (currentWord < wordCount - 1) currentWord++; if (words) return words[currentWord]; else return ""; }
-	std::wstring				NextWordW() { if (currentWord < wordCount - 1) currentWord++; if (words) return HelperStringToWString(words[currentWord]); else return L""; }
-	// assign
+    // assign
 	void						SetCommentDesignator(std::string comments) { commentDes = comments; }
 	void						SetCustomSeparator(char s) { customSeparator = s; }
 	void						SetCustomGroupStart(std::string in) { groupStartDes = in; }
@@ -79,11 +85,13 @@ public:
 	bool						FindFirst(const std::string &txt);
 	bool						FindNext(const std::string &txt, bool onlyWithInGroupBracketLimiters = true);
 	bool						FindNextFrom(const std::string &txt, const int wordPositionIN) { currentWord = wordPositionIN; return FindNext(txt); }
-	
-	std::wstring				HelperStringToWString(const std::string strIn) { _bstr_t	bstr1(strIn.c_str()); std::wstring wstr(bstr1); return wstr; }
+
+    bool						FindPrevious(const std::string& txt, bool onlyWithInGroupBracketLimiters = true);
+    bool						FindPreviousFrom(const std::string& txt, const int wordPositionIN) { currentWord = wordPositionIN; return FindNext(txt); }
 
 protected:
     void						WordParse();
+    std::wstring				HelperStringToWString(const std::string strIn) { _bstr_t bstr1(strIn.c_str()); std::wstring wstr(bstr1); return wstr; }
 };
 
 }

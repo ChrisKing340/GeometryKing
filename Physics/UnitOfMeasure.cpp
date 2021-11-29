@@ -107,6 +107,33 @@ UnitOfMeasure::Mass King::UnitOfMeasure::operator/(const UnitOfMeasure::MassSq& 
 UnitOfMeasure::Mass King::UnitOfMeasure::operator/(const UnitOfMeasure::Energy& num, const UnitOfMeasure::SpeedSq& dem) { return UnitOfMeasure::Mass(static_cast<float>(num) / static_cast<float>(dem)); }
 
 /******************************************************************************
+*   Inertia
+******************************************************************************/
+// streams
+std::ostream& King::UnitOfMeasure::operator<< (std::ostream& os, const King::UnitOfMeasure::Inertia& in)
+{
+    return os << "{ Inertia " << in._value << " " << in.Unit() << " }"; // text out
+}
+std::wostream& King::UnitOfMeasure::operator<< (std::wostream& os, const King::UnitOfMeasure::Inertia& in)
+{
+    return os << L"{ Inertia " << in._value << L" " << in.UnitW() << L" }"; // text out
+}
+std::istream& King::UnitOfMeasure::operator>> (std::istream& is, King::UnitOfMeasure::Inertia& out)
+{
+    return is >> out._value; // binary in
+}
+std::wistream& King::UnitOfMeasure::operator>> (std::wistream& is, King::UnitOfMeasure::Inertia& out)
+{
+    return is >> out._value; // binary in
+}
+// json
+void King::UnitOfMeasure::to_json(json& j, const King::UnitOfMeasure::Inertia& from) { j = json{ {"Inertia", from._value}, {"U", from._unit} }; }
+void King::UnitOfMeasure::from_json(const json& j, King::UnitOfMeasure::Inertia& to) { j.at("Inertia").get_to(to._value); }
+// operators
+UnitOfMeasure::InertiaSq King::UnitOfMeasure::operator*(const UnitOfMeasure::Inertia& t1, const UnitOfMeasure::Inertia& t2) { return InertiaSq(static_cast<float>(t1) * static_cast<float>(t2)); }
+UnitOfMeasure::Inertia King::UnitOfMeasure::operator/(const UnitOfMeasure::InertiaSq& num, const UnitOfMeasure::Inertia& dem) { return Inertia(static_cast<float>(num) / static_cast<float>(dem)); }
+
+/******************************************************************************
 *   Angle
 ******************************************************************************/
 // streams
@@ -338,6 +365,9 @@ void King::UnitOfMeasure::from_json(const json& j, King::UnitOfMeasure::AngularS
 UnitOfMeasure::Length King::UnitOfMeasure::operator/(const UnitOfMeasure::AngularStrength& num, const UnitOfMeasure::Strength& dem) { return Length(static_cast<float>(num) / static_cast<float>(dem)); }
 UnitOfMeasure::Strength King::UnitOfMeasure::operator/(const UnitOfMeasure::AngularStrength& num, const UnitOfMeasure::Length& dem) { return Strength(static_cast<float>(num) / static_cast<float>(dem)); }
 
+UnitOfMeasure::Speed operator*(const UnitOfMeasure::Length& l, const UnitOfMeasure::AngularSpeed& a) { return Speed(static_cast<float>(l) * static_cast<float>(a)); }
+UnitOfMeasure::Speed operator*(const UnitOfMeasure::AngularSpeed& a, const UnitOfMeasure::Length& l) { return Speed(static_cast<float>(l) * static_cast<float>(a)); }
+
 /******************************************************************************
 *   Accel
 ******************************************************************************/
@@ -424,6 +454,26 @@ UnitOfMeasure::AngularSpeedSq King::UnitOfMeasure::operator*(const UnitOfMeasure
 UnitOfMeasure::AngularSpeed King::UnitOfMeasure::operator/(const UnitOfMeasure::AngularSpeedSq& num, const UnitOfMeasure::AngularSpeed& dem) { return AngularSpeed(static_cast<float>(num) / static_cast<float>(dem)); }
 UnitOfMeasure::AngularSpeed King::UnitOfMeasure::operator/(const UnitOfMeasure::Angle& num, const UnitOfMeasure::Time& dem) { return AngularSpeed(static_cast<float>(num) / static_cast<float>(dem)); } // rad/s
 /******************************************************************************
+*   AngularSpeedSq
+******************************************************************************/
+// streams
+std::ostream& King::UnitOfMeasure::operator<< (std::ostream& os, const King::UnitOfMeasure::AngularSpeedSq& in)
+{
+    return os << "{ AngularSpeedSq " << in._value << " " << in.Unit() << " }"; // text out
+}
+std::wostream& King::UnitOfMeasure::operator<< (std::wostream& os, const King::UnitOfMeasure::AngularSpeedSq& in)
+{
+    return os << L"{ AngularSpeedSq " << in._value << L" " << in.UnitW() << L" }"; // text out
+}
+std::istream& King::UnitOfMeasure::operator>> (std::istream& is, King::UnitOfMeasure::AngularSpeedSq& out)
+{
+    return is >> out._value; // binary in
+}
+std::wistream& King::UnitOfMeasure::operator>> (std::wistream& is, King::UnitOfMeasure::AngularSpeedSq& out)
+{
+    return is >> out._value; // binary in
+}
+                                                                                                                                                                                                        /******************************************************************************
 *   Motion
 ******************************************************************************/
 // streams
@@ -519,7 +569,26 @@ UnitOfMeasure::Speed King::UnitOfMeasure::operator*(const Accel& a, const Time& 
 UnitOfMeasure::SpeedSq King::UnitOfMeasure::operator*(const UnitOfMeasure::Speed& t1, const UnitOfMeasure::Speed& t2) { return SpeedSq(static_cast<float>(t1)* static_cast<float>(t2)); }
 UnitOfMeasure::SpeedSq King::UnitOfMeasure::operator/(const UnitOfMeasure::Energy& num, const UnitOfMeasure::Mass& dem) { return UnitOfMeasure::SpeedSq(static_cast<float>(num) / static_cast<float>(dem)); }
 UnitOfMeasure::Speed King::UnitOfMeasure::operator/(const UnitOfMeasure::SpeedSq& num, const UnitOfMeasure::Speed& dem) { return Speed(static_cast<float>(num) / static_cast<float>(dem)); }
-
+/******************************************************************************
+*   SpeedSq
+******************************************************************************/
+// streams
+std::ostream& King::UnitOfMeasure::operator<< (std::ostream& os, const King::UnitOfMeasure::SpeedSq& in)
+{
+    return os << "{ SpeedSq " << in._value << " " << in.Unit() << " }"; // text out
+}
+std::wostream& King::UnitOfMeasure::operator<< (std::wostream& os, const King::UnitOfMeasure::SpeedSq& in)
+{
+    return os << L"{ SpeedSq " << in._value << L" " << in.UnitW() << L" }"; // text out
+}
+std::istream& King::UnitOfMeasure::operator>> (std::istream& is, King::UnitOfMeasure::SpeedSq& out)
+{
+    return is >> out._value; // binary in
+}
+std::wistream& King::UnitOfMeasure::operator>> (std::wistream& is, King::UnitOfMeasure::SpeedSq& out)
+{
+    return is >> out._value; // binary in
+}
 /******************************************************************************
 *   Temperature
 ******************************************************************************/

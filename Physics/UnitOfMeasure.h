@@ -179,6 +179,7 @@ namespace UnitOfMeasure
     const float radTodeg = 180.f / PI; // deg  
     // DENSITY
     const float kgPerMeterCubedTolbmPerFtCubed = kgTolbm / 35.3147f; // lbm / ft^3
+    const float lbmPerFtCubedTokgPerMeterCubed = 1 / kgPerMeterCubedTolbmPerFtCubed; // kg / m^3
     // FORCE
     const float lbf = 1.0f;
     const float N = 1.0f; // kg * m / s^2 = definition of a Newton, N
@@ -298,15 +299,18 @@ namespace UnitOfMeasure
 #define MAKE_SCALAR_CLASS( Type ) \
     class alignas(16) Type \
     { \
-    private: \
-        float _value; \
+    public: \
         static const std::string _unit; \
         static const std::wstring _wunit; \
+    private: \
+        float _value; \
     public: \
         constexpr Type() : _value(0.f) {} \
         explicit constexpr Type(const long double h) : _value(static_cast<float>(h)) {} \
-        const std::string Unit() const { return _unit; } \
-        const std::wstring UnitW() const { return _wunit; } \
+        constexpr Type(std::initializer_list<const long double > l) : _value(static_cast<float>(*(l.begin()))) {} \
+        constexpr Type(std::initializer_list<float> l) : _value(*(l.begin())) {} \
+        inline const std::string Unit() const { return _unit; } \
+        inline const std::wstring UnitW() const { return _wunit; } \
         inline operator float() const { return _value; } \
         inline Type operator- () const { return Type(-1 * _value); } \
         inline Type operator+ (const Type & in) const { return Type(_value + in._value); } \
@@ -356,15 +360,16 @@ namespace UnitOfMeasure
 #define MAKE_SCALAR_CLASS( Type ) \
     class alignas(16) Type \
     { \
-    private: \
-        float _value; \
+    public: \
         static const std::string _unit; \
         static const std::wstring _wunit; \
+    private: \
+        float _value; \
     public: \
         constexpr Type() : _value(0.f) {} \
         explicit constexpr Type(const long double h) : _value(static_cast<float>(h)) {} \
-        const std::string Unit() const { return _unit; } \
-        const std::wstring UnitW() const { return _wunit; } \
+        const std::string Unit() const { return Type::_unit; } \
+        const std::wstring UnitW() const { return Type::_wunit; } \
         inline operator float() const { return _value; } \
         inline Type operator- () const { return Type(-1 * _value); } \
         inline Type operator+ (const Type & in) const { return Type(_value + in._value); } \
@@ -373,9 +378,16 @@ namespace UnitOfMeasure
         inline Type operator/ (const float & in) const { return Type(_value / in); } \
         inline Type & operator= (const float & in) { _value = in; return *this; } \
         inline Type & operator+= (const Type & in) { _value = _value + in._value; return *this; } \
-        inline Type & operator-= (const Type & in) { _value = _value - in._value; return *this; } };
+        inline Type & operator-= (const Type & in) { _value = _value - in._value; return *this; } \
+        friend std::ostream& operator<< (std::ostream& os, const Type& in); \
+        friend std::wostream& operator<< (std::wostream& os, const Type& in); \
+        friend std::istream& operator>> (std::istream& is, Type& in); \
+        friend std::wistream& operator>> (std::wistream& is, Type& in); \
+        friend void to_json(json& j, const Type& from); \
+        friend void from_json(const json& j, Type& to); };
 
     MAKE_SCALAR_CLASS(MassSq);
+    MAKE_SCALAR_CLASS(InertiaSq);
     MAKE_SCALAR_CLASS(AngleSq);
     MAKE_SCALAR_CLASS(AreaSq);
     MAKE_SCALAR_CLASS(VolumeSq);
@@ -391,8 +403,20 @@ namespace UnitOfMeasure
 
 #undef MAKE_SCALAR_CLASS
 
+    // streams for only certain squared units
+    std::ostream& operator<< (std::ostream& os, const SpeedSq& in);
+    std::wostream& operator<< (std::wostream& os, const SpeedSq& in);
+    std::istream& operator>> (std::istream& is, SpeedSq& in);
+    std::wistream& operator>> (std::wistream& is, SpeedSq& in);
+
+    std::ostream& operator<< (std::ostream& os, const AngularSpeedSq& in);
+    std::wostream& operator<< (std::wostream& os, const AngularSpeedSq& in);
+    std::istream& operator>> (std::istream& is, AngularSpeedSq& in);
+    std::wistream& operator>> (std::wistream& is, AngularSpeedSq& in);
+
     // Square Math Operators
     MassSq operator*(const Mass& in1, const Mass& in2);
+    InertiaSq operator*(const Inertia& in1, const Inertia& in2);
     AngleSq operator*(const Angle& in1, const Angle& in2);
     AreaSq operator*(const Area& in1, const Area& in2);
     VolumeSq operator*(const Volume& in1, const Volume& in2);
@@ -423,6 +447,9 @@ namespace UnitOfMeasure
     UnitOfMeasure::Length operator/(const UnitOfMeasure::SpeedSq& num, const UnitOfMeasure::Accel& dem);
     UnitOfMeasure::Length operator/(const UnitOfMeasure::AngularStrength& num, const UnitOfMeasure::Strength& dem);
 
+    UnitOfMeasure::Speed operator*(const UnitOfMeasure::Length& l, const UnitOfMeasure::AngularSpeed& a);
+    UnitOfMeasure::Speed operator*(const UnitOfMeasure::AngularSpeed& a, const UnitOfMeasure::Length& l);
+
     UnitOfMeasure::Volume operator*(const UnitOfMeasure::Length &l, const UnitOfMeasure::Area & a); 
     UnitOfMeasure::Volume operator*(const UnitOfMeasure::Area & a, const UnitOfMeasure::Length &l);
 
@@ -430,6 +457,8 @@ namespace UnitOfMeasure
 
     UnitOfMeasure::Mass operator/(const UnitOfMeasure::MassSq& num, const UnitOfMeasure::Mass& dem);
     UnitOfMeasure::Mass operator/(const UnitOfMeasure::Energy& num, const UnitOfMeasure::SpeedSq& dem);
+
+    UnitOfMeasure::Inertia operator/(const UnitOfMeasure::InertiaSq& num, const UnitOfMeasure::Inertia& dem);
 
     UnitOfMeasure::Area operator*(const UnitOfMeasure::Length& l1, const UnitOfMeasure::Length& l2);
 
@@ -485,6 +514,8 @@ namespace UnitOfMeasure
     constexpr UnitOfMeasure::Mass operator"" _lbm(long double in) { return UnitOfMeasure::Mass{ in * lbmTokg }; }
     constexpr UnitOfMeasure::Mass operator"" _tons(long double in) { return UnitOfMeasure::Mass{ in * tonsTokg }; }
 
+    constexpr UnitOfMeasure::Inertia operator"" _kgMSq(long double in) { return UnitOfMeasure::Inertia{ in }; }
+
     constexpr UnitOfMeasure::Angle operator"" _rev(long double in) { return UnitOfMeasure::Angle{ in * 2.f * PI }; } // 1 revolution = 2 PI
     constexpr UnitOfMeasure::Angle operator"" _rad(long double in) { return UnitOfMeasure::Angle{ in }; }
     constexpr UnitOfMeasure::Angle operator"" _deg(long double in) { return UnitOfMeasure::Angle{ in * degTorad }; }
@@ -533,6 +564,9 @@ namespace UnitOfMeasure
     constexpr UnitOfMeasure::AngularSpeed operator"" _rpm(long double in) { return UnitOfMeasure::AngularSpeed{ in / 30 }; } // 2 PI in 60 sec
     constexpr UnitOfMeasure::AngularSpeed operator"" _radPerSec(long double in) { return UnitOfMeasure::AngularSpeed{ in }; }
     constexpr UnitOfMeasure::AngularSpeed operator"" _degPerSec(long double in) { return UnitOfMeasure::AngularSpeed{ in * degTorad }; }
+
+    constexpr UnitOfMeasure::AngularAccel operator"" _radPerSecSq(long double in) { return UnitOfMeasure::AngularAccel{ in }; }
+    constexpr UnitOfMeasure::AngularAccel operator"" _degPerSecSq(long double in) { return UnitOfMeasure::AngularAccel{ in * degTorad }; }
 
     constexpr UnitOfMeasure::Temperature operator"" _K(long double in) { return UnitOfMeasure::Temperature{ in }; }
     constexpr UnitOfMeasure::Temperature operator"" _degR(long double in) { return UnitOfMeasure::Temperature{ in * 5/9 }; }

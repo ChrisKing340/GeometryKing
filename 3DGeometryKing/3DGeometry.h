@@ -30,6 +30,9 @@ References:     Code not original or substantially created by me will be cited h
                 https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
 
 
+                3) Douglas Gregory (2018). OBB vs Sphere collision detection method answer. Game Development Q&A on forum stackexchange.com.
+                https://gamedev.stackexchange.com/questions/163873/separating-axis-theorem-obb-vs-sphere
+
 Contact:        https://chrisking340.github.io/GeometryKing/
 
 Copyright (c) 2020, 2021 Christopher H. King
@@ -71,10 +74,10 @@ SOFTWARE.
     REVISION HISTORY:
     7/25/2021 - Version 2 - Functionality added in many different classes between minor releases and major code
     merged in to expand the usefulness of the library to make models. For example, Model received the ability to
-    Optimize vertex order, reverse normals, reverse triangle windings to match normals, and create meshes from
+    optimize vertex order, reverse normals, reverse triangle windings to match normals, and create meshes from
     other objects such as lines, paths, boxes, and sphere objects.  Previous minor releases added classes such
     as capsules, collision detection in all classes, and interection code between all of the objects. Some 
-    functionality from object on object and transforms into a meshe for display is in the works but since the 
+    functionality from object on object and transforms into a mesh for display is in the works but since the 
     code is three times larger than the version one release, thought a major increment was warranted and anyone
     still on version one will want to take advantage of the many increases in functionality in version 2.
 */
@@ -94,11 +97,14 @@ using json = nlohmann::json;
 
 // SIMD acceleration
 #include "..\MathSIMD\MathSIMD.h"
+
 // Simple memory handling
 #include "..\General\MemoryBlock.h"
+
 // Basis of physical properties
 #include "..\Physics\UnitOfMeasure.h"
 #include "..\Physics\Physics.h"
+
 // WIP: Collsision testing, these are TEMPORARIES for experimentation
 #include "CK_Cube.h"
 #include "CK_CubeCollision.h"
@@ -341,10 +347,10 @@ namespace King {
         Pose(Pose &&M) noexcept { *this = std::move(M); } // involke move assignment operator
         explicit Pose(const DirectX::XMMATRIX &M4x4); // involke conversion copy assignment operator
         explicit Pose(const DirectX::XMFLOAT4X4 &F4x4); // involke conversion copy assignment operator
-        explicit Pose(const quat &rotation, const float3 &scale, const float3 &translation) { Set(rotation, scale, translation); }
+        explicit Pose(const quat rotate, const float3 translate) : _rotation(rotate), _translation(translate) {}
+        explicit Pose(const quat rotate, const float3 translate, const float3 scale) : _rotation(rotate), _translation(translate), _scale(scale) { ; }
         explicit Pose(quat rotate) : _rotation(rotate) {}
         explicit Pose(float3 translate) : _translation(translate) {}
-        explicit Pose(quat rotate, float3 translate) : _rotation(rotate), _translation(translate) {}
         explicit Pose(const XMMATRIX &M3x3, float3 translate);
         virtual ~Pose() = default;
         // Operators 
@@ -629,7 +635,7 @@ namespace King {
         const auto &                        GetVertex(const uint32_t vertexIndexIn) const { return pt[vertexIndexIn]; }
         float                               GetLength() const { return FloatPoint3::Magnitude(pt[1] - pt[0]); }
         FloatPoint3                         GetLengthVector() const { return (pt[1] - pt[0]); }
-        FloatPoint3                         GetMidPoint() const { return (pt[0] + pt[1]) * 0.5f; }
+        FloatPoint3                         GetCenter() const { return (pt[0] + pt[1]) * 0.5f; }
         FloatPoint3                         GetPerpendicular() const; // infinte solutions, returns only 1 semi-optimized. By rotating this vector about our line, you may retrieve all solutions
         FloatPoint3 __vectorcall            GetPerpendicular(FloatPoint3 firstPlaneIn) const; // two solutions, to get the other negate the vector returned
         // Assignments
@@ -820,10 +826,9 @@ namespace King {
         inline explicit Plane(const float distFromOrigin, const FloatPoint3 normalToPlane) { v = DirectX::XMPlaneNormalizeEst(normalToPlane); v = DirectX::XMVectorSetW(v, distFromOrigin); } // should distFromOrigin be negated?
         explicit Plane(const Position origin, const FloatPoint3 normalToPlane);
         explicit Plane(const Position& point1, const Position& point2, const Position& point3); // input points should be CCW
-        Plane(float x, float y, float z, float s) { v = FloatPoint4(x,y,z,s); } // should distFromOrigin be negated?
-
-        inline explicit Plane(const DirectX::XMVECTOR &vec) { v = vec; }
-        inline explicit Plane(const FloatPoint4 in) { v = in; }
+        inline explicit Plane(float x, float y, float z, float s) { v = FloatPoint4(x,y,z,s); } // should distFromOrigin be negated?
+        inline Plane(const DirectX::XMVECTOR vec) { v = vec; }
+        inline Plane(const FloatPoint4 in) { v = in; }
         inline Plane(const Plane &in) { v = in; } // copy 
         inline Plane(Plane &&in) noexcept { v = std::move(in); } // move
         virtual ~Plane() = default;
@@ -1066,11 +1071,12 @@ namespace King {
         inline bool operator==  (const Sphere &rhs) { return DirectX::XMVector4Equal(v, rhs.v); }
         inline bool operator!=  (const Sphere &rhs) { return DirectX::XMVector4NotEqual(v, rhs.v); }
         // Functionality
-        bool                                Contains(const Point & ptIn) const;
-        bool                                Intersects(const Ray & rhs, float3 *ptOut) const;
-        bool                                Intersects(const Line &rhs) const;
-        bool                                Intersects(const Plane&rhs) const;
+        bool                                Contains(const Point& ptIn) const;
+        bool                                Intersects(const Ray& rhs, float3 *ptOut) const;
+        bool                                Intersects(const Line& rhs) const;
+        bool                                Intersects(const Plane& rhs) const;
         bool                                Intersects(const Sphere& rhs) const;
+        bool                                Intersects(const Box& boxIn, const Quaternion& orientationIn) const;
                 
         virtual bool                        Collision(Collidable const& in) const override { return in.Collision(*this); } // double dispatch
         virtual bool                        Collision(Point const& pointIn) const override;
@@ -1080,7 +1086,7 @@ namespace King {
         virtual bool                        Collision(Sphere const& sphereIn) const override;
         virtual bool                        Collision(Capsule const& capsuleIn) const override;
         virtual bool                        Collision(Box const& boxIn) const override;
-        virtual bool                        Collision(Frustum const& frustumIn) const override { return false; }
+        virtual bool                        Collision(Frustum const& frustumIn) const override;
 
         void                                Merge(const Sphere& sIn); // grow the sphere to match the min and max extents of each sphere
         // Accessors
@@ -1244,7 +1250,7 @@ namespace King {
         virtual bool                        Collision(Sphere const& sphereIn) const override;
         virtual bool                        Collision(Capsule const& capsuleIn) const override;
         virtual bool                        Collision(Box const& boxIn) const override;
-        virtual bool                        Collision(Frustum const& frustumIn) const override { return false; }
+        virtual bool                        Collision(Frustum const& frustumIn) const override;
 
         Box                                 CollisionVolume(const Box& boxIn); // over lapping volume with boxIn
 
@@ -1340,14 +1346,14 @@ namespace King {
         Frustum(const Box& in, const quat* rQIn = nullptr) { ConstructOrthographicFrustum(in, rQIn); }
 
         Frustum(const Frustum &in) { *this = in; } // copy 
-        Frustum(Frustum &&in) { *this = std::move(in); } // move
+        Frustum(Frustum &&in) noexcept { *this = std::move(in); } // move
         virtual ~Frustum() = default;
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<Frustum*>(p)); }
         Frustum & operator= (const Frustum &in) = default; // copy assignment
         Frustum & operator= (Frustum &&in) = default; // move assignment
-        inline Frustum & operator*= (const DirectX::XMMATRIX &m);
+        Frustum & operator*= (const DirectX::XMMATRIX &m);
         friend Frustum operator* (Frustum lhs, const DirectX::XMMATRIX &m) { lhs *= m; return lhs; } // invokes std::move(lhs)
         // Functionality
         virtual bool                        Collision(Collidable const& in) const override { return in.Collision(*this); } // double dispatch
@@ -1355,17 +1361,19 @@ namespace King {
         virtual bool                        Collision(Ray const& rayIn) const override { return false; }
         virtual bool                        Collision(Line const& lineIn) const override { return false; }
         virtual bool                        Collision(Plane const& planeIn) const override { return false; }
-        virtual bool                        Collision(Sphere const& sphereIn) const override { return false; }
+        virtual bool                        Collision(Sphere const& sphereIn) const override { return Intersect(sphereIn); }
         virtual bool                        Collision(Capsule const& capsuleIn) const override { return false; }
-        virtual bool                        Collision(Box const& boxIn) const override { return false; }
+        virtual bool                        Collision(Box const& boxIn) const override { return Intersect(boxIn); }
         virtual bool                        Collision(Frustum const& frustumIn) const override { return false; }
         // *** TO DO *** add a cone collision test, and implement a better frustum culling routine; reference https://www.flipcode.com/archives/Frustum_Culling.shtml *** TO DO ***
 
-        bool __vectorcall                   Intersect(const Box &boxIn) const;
-        bool __vectorcall                   Intersect(const Sphere &sphereIn) const;
+        inline bool                         Intersect(const Box &boxIn) const;
+        inline bool __vectorcall            Intersect(const Sphere sphereIn) const;
         // Accessors
-        inline FloatPoint3&                 GetFrustumCorner(Frustum::CornerID id) { assert(id < Frustum::CornerID::INVALID); return _FrustumCorners[id]; }
-        inline Plane&                       GetFrustumPlane(Frustum::PlaneID id) { assert(id < Frustum::PlaneID::kINVALID); return _FrustumPlanes[id]; }
+        inline const FloatPoint3&           GetFrustumCorner(const Frustum::CornerID id) const { assert(id >= 0 && id < Frustum::CornerID::INVALID); return _FrustumCorners[id]; }
+        inline const Plane&                 GetFrustumPlane(const Frustum::PlaneID id) const { assert(id >= 0 && id < Frustum::PlaneID::kINVALID); return _FrustumPlanes[id]; }
+        // Assignments
+        inline void                         SetFrustumPlane(const Frustum::PlaneID id, const Plane p) { assert(id >= 0 && id < Frustum::PlaneID::kINVALID); _FrustumPlanes[id] = p; }
     private:
         void                                ConstructPerspectiveFrustum(float HTan, float VTan, float NearClip, float FarClip); // Perspective frustum constructor (for pyramid-shaped frusta)
         void                                ConstructOrthographicFrustum(float Left, float Right, float Top, float Bottom, float NearClip, float FarClip); // Orthographic frustum constructor (for box-shaped frusta from front plane and depth)
@@ -1736,7 +1744,8 @@ namespace King {
         static std::shared_ptr<ModelScaffold>    Create() { return std::make_shared<ModelScaffold>(); }
         // Construction/Destruction
         ModelScaffold() { /*_vertexFormat.SetNext(VertexAttrib::enumDesc::position, VertexAttrib::enumFormat::format_float32x3); _vertexBufferMaster.SetStride(_vertexFormat.GetByteSize());*/ }
-        ModelScaffold(const Box& boxIn) : ModelScaffold() { *this = boxIn; } // forward to copy assignment
+        ModelScaffold(const Line& lineIn) { *this = lineIn; } // forward to copy assignment
+        ModelScaffold(const Box& boxIn) { *this = boxIn; } // forward to copy assignment
         ModelScaffold(const ModelScaffold &in) { *this = in; } // forward to copy assignment
         ModelScaffold(ModelScaffold &&in) noexcept { *this = std::move(in); } // forward to move assignment
 
@@ -1745,6 +1754,7 @@ namespace King {
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<ModelScaffold*>(p)); }
+        ModelScaffold& operator= (const Line& lineIn);
         ModelScaffold& operator= (const Box& boxIn);
         ModelScaffold & operator= (const ModelScaffold &in) = default; // copy assignment
         ModelScaffold & operator= (ModelScaffold &&in) = default; // move assignment
@@ -1775,8 +1785,8 @@ namespace King {
         bool                                HasBoneIndicies() const { return _vertexFormat.Has(King::VertexAttrib::enumDesc::boneIndicies); }
         bool                                HasBoneWeights() const { return _vertexFormat.Has(King::VertexAttrib::enumDesc::boneWeights); }
         // Accessors
-        const auto &                        GetModelName() const { return _modelName; }
-        const auto &                        GetBoundingBox() const { return _boundingBox; }
+        const auto&                         GetModelName() const { return _modelName; }
+        const auto&                         GetBoundingBox() const { return _boundingBox; }
 
         uint8_t*                            GetVertexAddr(const uint32_t vertexNumIn); // no indirection
         uint8_t*                            GetVertexAddr(const uint32_t vertexNumIn, uint32_t vbStartIn); // no indirection
@@ -1843,19 +1853,23 @@ namespace King {
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<LineModel*>(p)); }
-        LineModel & operator= (const Box& boxIn);
-        LineModel & operator= (const LineModel &in); // copy assignment
-        LineModel & operator= (LineModel &&in) = default; // move assignment
+        LineModel& operator= (const Line& lineIn) { CreateMeshFrom(lineIn); } // adds a mesh to model
+        LineModel& operator= (const Box& boxIn); // adds a mesh to model
+        LineModel& operator= (const LineModel &in); // copy assignment
+        LineModel& operator= (LineModel &&in) = default; // move assignment
         // Functionality
         void                                Destroy() { _meshes.clear(); King::ModelScaffold::Destroy(); }
 
         virtual Box                         CalculateBoundingBox() override;
+
+        void                                MergeMeshes(const size_t meshIndex1, const size_t meshIndex2);
         // Accessors
         const size_t                        GetNumMeshes() const { return _meshes.size(); }
         std::shared_ptr<LineMesh>           GetMesh(size_t index) { assert(index < _meshes.size()); return _meshes[index]; }
         // Assignments
-        void                                AddMesh(std::shared_ptr<LineMesh> meshIn) { _meshes.push_back(meshIn); }
+        auto                                AddMesh(std::shared_ptr<LineMesh> meshIn) { _meshes.push_back(meshIn); return _meshes.size()-1; }
         std::shared_ptr<LineMesh>           CreateMesh(uint32_t numLinesIn, uint32_t vbStartIn = 0, uint32_t ibStartIn = 0);
+        int                                 CreateMeshFrom(const King::Line& lineIn, float4 colorIn = float4(0.f, 1.0f, 1.0f, 1.0f));
     };
     /******************************************************************************
     *    Model
@@ -1909,6 +1923,7 @@ namespace King {
         void                                CalculateTangentsAndBiTangents();
 
         void                                ReverseNormals();
+        void                                ReverseWindings();
         void                                ReverseWindingsToMatchNormals();
 
         size_t                              RemoveUnusedVerticies();
@@ -1923,25 +1938,27 @@ namespace King {
         std::shared_ptr<TriangleMesh>       GetMesh(size_t index) { assert(index < _meshes.size()); return _meshes[index]; }
         const std::vector< std::shared_ptr<TriangleMesh>> & GetMeshes() const { return _meshes; }
 
-        const auto                          GetNumMaterials() const { return _materials.size(); }
         std::shared_ptr<Material>           GetMaterial(string name) { assert(_materials.count(name)); return _materials[name]; }
-        auto &                              GetMaterials() { return _materials; }
-
+        auto&                               GetMaterials() { return _materials; }
+        const auto                          GetNumMaterials() const { return _materials.size(); }
+        
         virtual std::size_t                 GetBoneCount() const { return 0; } // base class has no bones
         // Assignments
+        void                                AddMaterial(std::shared_ptr<Material> mtl_IN);
+
         virtual void                        AddMasterVertexData(const MemoryBlock<uint8_t>& vdIn) override { _vertexBufferMaster.Append(vdIn); for (auto& m : _meshes) m->SetVB(&_vertexBufferMaster.GetData()); }
         virtual void                        AddMasterIndexData(const MemoryBlock<uint32_t>& idIn) override { _indexBufferMaster.Append(idIn); for (auto& m : _meshes) m->SetIB(&_indexBufferMaster.GetData()); }
 
         void                                AddMesh(const TriangleMesh& meshIn) { auto m = TriangleMesh::Create(); *m = meshIn; _meshes.push_back(m); }
         void                                AddMesh(std::shared_ptr <TriangleMesh> meshIn) { _meshes.push_back(meshIn); }
-        void                                AddMaterial(std::shared_ptr<Material> mtl_IN);
 
         std::shared_ptr<TriangleMesh>       CreateMesh(const uint32_t numTrianglesIn, const uint32_t vbStartIn = 0, const uint32_t ibStartIn = 0); // empty mesh
-        int                                 CreateMeshFrom(const Line& l, Distance d);
-        int                                 CreateMeshFrom(const Path& p, Distance d);
-        int                                 CreateMeshFrom(const Path& pFrom, const Path& pTo);
+
+        int                                 CreateMeshFrom(const Line& l, Distance d); // offsets by d
+        int                                 CreateMeshFrom(const Path& p, Distance d); // offsets by d
+        int                                 CreateMeshFrom(const Path& pFrom, const Path& pTo); // connects to form quads
         int                                 CreateMeshFrom(const Box& b); // presently, takes over all the data for the model, *** TO DO ** add mesh
-        int                                 CreateMeshFrom(const Sphere& s, const uint32_t segmentsIn = 16); 
+        int                                 CreateMeshFrom(const Sphere& s, const uint32_t segmentsIn = 16); // quads
     };                                                     
 
     /******************************************************************************
@@ -1960,13 +1977,15 @@ namespace King {
         {
             std::vector<Bone>                _bones; // sort such that a child bone never comes before a parent bone
             std::vector<DirectX::XMFLOAT4X4> _toParentTransform; // 1 to 1 size with bones, contains the hiearchy of the bone structure
-            // also note that toParentTransform[0] is alway identity as the top most node of the structure
+
+            // Note: toParentTransform[0] is alway identity as the top most node of the structure
         };
         /* variables */
     public:
         // begin file type v1
         Skeleton                            _skeleton;
         std::vector<uint8_t>                _boneInfluenceCount; // 1 to 1 size with # of verticies in mesh and contains the number of bones influencing each vertex
+
         std::vector<uint8_t>                _boneIndex; // size is boneInfluenceCount values summed and hold the indicies into skeleton.bones and is ordered in vertex order; ex: _bones.size()=2, _boneInfluenceCount[0]=1, _boneInfluenceCount[1]=4, then _boneIndex.size() = 5;
         std::vector<float>                  _boneWeight; // size matches boneIndex and gives the weight of each bones influence on this vertex
         // end file type v1

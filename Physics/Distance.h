@@ -89,12 +89,15 @@ namespace King {
         explicit Distance(const UnitOfMeasure::Length &l, const float3 &dirIn) { _magnitude = abs(l); _unit_direction = float3::Normal(dirIn); if (_magnitude != l) { _unit_direction = -_unit_direction; }; }
         Distance(const float3 &vectorIn) { _magnitude = float3::Magnitude(vectorIn); _unit_direction = float3::Normal(vectorIn); }
         Distance(const float3& pt1In, const float3& pt2In) { auto AB=pt2In-pt1In; _magnitude = float3::Magnitude(AB); _unit_direction = float3::Normal(AB); }
-        explicit Distance(const Acceleration & accIn, const UnitOfMeasure::Time &t) { _magnitude = UnitOfMeasure::Length(static_cast<float>(accIn.Get_magnitude()) * 0.5f * (float)t * (float)t); _unit_direction = accIn.Get_unit_direction(); }
-        explicit Distance(const Velocity & velIn, const UnitOfMeasure::Time &t) { _magnitude = UnitOfMeasure::Length(static_cast<float>(velIn.Get_magnitude()) * t); _unit_direction = velIn.Get_unit_direction(); }
+        explicit Distance(const Acceleration & accIn, const UnitOfMeasure::TimeSq &dtSq) { _magnitude = UnitOfMeasure::Length(static_cast<float>(accIn.Get_magnitude()) * 0.5f * (float)dtSq); _unit_direction = accIn.Get_unit_direction(); }
+        explicit Distance(const Velocity & velIn, const UnitOfMeasure::Time &dt) { _magnitude = UnitOfMeasure::Length(static_cast<float>(velIn.Get_magnitude()) * dt); _unit_direction = velIn.Get_unit_direction(); }
         Distance(const Distance &in) { *this = in; } // forward to copy assignment
         Distance(Distance &&in) noexcept { *this = std::move(in); } // forward to move assignment
 
-        virtual ~Distance() { ; }
+        ~Distance() { ; }
+
+        static const std::string Unit() { return UnitOfMeasure::Length::_unit; }
+        static const std::wstring UnitW() { return UnitOfMeasure::Length::_wunit; }
 
         // Conversions
         inline explicit operator float() const { return _magnitude; }
@@ -120,6 +123,8 @@ namespace King {
         inline Distance operator* (const float & in) const { return Distance(_magnitude * in, _unit_direction); }
         // Init/Start/Stop/Destroy
         // Functionality
+        bool                                IsZero() const { return _magnitude == 0.f; }
+        bool                                IsOrNearZero() const { return _magnitude <= 1.0e-5f; }
         // Accessors
         const auto&                         Get_magnitude() const { return _magnitude; }
         auto&                               Get_magnitude() { return _magnitude; }
