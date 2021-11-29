@@ -3392,6 +3392,154 @@ int King::Model::CreateMeshFrom(const Line& l, Distance d)
 *    Method:    CreateMeshFrom
 *       Inputs:
 *           Path p          List of points for each new vertex
+*       Output:
+*           Adds a new TriangleMesh to _meshes which forms a closed mesh of the
+*           path.
+*       Returns:
+*           Index into _meshes of the TriangleMesh created
+******************************************************************************/
+int King::Model::CreateMeshFrom(const Path& p)
+{
+    assert(p.size() > 2);
+
+    auto numPathVerts = p.size();
+
+    vector<float3> verticies;
+    vector<int32_t> indicies;
+    vector<float2> textureCoordinates;
+    vector<float3> normals;
+
+    Triangle t;
+    // first two of triangle strip;
+    // make sure first and last are not the same
+    if (p[0] == p[numPathVerts - 1])
+        --numPathVerts;
+    verticies.push_back(p[0]);
+    vb.push_back(p[numPathVerts - 1]);
+    
+    for (size_t i = 1; i < numPathVerts; ++i)
+    {
+        // path indicies
+        auto i0 = i;
+        auto i1 = i + 1;
+        auto ia = numPathVerts - 1 - i;
+
+        if (i0 != ia && i1 != ia)
+        {
+            verticies.push_back(p[i0]);
+            // vb indicies
+            auto index = verticies.size() - 1;
+            indicies.push_back(index - 2);
+            indicies.push_back(index);
+            indicies.push_back(index - 1);
+
+            t.Set(verticies[index - 2], verticies[index], verticies[index - 1]);
+            normals.emplace_back(t.GetNormalCCW());
+            textureCoordinates.emplace_back(float2(0.f, 0.f));
+        }
+        else
+            break;
+        if (ia != i0 && i1 != ia)
+        {
+            verticies.push_back(p[ia]);
+            // vb indicies
+            auto index = verticies.size() - 1;
+            indicies.push_back(index - 2);
+            indicies.push_back(index - 1);
+            indicies.push_back(index);
+
+            t.Set(verticies[index - 2], verticies[index - 1], verticies[index]);
+            normals.emplace_back(t.GetNormalCCW());
+            textureCoordinates.emplace_back(float2(0.f, 0.f));
+        }
+        else
+            break;
+    }
+
+    // Buffers and format for model
+    // use existing format
+    auto stride = _vertexFormat.GetByteSize();
+    // is a model vertex buffer already setup?
+    assert(stride == GetVertexBufferMaster().GetStride());
+    auto indexPos = _vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::enumDesc::position); // UINT16_MAX did not find
+    auto indexUV = _vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::enumDesc::textureCoord); // UINT16_MAX did not find
+    auto indexNorm = _vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::enumDesc::normal); // UINT16_MAX did not find
+
+    if (indexPos == UINT16_MAX)
+    {
+        // minimum is not present, reset the master and add position as minimum
+        _vertexBufferMaster.Destroy();
+        _indexBufferMaster.Destroy();
+        _vertexFormat.SetNext(VertexAttrib::enumDesc::position, VertexAttrib::enumFormat::format_float32x3);
+        stride = _vertexFormat.GetByteSize();
+        _vertexBufferMaster.SetStride(stride);
+    }
+
+    // define size of elements
+    const size_t numVertex = verticies.size();
+    size_t numTriangles = indicies.size() / 3;
+
+    // start where the last mesh left off
+    const uint32_t vbStart(_vertexBufferMaster.GetElements()); // zero based to this start position for mesh
+    const uint32_t ibStart(_indexBufferMaster.GetElements()); // zero based to this start position for mesh
+    // create our mesh and allocate memory
+    {
+        // total vertex and indicies for our mesh matching our model's master format
+        MemoryBlock<uint8_t> vb(numVertex, GetVertexStride());
+        MemoryBlock<uint32_t> ib(3 * numTriangles);
+        // store our data into the model master buffers
+        AddMasterVertexData(vb);
+        AddMasterIndexData(ib);
+        // our mesh!
+        auto tm = CreateMesh(numTriangles, vbStart, ibStart);
+        tm->Set_name("CreateMeshFrom(path)");
+        tm->Set_materialName("default");
+    }
+
+    // indicies, RH CCW
+    MemoryBlock<uint32_t> ib(3);
+    for (size_t c = 0; c < numTriangles; i += 3)
+    {
+        ib[0] = indicies[c + 0]; ib[1] = indicies[c + 1]; ib[2] = indicies[c + 2];
+        _indexBufferMaster.Copy(ibStart + c, &ib.GetData(), ib.GetElements());
+    }
+
+    // verticies
+    const auto offsetPosBytes = _vertexFormat.GetAttributeByteStart(indexPos);
+    const auto offsetUVBytes = _vertexFormat.GetAttributeByteStart(indexUV);
+    const auto offsetNormBytes = _vertexFormat.GetAttributeByteStart(indexNorm);
+        
+    assert(indexPos != UINT16_MAX);
+
+    auto srcPos = reinterpret_cast<uint8_t*>(verticies.data());
+    auto srcUV = reinterpret_cast<uint8_t*>(textureCoordinates.data());
+    auto srcNor = reinterpret_cast<uint8_t*>(normals.data());
+
+    for (i = 0; i < verticies.size(); ++i)
+    {
+        auto dest = GetVertexAddr(i, vbStart);
+        // positions
+        std::copy(srcPos, srcPos + 12, dest + offsetPosBytes);
+        // texture coordinates
+        if (indexUV != UINT16_MAX)
+            std::copy(srcNor, srcNor + 8, dest + offsetUVBytes);
+        // normals
+        if (indexNorm != UINT16_MAX)
+            std::copy(srcNor, srcNor + 12, dest + offsetNormBytes);
+    }
+    // tangents and bitangents
+    CalculateTangentsAndBiTangents();
+
+    // update the bounding geometry
+    CalculateBoundingBox();
+
+    // return the mesh index
+    return _meshes.size() - 1;
+}
+/******************************************************************************
+*    Method:    CreateMeshFrom
+*       Inputs:
+*           Path p          List of points for each new vertex
 *           Distance d      length and direction to extrude Path to form new
 *                           verticies and join as a mesh
 *       Output:
