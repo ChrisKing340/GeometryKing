@@ -176,8 +176,11 @@
     <ClInclude Include="..\Physics\Acceleration.h" />
     <ClInclude Include="..\Physics\AngularAcceleration.h" />
     <ClInclude Include="..\Physics\AngularVelocity.h" />
+    <ClInclude Include="..\Physics\CK_Cube.h" />
+    <ClInclude Include="..\Physics\CK_CubeCollision.h" />
     <ClInclude Include="..\Physics\Distance.h" />
     <ClInclude Include="..\Physics\Force.h" />
+    <ClInclude Include="..\Physics\Physics.h" />
     <ClInclude Include="..\Physics\PhysicsMaterial.h" />
     <ClInclude Include="..\Physics\PhysicsObject.h" />
     <ClInclude Include="..\Physics\PhysicsRigidBody.h" />
@@ -191,11 +194,11 @@
   <ItemGroup>
     <ClCompile Include="..\2DGeometryKing\2DGeometry.cpp" />
     <ClCompile Include="..\3DGeometryKing\3DGeometry.cpp" />
-    <ClCompile Include="..\3DGeometryKing\CK_Cube.cpp" />
-    <ClCompile Include="..\3DGeometryKing\CK_CubeCollision.cpp" />
     <ClCompile Include="..\3DGeometryKing\Model_IO.cpp" />
     <ClCompile Include="..\General\TextFileParse.cpp" />
     <ClCompile Include="..\MathSIMD\MathSIMD.cpp" />
+    <ClCompile Include="..\Physics\CK_Cube.cpp" />
+    <ClCompile Include="..\Physics\CK_CubeCollision.cpp" />
     <ClCompile Include="..\Physics\Physics.cpp" />
     <ClCompile Include="..\Physics\UnitOfMeasure.cpp" />
   </ItemGroup>

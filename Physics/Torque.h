@@ -119,6 +119,19 @@ namespace King {
         inline explicit operator float() const { return _magnitude; }
         inline explicit operator UnitOfMeasure::AngularStrength() const { return _magnitude; }
         inline operator float3() const { return GetVector(); }
+        // Comparators
+        inline bool operator<  (const float& rhs) const { return _magnitude < rhs; }
+        inline bool operator<= (const float& rhs) const { return _magnitude <= rhs; }
+        inline bool operator>  (const float& rhs) const { return _magnitude > rhs; }
+        inline bool operator>= (const float& rhs) const { return _magnitude >= rhs; }
+        inline bool operator== (const float& rhs) const { return _magnitude == rhs; }
+        inline bool operator!= (const float& rhs) const { return _magnitude != rhs; }
+        inline bool operator<  (const Force& rhs) const { return DirectX::XMVector3Less(GetVector(), rhs.GetVector()); }
+        inline bool operator<= (const Force& rhs) const { return DirectX::XMVector3LessOrEqual(GetVector(), rhs.GetVector()); }
+        inline bool operator>  (const Force& rhs) const { return DirectX::XMVector3Greater(GetVector(), rhs.GetVector()); }
+        inline bool operator>= (const Force& rhs) const { return DirectX::XMVector3GreaterOrEqual(GetVector(), rhs.GetVector()); }
+        inline bool operator== (const Force& rhs) const { return DirectX::XMVector3Equal(GetVector(), rhs.GetVector()); }
+        inline bool operator!= (const Force& rhs) const { return DirectX::XMVector3NotEqual(GetVector(), rhs.GetVector()); }
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<Torque*>(p)); }

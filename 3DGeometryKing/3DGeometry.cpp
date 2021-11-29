@@ -3415,7 +3415,12 @@ int King::Model::CreateMeshFrom(const Path& p)
     if (p[0] == p[numPathVerts - 1])
         --numPathVerts;
     verticies.push_back(p[0]);
-    vb.push_back(p[numPathVerts - 1]);
+    normals.push_back(float3());
+    textureCoordinates.push_back(float2());
+
+    verticies.push_back(p[numPathVerts - 1]);
+    normals.push_back(float3());
+    textureCoordinates.push_back(float2());
     
     for (size_t i = 1; i < numPathVerts; ++i)
     {
@@ -3439,6 +3444,7 @@ int King::Model::CreateMeshFrom(const Path& p)
         }
         else
             break;
+
         if (ia != i0 && i1 != ia)
         {
             verticies.push_back(p[ia]);
@@ -3455,6 +3461,9 @@ int King::Model::CreateMeshFrom(const Path& p)
         else
             break;
     }
+    // set the two "primed" verticies normals
+    normals[0] = normals[2];
+    normals[1] = normals[2];
 
     // Buffers and format for model
     // use existing format
@@ -3498,7 +3507,7 @@ int King::Model::CreateMeshFrom(const Path& p)
 
     // indicies, RH CCW
     MemoryBlock<uint32_t> ib(3);
-    for (size_t c = 0; c < numTriangles; i += 3)
+    for (size_t c = 0; c < numTriangles; c += 3)
     {
         ib[0] = indicies[c + 0]; ib[1] = indicies[c + 1]; ib[2] = indicies[c + 2];
         _indexBufferMaster.Copy(ibStart + c, &ib.GetData(), ib.GetElements());
@@ -3515,7 +3524,7 @@ int King::Model::CreateMeshFrom(const Path& p)
     auto srcUV = reinterpret_cast<uint8_t*>(textureCoordinates.data());
     auto srcNor = reinterpret_cast<uint8_t*>(normals.data());
 
-    for (i = 0; i < verticies.size(); ++i)
+    for (size_t i = 0; i < verticies.size(); ++i)
     {
         auto dest = GetVertexAddr(i, vbStart);
         // positions

@@ -103,6 +103,13 @@ namespace King {
         inline explicit operator DirectX::XMVECTOR() const { return _position.GetVecConst(); }
         inline operator King::FloatPoint3() const { return static_cast<King::FloatPoint3>(_position); } // allow implicit for a default behavior
         inline explicit operator King::FloatPoint4() const { return _position; }
+        // Comparators
+        inline bool operator<  (const Position& rhs) const { return DirectX::XMVector3Less(_position.GetVecConst(), rhs.GetVecConst()); }
+        inline bool operator<= (const Position& rhs) const { return DirectX::XMVector3LessOrEqual(_position.GetVecConst(), rhs.GetVecConst()); }
+        inline bool operator>  (const Position& rhs) const { return DirectX::XMVector3Greater(_position.GetVecConst(), rhs.GetVecConst()); }
+        inline bool operator>= (const Position& rhs) const { return DirectX::XMVector3GreaterOrEqual(_position.GetVecConst(), rhs.GetVecConst()); }
+        inline bool operator== (const Position& rhs) const { return DirectX::XMVector3Equal(_position.GetVecConst(), rhs.GetVecConst()); }
+        inline bool operator!= (const Position& rhs) const { return DirectX::XMVector3NotEqual(_position.GetVecConst(), rhs.GetVecConst()); }
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<Position*>(p)); }

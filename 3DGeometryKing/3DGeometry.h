@@ -84,9 +84,9 @@ SOFTWARE.
     11/28/2021 - Version 2.1 - Classes Model & SkinnedModel gained method CreateMeshFrom(const Path& p)
 */
 
-#define KING_3DGEOMETRY_VERSION_MAJOR 2
-#define KING_3DGEOMETRY_VERSION_MINOR 1
-#define KING_3DGEOMETRY_VERSION_PATCH 0
+constexpr auto KING_3DGEOMETRY_VERSION_MAJOR = 2;
+constexpr auto KING_3DGEOMETRY_VERSION_MINOR = 1;
+constexpr auto KING_3DGEOMETRY_VERSION_PATCH = 0;
 
 #include <DirectXCollision.h>
 #include <vector>
@@ -108,8 +108,8 @@ using json = nlohmann::json;
 #include "..\Physics\Physics.h"
 
 // WIP: Collsision testing, these are TEMPORARIES for experimentation
-#include "CK_Cube.h"
-#include "CK_CubeCollision.h"
+#include "..\Physics\CK_Cube.h"
+#include "..\Physics\CK_CubeCollision.h"
 
 // Compile with code files 3DGeometry.cpp and CK_CubeCollision.cpp
 
@@ -2001,7 +2001,7 @@ namespace King {
         // Creation/Life cycle
         static std::shared_ptr<BoneHierarchy>   Create() { return std::make_shared<BoneHierarchy>(); }
         static std::unique_ptr<BoneHierarchy>   CreateUnique() { return std::make_unique<BoneHierarchy>(); }
-        BoneHierarchy() = default
+        BoneHierarchy() = default;
         BoneHierarchy(const BoneHierarchy &in) { *this = in; } // forward to copy assignment
         BoneHierarchy(BoneHierarchy &&in) noexcept { *this = std::move(in); } // forward to move assignment
         virtual ~BoneHierarchy() = default;

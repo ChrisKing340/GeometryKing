@@ -189,7 +189,9 @@ inline void King::PhysicsObject::Update(const UnitOfMeasure::Time& dtIn)
         Force F;
         F.Set_magnitude(0.5f * den * _coefficientOfDrag * _crossSectionalArea * vSq);
         F.Set_unit_direction(-dir);
-        _forcesActingOnBody.push_back(pair<Force,Distance>(F, Distance()));
+
+        std::pair<Force, Distance> Fr(F, Distance());
+        _forcesActingOnBody.push_back(Fr);
     }
 
     // Newton's 1st law

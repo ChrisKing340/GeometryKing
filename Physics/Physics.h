@@ -20,6 +20,7 @@ using json = nlohmann::json; // for convenience
 // Properties
 #include "PhysicsMaterial.h"
 #include "PhysicsState.h"
+//#include "PhysicsObject.h"
 #include "PhysicsRigidBody.h"
 
 // Symbols: 𝛼𝛽𝛾𝜃𝛷𝜏𝜔𝜌𝜋𝜎𝜇𝜆𝜀𝛥ζ 𝑖𝑗𝑘 𝑚𝑛𝑟𝑠𝑡 𝒾𝒿𝓀𝓁𝓂𝓃𝒹𝒶𝒷𝒸 ±° ⊙⊚ ∫∬∭∮∯∰∝∞∟∠∡∑√∛∜∴≈⨯• ͢   ͢𝑖  ͢𝑗  ͢𝑘
@@ -140,6 +141,6 @@ namespace Physics {
     // PE = m * h * g
     // KE = 1/2 m * v^2
     // U = P * V = m * R(of the gas) * T ; T in kelvin (note this is the ideal gas law, so assumed uncompressed gas)
-    // Q = combustion or other source through mechanisims of radiation, conduction, or convection
+    // Q = combustion or other source through mechanisms of radiation, conduction, or convection
 }
 }
