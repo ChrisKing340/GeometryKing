@@ -73,12 +73,12 @@ namespace King {
         std::shared_ptr<PhysicsMaterial>        _sp_material;
         UnitOfMeasure::Mass                     _mass;
         UnitOfMeasure::Inertia                  _momentOfInteria;
-        float                                   _coefficientOfDrag = 0.f;
+        float                                   _coefficientOfDrag = 0.5f; // sphere
         float                                   _crossSectionalArea = 1.f;
         Pose                                    _pose;
         bool                                    _hasGravity = true;
         // calculated outputs
-        bool                                    _stationary = false;
+        bool                                    _sleep = false;
         std::pair<bool, DirectX::XMMATRIX>      _worldMatrix; // first bool is world matrix good (false = needs updating)
         Box                                     _boundingBox;
         Acceleration                            _linearAcceleration;
@@ -115,8 +115,8 @@ namespace King {
 
         // Assignments
         void Set_TBD(const float& TBDIn) { _TBD = TBDIn; }
-        void Set_linearVelocityCofM(const Velocity& linearVelocityCofMIn) { _linearVelocityCofM = linearVelocityCofMIn; _stationary = false; }
-        void Set_angularVelocityCofM(const AngularVelocity& angularVelocityCofMIn) { _angularVelocityCofM = angularVelocityCofMIn; _stationary = false; }
+        void Set_linearVelocityCofM(const Velocity& linearVelocityCofMIn) { _linearVelocityCofM = linearVelocityCofMIn; _sleep = false; }
+        void Set_angularVelocityCofM(const AngularVelocity& angularVelocityCofMIn) { _angularVelocityCofM = angularVelocityCofMIn; _sleep = false; }
         void SetWorldMatrixAsUpdateRequired() { _worldMatrix.first = false; }
 
         // Friends
@@ -173,10 +173,10 @@ inline void King::from_json(const json& j, PhysicsObject& to)
 
 inline void King::PhysicsObject::Update(const UnitOfMeasure::Time& dtIn)
 {
-    if (_stationary && !_forcesActingOnBody.size())
+    if (_sleep && !_forcesActingOnBody.size())
     {
         // sleeping
-        // note a change in velocities shoudld wake us up, refer to Set_... methods
+        // note a change in velocities should wake us up, refer to Set_... methods
         return;
     }
     if (_coefficientOfDrag != 0.f)
@@ -226,33 +226,31 @@ inline void King::PhysicsObject::Update(const UnitOfMeasure::Time& dtIn)
         _linearAcceleration += g;
     }
 
-    // Kinematics with simple Euler integration acceptable for game simulations
-    auto dtSq = dtIn * dtIn;
+    // Dynamics with simple Euler integration acceptable for game simulations
     // Effect of velocity and acceleration on position
-    // Xn = Xn-1 + v * dt + 1/2 * a * dt^2
-    Distance disA(_linearAcceleration, dtSq);
-    Distance disV(_linearVelocityCofM, dtIn);
-    float3 dis = _pose.GetTranslation() + disV + disA;
+    // X = X0 + v0 * t + 1/2 * a0 * t^2
+    // Xn = Xn-1 + (vn * tn - vn-1 * tn-1) + 1/2 * (an * tn^2 - an-1 * tn-1^2)
+    // our time step will be constant between simulation frames, so...
+    // Xn = Xn-1 + (vn-1 + vn) / 2 * dt // use the midpoint of velocity as a good integration approximation; vn accounts for current acceleration
+    Distance disVnLess1(_linearVelocityCofM, dtIn);
+    // vn = vn-1 + an * dt
+    _linearVelocityCofM += _linearAcceleration * dtIn;
+    Distance disVn(_linearVelocityCofM, dtIn);
+    float3 dis = _pose.GetTranslation() + (disVnLess1 + disVn) * 0.5f;
     _pose.SetTranslation(dis);
 
-    Rotation rotA(_angularAcceleration, dtSq);
-    Rotation rotV(_angularVelocityCofM, dtIn);
-    // apply rotation uses Quaternions, why it is multiplication and non-cumulative
-    Rotation rot = rotA * rotV * _pose.GetRotation();
-    _pose.SetRotation(rot);
-
-    // Effect on velocity is the derivative of the equation above and it is conserved
-    // for the next from due to Newton's 1st law, conservation of momentum P = v * m
-    // with mass constant between time steps, we just need to modify velocity
-    // vn+1 = vn + an * dt
-    _linearVelocityCofM += _linearAcceleration * dtIn;
+    Rotation rotVnLess1(_angularVelocityCofM, dt);
     _angularVelocityCofM += _angularAcceleration * dtIn;
+    Rotation rotVn(_angularVelocityCofM, dtIn);
+    // apply rotation uses Quaternions, why it is multiplication and non-cumulative
+    Rotation rot = rotVn * rotVnLess1 * _pose.GetRotation();
+    _pose.SetRotation(rot);
 
     SetWorldMatrixAsUpdateRequired();
 
     if (_angularAcceleration.Get_magnitude() == 0.f && _linearVelocityCofM.Get_magnitude() == 0.f)
     {
         // go to sleep
-        _stationary = true;
+        _sleep = true;
     }
 }
