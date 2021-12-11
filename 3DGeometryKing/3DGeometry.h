@@ -29,7 +29,6 @@ References:     Code not original or substantially created by me will be cited h
                 2) Möller, Tomas; Trumbore, Ben (1997). "Fast, Minimum Storage Ray-Triangle Intersection". Journal of Graphics Tools. 2: 21–28.
                 https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
 
-
                 3) Douglas Gregory (2018). OBB vs Sphere collision detection method answer. Game Development Q&A on forum stackexchange.com.
                 https://gamedev.stackexchange.com/questions/163873/separating-axis-theorem-obb-vs-sphere
 
@@ -166,44 +165,20 @@ namespace King {
     class alignas(16) VertexAttrib
     {
     public:
-        enum enumDesc
-        {
-            position = 0,
-            color,
-            textureCoord,
-            normal,
-            tangent,
-            bitangent,
-            boneWeights,
-            boneIndicies,
-
-            types
-        };
-        static std::vector<std::string>  description; // to describe enumDesc as strings.  Global initialized in 3DGeometry.cpp
-
+        static std::vector<std::string>     description; // to describe enumDesc as strings.  Global initialized in 3DGeometry.cpp
         enum enumFormat
         {
-            format_none = 0,
-            format_byte8,
-            format_byte8x2,
-            format_byte8x3,
-            format_byte8x4,
-            format_int16,
-            format_int16x2,
-            format_int16x3,
-            format_int32,
-            format_float32,
-            format_int32x3,
-            format_float32x2,
-            format_float32x3,
-            format_int32x4,
-            format_float32x4,
-
+            format_none = 0, format_byte8, format_byte8x2, format_byte8x3, format_byte8x4, format_int16, format_int16x2, format_int16x3, format_int32, format_float32, format_int32x3, format_float32x2, format_float32x3, format_int32x4, format_float32x4,
             formats
         };
+        enum enumDesc
+        {   position = 0,color,textureCoord,normal,tangent,bitangent,boneWeights,boneIndicies,
+            types
+        };
+
         uint16_t    _offset = 0; // bytes
         enumFormat  _format = format_none; // data format
-        enumDesc    _desc = types; // data descriptor
+        enumDesc    _desc   = types; // data descriptor
 
     public:
         VertexAttrib() = default;
@@ -213,53 +188,7 @@ namespace King {
         std::string                         GetDescriptionString() const { return description[_desc]; }
         const auto &                        GetFormat() const { return _format; }
         const auto &                        GetOffset() const { return _offset; }
-
-        uint32_t GetByteSize() const
-        {
-            uint32_t bytes;
-            switch (_format)
-            {
-            case VertexAttrib::enumFormat::format_none:
-                bytes = 0;
-                break;
-            case VertexAttrib::enumFormat::format_byte8:
-                bytes = 1;
-                break;
-            case VertexAttrib::enumFormat::format_byte8x2:
-                bytes = 2;
-                break;
-            case VertexAttrib::enumFormat::format_byte8x3:
-                bytes = 3;
-                break;
-            case VertexAttrib::enumFormat::format_byte8x4:
-                bytes = 4;
-                break;
-            case VertexAttrib::enumFormat::format_int16:
-                bytes = 2;
-                break;
-            case VertexAttrib::enumFormat::format_float32:
-            case VertexAttrib::enumFormat::format_int16x2:
-                bytes = 2 * 2;
-                break;
-            case VertexAttrib::enumFormat::format_int16x3:
-                bytes = 2 * 3;
-                break;
-            case VertexAttrib::enumFormat::format_float32x2:
-                bytes = 4 * 2;
-                break;
-            case VertexAttrib::enumFormat::format_int32x3:
-            case VertexAttrib::enumFormat::format_float32x3:
-                bytes = 4 * 3;
-                break;
-            case VertexAttrib::enumFormat::format_int32x4:
-            case VertexAttrib::enumFormat::format_float32x4:
-                bytes = 4 * 4;
-                break;
-            default:
-                bytes = 8; // any other would be 64 bits
-            }
-            return bytes;
-        }
+        uint32_t                            GetByteSize() const;
     };
     /******************************************************************************
     *    VertexFormat
@@ -275,49 +204,17 @@ namespace King {
 
         void Destroy() { nextAttribute = 0; }
 
-        bool Has(VertexAttrib::enumDesc descIn) const { for (uint16_t i = 0; i < nextAttribute; ++i) if (attributes[i]._desc == descIn) return true; return false; }
-        bool IsFirst(VertexAttrib::enumDesc descIn) const { if (nextAttribute > 0 && attributes[0]._desc == descIn) return true; return false; }
+        bool                    Has(VertexAttrib::enumDesc descIn) const;
+        bool                    IsFirst(VertexAttrib::enumDesc descIn) const;
 
-        uint16_t SetNext(VertexAttrib::enumDesc descIn, VertexAttrib::enumFormat formatIn)
-        {
-            assert(nextAttribute < 8);
-            attributes[nextAttribute]._offset += GetByteSize();
-            attributes[nextAttribute]._desc = descIn;
-            attributes[nextAttribute]._format = formatIn;
-            ++nextAttribute;
+        uint16_t                SetNext(VertexAttrib::enumDesc descIn, VertexAttrib::enumFormat formatIn);
 
-            return nextAttribute - 1;
-        }
-        uint32_t GetByteSize() const
-        {
-            uint32_t s = 0;
-            int i = 0;
-
-            while (i < nextAttribute) 
-            { 
-                s += attributes[i].GetByteSize(); 
-                ++i; 
-            }
-
-            return s;
-        }
-        uint32_t GetAttributeByteStart(uint16_t indexIn) const
-        {
-            if (indexIn == UINT16_MAX || indexIn >= nextAttribute) return 0;
-            uint16_t i = 0;
-            uint32_t s = 0;
-            while (i < indexIn)
-            {
-                s += attributes[i].GetByteSize();
-                ++i;
-            }
-            return s;
-        }
-        bool                    Has(VertexAttrib::enumDesc descIn);
-        auto                    GetNumAttributes() const { return nextAttribute; }
+        uint32_t                GetByteSize() const;
+        uint32_t                GetAttributeByteStart(uint16_t indexIn) const;
         auto                    GetAttribute(uint16_t indexIn) const { return attributes[indexIn]; }
         uint16_t                GetAttributeIndexFromDescription(VertexAttrib::enumDesc descIn) const;
         auto                    GetAttributeDescriptionFromIndex(uint16_t indexIn) const { return attributes[indexIn]._desc; }
+        auto                    GetNumAttributes() const { return nextAttribute; }
     };
     /******************************************************************************
     *    IndexFormat
@@ -480,7 +377,7 @@ namespace King {
     class Collidable
     {
     public:
-        virtual bool Collision(Collidable const& in) const = 0; // for double dispatch
+        virtual bool  Collision(Collidable const& in) const = 0; // for double dispatch
 
         virtual bool  Collision(Point const& pointIn) const = 0;
         virtual bool  Collision(Ray const& pointIn) const = 0;
@@ -592,6 +489,7 @@ namespace King {
     //std::wistream& operator>> (std::wistream& is, King::Point& out);
     //void to_json(json& j, const Point& from);
     //void from_json(const json& j, Point& to);
+
     /******************************************************************************
     *    Line - A single 3D line segment
     *    pt1 ------- pt2
@@ -694,7 +592,7 @@ namespace King {
         inline bool operator==  (const LineIndexed& rhs) { return pt[0] == rhs.pt[0] && pt[1] == rhs.pt[1]; }
         inline bool operator!=  (const LineIndexed& rhs) { return (pt[0] != rhs.pt[0] || pt[1] != rhs.pt[1]); }
         // Functionality
-        inline bool    __vectorcall         Intersects(Line &lineIn, FloatPoint3 *intersectionOut = nullptr) { assert(vb != nullptr); Line(float3(GetVertex(0)),float3(GetVertex(1))).Intersects(lineIn, intersectionOut); }
+        inline bool __vectorcall            Intersects(Line &lineIn, FloatPoint3 *intersectionOut = nullptr) { assert(vb != nullptr); Line(float3(GetVertex(0)),float3(GetVertex(1))).Intersects(lineIn, intersectionOut); }
         FloatPoint3 __vectorcall            FindNearestPointOnLineSegment(const FloatPoint3 &pointIn) { assert(vb != nullptr); return Line(float3(GetVertex(0)), float3(GetVertex(1))).FindNearestPointOnLineSegment(pointIn); }
         // Accessors
         uint8_t *                           GetVertex(const uint32_t indexIn) const { return vb + pt[indexIn] * vertexFormat.GetByteSize(); } // byte pointer to start of vertex data
@@ -1237,6 +1135,7 @@ namespace King {
         bool                                Intersects(const Plane& planeIn) const;
         bool                                Intersects(const Box &boxIn) const;
         bool                                Intersects(const Sphere &sphereIn) const;
+
         bool                                Contains(const Box &boxIn) const; // boxIn is wholely inside of this box
         bool __vectorcall                   Contains(const FloatPoint3 ptIn) const;
 
@@ -1441,6 +1340,7 @@ namespace King {
         inline void                         SetNoContact() { _contactVerts.clear(); }
 
         bool                                SAT_ContactPointsFromOBBonOBBIntersection(const Box& A, const Quaternion qA, const Box& B, const Quaternion qB, const std::vector<float3>& cornersA, const std::vector<float3>& cornersB);
+        bool                                ContractPointsFromSphereonOBBIntersection() { ; } // *** TO DO *** https://gamedev.stackexchange.com/questions/163873/separating-axis-theorem-obb-vs-sphere
     protected:
         inline std::vector<float3>          GetContactVerts(const std::vector<float3>& corners, const Distance& dist);
         inline std::vector<float3>          ClosestPointsToFaces(std::vector<float3>* contactVertsA, std::vector<float3>* contactVertsB);

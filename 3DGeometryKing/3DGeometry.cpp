@@ -4017,15 +4017,59 @@ void King::ModelScaffold::SetVertexElement(const size_t & vertexIndexIn, const V
     std::copy(dataIn, dataIn + length, (&_vertexBufferMaster[vertexIndexIn]) + offset);
 }
 
+uint16_t King::VertexFormat::SetNext(VertexAttrib::enumDesc descIn, VertexAttrib::enumFormat formatIn)
+{
+    assert(nextAttribute < 8);
+    attributes[nextAttribute]._offset += GetByteSize();
+    attributes[nextAttribute]._desc = descIn;
+    attributes[nextAttribute]._format = formatIn;
+    ++nextAttribute;
+
+    return nextAttribute - 1;
+}
+
+uint32_t King::VertexFormat::GetByteSize() const
+{
+    uint32_t s = 0;
+    int i = 0;
+
+    while (i < nextAttribute)
+    {
+        s += attributes[i].GetByteSize();
+        ++i;
+    }
+
+    return s;
+}
+
+uint32_t King::VertexFormat::GetAttributeByteStart(uint16_t indexIn) const
+{
+    if (indexIn == UINT16_MAX || indexIn >= nextAttribute) return 0;
+    uint16_t i = 0;
+    uint32_t s = 0;
+    while (i < indexIn)
+    {
+        s += attributes[i].GetByteSize();
+        ++i;
+    }
+    return s;
+}
+
 /******************************************************************************
 *    Method:    Has VertexAttrib
 ******************************************************************************/
-bool King::VertexFormat::Has(VertexAttrib::enumDesc descIn)
+bool King::VertexFormat::Has(VertexAttrib::enumDesc descIn) const
 {
     if (GetAttributeIndexFromDescription(descIn) != UINT16_MAX)  // ! error code
         return true;
     else
         return false;
+}
+bool King::VertexFormat::IsFirst(VertexAttrib::enumDesc descIn) const 
+{ 
+    if (nextAttribute > 0 && attributes[0]._desc == descIn) 
+        return true; 
+    return false; 
 }
 /******************************************************************************
 *    Method:    GetAttributeIndexFromDescription
@@ -5193,6 +5237,7 @@ std::vector<Contact> King::SAT_OBBonOBB(const Box& A, const King::Quaternion& qA
     Ay.MakeNormalize();
     Az.MakeNormalize();
     float3 whdA(A.GetExtents());
+
     // Local axis B in world space
     float3 PB = B.GetCenter();
     float3 Bx = cB[Box::CornerDescription::rbf] - cB[Box::CornerDescription::lbf];
@@ -5202,6 +5247,7 @@ std::vector<Contact> King::SAT_OBBonOBB(const Box& A, const King::Quaternion& qA
     By.MakeNormalize();
     Bz.MakeNormalize();
     float3 whdB(B.GetExtents());
+
     // Translation vector from A to B
     auto T = PB - PA;
     float tDotAx, tDotAy, tDotAz;
@@ -6200,4 +6246,53 @@ bool King::BoneHierarchy::Write_v1(ofstream& outfileIn)
 
     if (outfileIn.fail()) return false;
     return true;
+}
+/******************************************************************************
+*    VertexAttrib:    GetByteSize
+******************************************************************************/
+uint32_t King::VertexAttrib::GetByteSize() const
+{
+    uint32_t bytes;
+    switch (_format)
+    {
+    case VertexAttrib::enumFormat::format_none:
+        bytes = 0;
+        break;
+    case VertexAttrib::enumFormat::format_byte8:
+        bytes = 1;
+        break;
+    case VertexAttrib::enumFormat::format_byte8x2:
+        bytes = 2;
+        break;
+    case VertexAttrib::enumFormat::format_byte8x3:
+        bytes = 3;
+        break;
+    case VertexAttrib::enumFormat::format_byte8x4:
+        bytes = 4;
+        break;
+    case VertexAttrib::enumFormat::format_int16:
+        bytes = 2;
+        break;
+    case VertexAttrib::enumFormat::format_float32:
+    case VertexAttrib::enumFormat::format_int16x2:
+        bytes = 2 * 2;
+        break;
+    case VertexAttrib::enumFormat::format_int16x3:
+        bytes = 2 * 3;
+        break;
+    case VertexAttrib::enumFormat::format_float32x2:
+        bytes = 4 * 2;
+        break;
+    case VertexAttrib::enumFormat::format_int32x3:
+    case VertexAttrib::enumFormat::format_float32x3:
+        bytes = 4 * 3;
+        break;
+    case VertexAttrib::enumFormat::format_int32x4:
+    case VertexAttrib::enumFormat::format_float32x4:
+        bytes = 4 * 4;
+        break;
+    default:
+        bytes = 8; // any other would be 64 bits
+    }
+    return bytes;
 }
