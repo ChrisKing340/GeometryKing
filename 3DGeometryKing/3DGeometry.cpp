@@ -1737,7 +1737,7 @@ vector<float2> King::Model::HelperCreateTextureCoordinatesFor(const vector<float
     // transform from global space to texture space
     Rectangle2DF texture;
     const float3& from(normal);
-    const float3 to(1.f, -1.f, 0.f);
+    const float3 to(0.f, 0.f, 1.f); // normal to xy plane
     Quaternion toObjectSpace(from, to);
     // for a unit square, 1.41421356237 = diagonal * scale
     float d1 = (pt[2] - pt[1]).GetMagnitude();
@@ -1751,12 +1751,21 @@ vector<float2> King::Model::HelperCreateTextureCoordinatesFor(const vector<float
     {
         scale /= d1;
     }
+    // find the center of the object
+    auto c = float3::Average(pt);
+    c = toObjectSpace * c;
     // rotate and scale each point, discarding z which is zero
+    // translate from c to 0,0 for center of scale
     for (auto i = 0ul; i < 4; ++i)
     {
         auto uv = toObjectSpace * pt[i];
+        uv -= c;
         uv *= scale;
-        textureCoordinatesOut.emplace_back(float2(uv));
+        uv += 0.5f * c;
+        auto textureCoord = float2(uv);
+        float2::Absolute(textureCoord);
+        //textureCoord.SetY(-textureCoord.GetY()); // ??? invert y or 1-y ???
+        textureCoordinatesOut.emplace_back();
     }
     // translate min x to 0 and min y to 0 (max since 0 to -1)
     float2 t(FLT_MAX, -FLT_MAX);
@@ -5512,7 +5521,7 @@ std::vector<Contact> King::SAT_OBBonOBB(const Box& A, const King::Quaternion& qA
     // if we made it here then there were no separating axis
     for (auto& ea : contacts)
     {
-        if (ea.SAT_ContactPointsFromOBBonOBBIntersection(A, qA, B, qB, cA, cB))
+        if (ea.SetContactPointsFromOBBonOBBIntersection(A, qA, B, qB, cA, cB))
             rtn.push_back(ea);
     }
 
@@ -5582,7 +5591,7 @@ Contact King::SAT_ContactDepthAndDirectionFromOBBonOBBIntersection(const vector<
     return contact; // compiler to optimize as && from temporary
 }
 
-bool King::Contact::SAT_ContactPointsFromOBBonOBBIntersection(const Box& A, const Quaternion qA, const Box& B, const Quaternion qB, const vector<float3>& cornersA, const vector<float3>& cornersB)
+bool King::Contact::SetContactPointsFromOBBonOBBIntersection(const Box& A, const Quaternion qA, const Box& B, const Quaternion qB, const vector<float3>& cornersA, const vector<float3>& cornersB)
 {
     // penetration must already be defined
 

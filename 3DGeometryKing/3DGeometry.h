@@ -32,6 +32,12 @@ References:     Code not original or substantially created by me will be cited h
                 3) Douglas Gregory (2018). OBB vs Sphere collision detection method answer. Game Development Q&A on forum stackexchange.com.
                 https://gamedev.stackexchange.com/questions/163873/separating-axis-theorem-obb-vs-sphere
 
+                4) Johnny Huynh (2009). "Separating Axis Theorem for Oriented Bounding Boxes". Site www.jkh.me
+                https://www.jkh.me/files/tutorials/Separating%20Axis%20Theorem%20for%20Oriented%20Bounding%20Boxes.pdf
+                    Which expands the equations into the 15 cases set forth in the original separating axis theorem paper
+                    by S. Gottschalk, M. C. Lin, D. Manocha, University of North Carolina, 1996.
+                    http://gamma.cs.unc.edu/SSV/obb.pdf.
+
 Contact:        https://chrisking340.github.io/GeometryKing/
 
 Copyright (c) 2020, 2021 Christopher H. King
@@ -84,11 +90,22 @@ SOFTWARE.
     12/12/2021 - Version 2.2 - Classes Model & SkinnedModel (derived) gained method CreateMeshFrom(const Triangle& tri); 
         CreateMeshFrom(const Quad& quad);
         Added additional initializer lists to class constructors for Point, Line, Ray, Triangle, Quad and Path
+    12/13/2021 - Version 2.2.1 - Corrections/edits to 2.2
+
+    Version 3.0 Planned release - oriented box on oriented box and sphere collision tests. Previously extended our axis 
+        aligned bounding box in version 1 to oriented by passing in a orientation quaterion. WIP code to implement
+        separating axis theorem. Goal is to to finish the physics engine by taking the OB on OB contacts and pentration
+        and implementing a momentum based response to resolve the collisions. Plan is to support OB and Sphere collisions
+        in the v3 release candidate: 1st: Sphere on Sphere, 2nd: Sphere on OB, 3rd: OB on OB. 
+        Experimental code: 
+            class Contact; 
+            Function SAT_OBBonOBB(...); 
+            Function SAT_ContactDepthAndDirectionFromOBBonOBBIntersection(...)
 */
 
 constexpr auto KING_3DGEOMETRY_VERSION_MAJOR = 2;
 constexpr auto KING_3DGEOMETRY_VERSION_MINOR = 2;
-constexpr auto KING_3DGEOMETRY_VERSION_PATCH = 0;
+constexpr auto KING_3DGEOMETRY_VERSION_PATCH = 1;
 
 #include <DirectXCollision.h>
 #include <vector>
@@ -157,6 +174,8 @@ namespace King {
     //enum IndexFormat;
 
     // Functions
+    // *** TO DO *** WIP an oriented box (OB) or (OBB, oriented bounding box) on OBB collision test using separating axis theorem. Objective is a contact point.
+    // *** TO DO *** WIP an oriented box (OB) or (OBB, oriented bounding box) on Sphere collision test using nearest point intersection testing from reference #3
     class Contact;
     std::vector<Contact>    SAT_OBBonOBB(const Box& A, const King::Quaternion& qA, const Box& B, const King::Quaternion& qB);
     Contact                 SAT_ContactDepthAndDirectionFromOBBonOBBIntersection(const std::vector<float3>& cornersA, const std::vector<float3>& cornersB, const float3& nonSeparatingAxis);
@@ -1307,9 +1326,9 @@ namespace King {
     {
         /* variables */
     public:
-        std::vector<float3>                 _contactVerts;
-        float3                              _Obj1Pt;
-        float3                              _Obj2Pt;
+        std::vector<float3>                 _contactVerts; // use set methods
+        float3                              _Obj1Position;
+        float3                              _Obj2Position;
     protected:
         bool                                _staticContact = false; // has not changed since last update *** TO DO ***
         Distance                            _directionContactObj1_to_ContactObj2; // normal & mag in world space
@@ -1345,11 +1364,11 @@ namespace King {
         float3                              GetPenetrationDirection() const { return _directionContactObj1_to_ContactObj2.Get_unit_direction(); }
         // Assignments
         void                                SetContactPenetration(const Distance& Obj1_to_Obj2) { _directionContactObj1_to_ContactObj2 = Obj1_to_Obj2; _staticContact = false; }
-        void                                SetObjects(const float3& obj1Pt, const float3& obj2Pt) { _Obj1Pt = obj1Pt; _Obj2Pt = obj2Pt; }
+        void                                SetObjects(const float3& obj1Pt, const float3& obj2Pt) { _Obj1Position = obj1Pt; _Obj2Position = obj2Pt; }
         inline void                         SetNoContact() { _contactVerts.clear(); }
 
-        bool                                SAT_ContactPointsFromOBBonOBBIntersection(const Box& A, const Quaternion qA, const Box& B, const Quaternion qB, const std::vector<float3>& cornersA, const std::vector<float3>& cornersB);
-        bool                                ContractPointsFromSphereonOBBIntersection() { ; } // *** TO DO *** https://gamedev.stackexchange.com/questions/163873/separating-axis-theorem-obb-vs-sphere
+        bool                                SetContactPointsFromOBBonOBBIntersection(const Box& A, const Quaternion qA, const Box& B, const Quaternion qB, const std::vector<float3>& cornersA, const std::vector<float3>& cornersB);
+        // *** TO DO *** bool SetContactPointsFromSphereOnOBBIntersection() { ; } // *** TO DO *** https://gamedev.stackexchange.com/questions/163873/separating-axis-theorem-obb-vs-sphere
     protected:
         inline std::vector<float3>          GetContactVerts(const std::vector<float3>& corners, const Distance& dist);
         inline std::vector<float3>          ClosestPointsToFaces(std::vector<float3>* contactVertsA, std::vector<float3>* contactVertsB);
