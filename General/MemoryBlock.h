@@ -301,7 +301,7 @@ public:
                         T* dest = &Get(elementNumber);
                         std::copy(dataIn, dataIn + _stride, dest);
                     }
-    void            Copy(const size_t& startElementNumber, T* srcIn, size_t size = 0)
+    void            Copy(const size_t& startElementNumber, const T* srcIn, const size_t size = 0)
                     {
                         if (!size) size = _stride; // 1 element by default
                         T* dest = &Get(startElementNumber);

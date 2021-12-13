@@ -75,16 +75,18 @@ SOFTWARE.
     merged in to expand the usefulness of the library to make models. For example, Model received the ability to
     optimize vertex order, reverse normals, reverse triangle windings to match normals, and create meshes from
     other objects such as lines, paths, boxes, and sphere objects.  Previous minor releases added classes such
-    as capsules, collision detection in all classes, and intersection code between all of the objects. Some 
-    functionality from object on object and transforms into a mesh for display is in the works but since the 
-    code is three times larger than the version one release, thought a major increment was warranted and anyone
-    still on version one will want to take advantage of the many increases in functionality in version 2.
+    as capsules, collision detection in all classes, and intersection code between all of the objects.
 
-    11/28/2021 - Version 2.1 - Classes Model & SkinnedModel gained method CreateMeshFrom(const Path& p)
+    11/28/2021 - Version 2.1 - Classes Model & SkinnedModel (derived) gained method CreateMeshFrom(const Path& p), 
+        a closed path linking first two points to the last point, then marching down the closed path to fill it in. 
+        This is an efficient way to fill polygons as opposed of the alternative of all points to a central point to 
+        triangulate.
+    12/12/2021 - Version 2.2 - Classes Model & SkinnedModel (derived) gained method CreateMeshFrom(const Triangle& tri); 
+        CreateMeshFrom(const Quad& quad);
 */
 
 constexpr auto KING_3DGEOMETRY_VERSION_MAJOR = 2;
-constexpr auto KING_3DGEOMETRY_VERSION_MINOR = 1;
+constexpr auto KING_3DGEOMETRY_VERSION_MINOR = 2;
 constexpr auto KING_3DGEOMETRY_VERSION_PATCH = 0;
 
 #include <DirectXCollision.h>
@@ -870,8 +872,8 @@ namespace King {
         bool __vectorcall                   Intersects(const FloatPoint3 &rayOriginIn, const FloatPoint3 &rayDirectionIn, FloatPoint3 *intersectPointOut);
         // Accessors
         [[deprecated("Use GetNormalCCW() or GetNormalCW()")]] FloatPoint3 GetFaceNormal() { return FloatPoint3::CrossProduct(GetEdge1(), GetEdge2()); }
-        FloatPoint3                         GetNormalCCW() { FloatPoint3 c(Cross(GetEdge1(), GetEdge2())); c.MakeNormalize(); return c; } // RHS
-        FloatPoint3                         GetNormalCW() { FloatPoint3 c(Cross(GetEdge2(), GetEdge1())); c.MakeNormalize(); return c; } // RHS
+        FloatPoint3                         GetNormalCCW() const { FloatPoint3 c(Cross(GetEdge1(), GetEdge2())); c.MakeNormalize(); return c; } // RHS
+        FloatPoint3                         GetNormalCW() const { FloatPoint3 c(Cross(GetEdge2(), GetEdge1())); c.MakeNormalize(); return c; } // RHS
         FloatPoint3                         GetEdge1() const { return pt[1] - pt[0]; }
         FloatPoint3                         GetEdge2() const { return pt[2] - pt[0]; }
         FloatPoint3                         GetEdge3() const { return pt[2] - pt[1]; }
@@ -928,9 +930,9 @@ namespace King {
         void                                Scale(const float scaleIn) { for (int i = 0; i<4; ++i) pt[i] *= scaleIn; }
         void                                Scale(const FloatPoint3 scaleIn) { for (int i = 0; i<4; ++i) pt[i] *= scaleIn; }
         // Accessors
-        FloatPoint3                         GetNormalCCW() { FloatPoint3 c(Cross(GetEdge1(), GetEdge4())); c.MakeNormalize(); return c; } // RHS, // note: Cross is LHS for DirectX, swapped the terms for RHS
-        FloatPoint3                         GetNormalCW() { FloatPoint3 c(Cross(GetEdge4(), GetEdge1())); c.MakeNormalize(); return c; } // RHS
-        FloatPoint3                         GetVertex(int i) const { return pt[i]; }
+        FloatPoint3                         GetNormalCCW() const { FloatPoint3 c(Cross(GetEdge1(), GetEdge4())); c.MakeNormalize(); return c; } // RHS, // note: Cross is LHS for DirectX, swapped the terms for RHS
+        FloatPoint3                         GetNormalCW() const { FloatPoint3 c(Cross(GetEdge4(), GetEdge1())); c.MakeNormalize(); return c; } // RHS
+        FloatPoint3                         GetVertex(const unsigned int& i) const { assert(i<4); return pt[i]; }
         FloatPoint3                         GetCenter() const { FloatPoint3 r = pt[0] + pt[3]; r *= 0.5f; return r; }
         FloatPoint3                         GetEdge1() const { return pt[1] - pt[0]; }
         FloatPoint3                         GetEdge2() const { return pt[3] - pt[1]; }
@@ -1632,12 +1634,12 @@ namespace King {
         // begin file type v1
         std::string                         _modelName;
 
-        VertexFormat                        _vertexFormat;
+        VertexFormat                        _vertexFormat; // byte size of format is stride size for _vertexBufferMaster
         IndexFormat                         _indexFormat = IndexFormat::uint32;
 
         Box                                 _boundingBox;
 
-        MemoryBlock<uint8_t>                _vertexBufferMaster; // set stride to data size after vertexFormat is initialized
+        MemoryBlock<uint8_t>                _vertexBufferMaster; // set stride of buffer to vertexFormat size after format is initialized
         MemoryBlock<uint32_t>               _indexBufferMaster; // 4,294,967,295 maximum verticies with 32 bit indexing
         // end file type v1
 
@@ -1671,8 +1673,8 @@ namespace King {
         virtual bool                        Read_v1(ifstream& dataFile);
         virtual bool                        Write_v1(ofstream& dataFile);
 
-        Position                            ConvertWorldPointToObjectSpace(const Position& worldPointIn, const DirectX::XMMATRIX transform);
-        Ray                                 ConvertWorldRayToObjectSpace(const Ray& worldRayIn, const DirectX::XMMATRIX transform);
+        Position                            ConvertWorldPointToObjectSpace(const Position& worldPointIn, const DirectX::XMMATRIX worldMatrixIn);
+        Ray                                 ConvertWorldRayToObjectSpace(const Ray& worldRayIn, const DirectX::XMMATRIX worldMatrixIn);
 
         virtual void                        Transform(const DirectX::XMMATRIX transform); // modifies the underlying data
         virtual void _vectorcall            Translate(const float3 In); // modifies the underlying data
@@ -1859,12 +1861,18 @@ namespace King {
         void                                AddMesh(std::shared_ptr <TriangleMesh> meshIn) { _meshes.push_back(meshIn); }
 
         std::shared_ptr<TriangleMesh>       CreateMesh(const uint32_t numTrianglesIn, const uint32_t vbStartIn = 0, const uint32_t ibStartIn = 0); // empty mesh
-        int                                 CreateMeshFrom(const Path& p); // closed path in ccw ordering, RHS as a triangle fan of path(first, second, last) then path(last, second, last-1), etc
-        int                                 CreateMeshFrom(const Line& l, Distance d); // extrude d away from l as a quad
-        int                                 CreateMeshFrom(const Path& p, Distance d); // extrude d away from p as a series of perpendicular quads
+        
+        int                                 CreateMeshFrom(const Triangle& tri);
+        int                                 CreateMeshFrom(const Quad& quad); 
+        int                                 CreateMeshFrom(const Box& box); // presently, takes over all the data for the model, *** TO DO ** add mesh
+        int                                 CreateMeshFrom(const Sphere& sphere, const uint32_t segmentsIn = 16); // quads
+        int                                 CreateMeshFrom(const Path& closedPath); // closed path in ccw ordering, RHS as a triangle fan of path(first, second, last) then path(last, second, last-1), etc
+        int                                 CreateMeshFrom(const Line& line, Distance d); // extrude d away from l as a quad
+        int                                 CreateMeshFrom(const Path& path, Distance d); // extrude d away from p as a series of perpendicular quads
         int                                 CreateMeshFrom(const Path& pFrom, const Path& pTo); // extrude pFrom to pTo as a series of connected quads
-        int                                 CreateMeshFrom(const Box& b); // presently, takes over all the data for the model, *** TO DO ** add mesh
-        int                                 CreateMeshFrom(const Sphere& s, const uint32_t segmentsIn = 16); // quads
+    protected:
+        std::vector<float2>                 HelperCreateTextureCoordinatesFor(const vector<float3>& positions);
+        int                                 HelperCreateMeshFrom(const vector<float3>& positionsIn, const vector<uint32_t>& indiciesIn, const vector<float2>& uvIn, const vector<float3>& normalsIn);
     };                                                     
 
     /******************************************************************************

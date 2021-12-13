@@ -1604,7 +1604,7 @@ King::LineModel& King::LineModel::operator= (const King::Box& boxIn)
     return *this;
 }
 /******************************************************************************
-*    Method:    CreateMeshFrom
+*    Method:    CreateMeshFrom Line
 ******************************************************************************/
 int King::LineModel::CreateMeshFrom(const King::Line& lineIn, float4 colorIn)
 {
@@ -1672,6 +1672,195 @@ int King::LineModel::CreateMeshFrom(const King::Line& lineIn, float4 colorIn)
     CalculateBoundingBox();
 
     return index;
+}
+/******************************************************************************
+*    Method:    CreateMeshFrom Triangle
+******************************************************************************/
+int King::Model::CreateMeshFrom(const Triangle& tri)
+{
+    _modelName = "Triangle";
+
+    vector<float3>      positions(3);
+    vector<uint32_t>    indicies(3);
+    vector<float3>      normals(3);
+
+    indicies = { 0, 1, 2 };
+    auto normal = tri.GetNormalCCW();
+
+    for (auto i = 0ul; i < 3; ++i)
+    {
+        positions.push_back(tri.GetVertex(i));
+        normals.push_back(normal);
+    }
+
+    auto textureCoordinates = HelperCreateTextureCoordinatesFor(positions);
+
+    return HelperCreateMeshFrom(positions, indicies, textureCoordinates, normals);
+}
+/******************************************************************************
+*    Method:    CreateMeshFrom Quad
+******************************************************************************/
+int King::Model::CreateMeshFrom(const Quad& q)
+{
+    _modelName = "Quad";
+
+    vector<float3>      positions(4);
+    vector<uint32_t>    indicies(6);
+    vector<float3>      normals(4);
+
+    indicies = { 0, 1, 2, 2, 1, 3 };
+    auto normal = q.GetNormalCCW();
+
+    for (auto i = 0ul; i < 4; ++i)
+    {
+        positions.push_back(q.GetVertex(i));
+        normals.push_back(normal);
+    }
+
+    auto textureCoordinates = HelperCreateTextureCoordinatesFor(positions);
+
+    return HelperCreateMeshFrom(positions, indicies, textureCoordinates, normals);
+}
+/******************************************************************************
+*    Method:    HelperCreateTextureCoordinatesFor
+******************************************************************************/
+vector<float2> King::Model::HelperCreateTextureCoordinatesFor(const vector<float3>& pt)
+{
+    assert(pt.size() > 2);
+    vector<float2> textureCoordinatesOut(pt.size());
+
+    // *** TO DO *** this works for triangles and quads, extend to an arbitrary plannar path
+    // RHS CCW
+    auto normal = Cross(pt[1] - pt[0], pt[2] - pt[0]);
+    normal.MakeNormalize();
+
+    // transform from global space to texture space
+    Rectangle2DF texture;
+    const float3& from(normal);
+    const float3 to(1.f, -1.f, 0.f);
+    Quaternion toObjectSpace(from, to);
+    // for a unit square, 1.41421356237 = diagonal * scale
+    float d1 = (pt[2] - pt[1]).GetMagnitude();
+    float scale(1.41421356237f);
+    if (pt.size() > 3)
+    {
+        float d2 = (pt[3] - pt[0]).GetMagnitude();
+        scale /= (d1 > d2 ? d1 : d2);
+    }
+    else
+    {
+        scale /= d1;
+    }
+    // rotate and scale each point, discarding z which is zero
+    for (auto i = 0ul; i < 4; ++i)
+    {
+        auto uv = toObjectSpace * pt[i];
+        uv *= scale;
+        textureCoordinatesOut.emplace_back(float2(uv));
+    }
+    // translate min x to 0 and min y to 0 (max since 0 to -1)
+    float2 t(FLT_MAX, -FLT_MAX);
+    for (auto i = 0ul; i < 4; ++i)
+    {
+        if (textureCoordinatesOut[i].GetX() < t.GetX())
+            t.SetX(textureCoordinatesOut[i].GetX());
+        if (textureCoordinatesOut[i].GetY() > t.GetY())
+            t.SetY(-textureCoordinatesOut[i].GetY()); // note sign change so we offset correctly
+    }
+    for (auto& ea : textureCoordinatesOut)
+        ea -= t;
+
+    // *** TO DO *** uv creation is untested
+    return textureCoordinatesOut;
+}
+/******************************************************************************
+*    Method:    HelperCreateMeshFrom
+*       Input buffers with positionsIn and indicies being of non-zero size
+*       Input buffers uvIn and normalsIn are optional and added if that format
+*           is already defined in the model vertex format. Note that these
+*           two buffers must be size zero OR size of positionsIn.
+******************************************************************************/
+int King::Model::HelperCreateMeshFrom(const vector<float3>& positionsIn, const vector<uint32_t>& indiciesIn, const vector<float2>& uvIn, const vector<float3>& normalsIn)
+{
+    // Input validation
+    assert(positionsIn.size());
+    assert(indiciesIn.size());
+    assert((uvIn.size() == 0 ? true : uvIn.size() == positionsIn.size()));
+    assert((normalsIn.size() == 0 ? true : normalsIn.size() == positionsIn.size()));
+    // use existing vertex format
+    auto stride = _vertexFormat.GetByteSize();
+    assert(stride == GetVertexBufferMaster().GetStride());
+    assert(stride);
+    // format offsets
+    auto indexPos = _vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::enumDesc::position); // UINT16_MAX did not find
+    auto indexUV = _vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::enumDesc::textureCoord); // UINT16_MAX did not find
+    auto indexNorm = _vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::enumDesc::normal); // UINT16_MAX did not find
+    // must have position data in format, if not, reset
+    if (indexPos == UINT16_MAX)
+    {
+        _vertexBufferMaster.Destroy();
+        _indexBufferMaster.Destroy();
+        _vertexFormat.SetNext(VertexAttrib::enumDesc::position, VertexAttrib::enumFormat::format_float32x3);
+        stride = _vertexFormat.GetByteSize();
+        _vertexBufferMaster.SetStride(stride);
+    }
+    // start where the last mesh left off
+    const uint32_t vbStart(_vertexBufferMaster.GetElements()); 
+    const uint32_t ibStart(_indexBufferMaster.GetElements()); 
+    // create our mesh and copy the indicies
+    {
+        // Expand index memory block
+        MemoryBlock<uint32_t> ib(indiciesIn.size());
+        size_t numTriangles = indiciesIn.size() / 3;
+        // indicies, RH CCW
+        ib.Copy(0, indiciesIn.data(), indiciesIn.size());
+        // store our data into the model master buffers
+        AddMasterIndexData(ib);
+        // our mesh!
+        auto tm = CreateMesh(numTriangles, vbStart, ibStart);
+        tm->Set_name("CreateMeshFrom");
+        tm->Set_materialName("default");
+    }
+    // verticies
+    {
+        // Expand vertex memory block
+        {
+            MemoryBlock<uint8_t> vb(positionsIn.size(), GetVertexStride());
+            AddMasterVertexData(vb);
+        }
+        const auto offsetPosBytes = _vertexFormat.GetAttributeByteStart(indexPos);
+        const auto offsetUVBytes = _vertexFormat.GetAttributeByteStart(indexUV);
+        const auto offsetNormBytes = _vertexFormat.GetAttributeByteStart(indexNorm);
+
+        assert(indexPos != UINT16_MAX);
+
+        auto srcPos = reinterpret_cast<const uint8_t*>(positionsIn.data());
+        auto srcUV = reinterpret_cast<const uint8_t*>(uvIn.data());
+        auto srcNor = reinterpret_cast<const uint8_t*>(normalsIn.data());
+
+        // build the vertex data with pos, uv, and normals as appropriate
+        for (size_t i = 0; i < positionsIn.size(); ++i)
+        {
+            // copy directly into the master vertex buffer
+            auto dest = GetVertexAddr(i, vbStart);
+            // positions
+            std::copy(srcPos, srcPos + 12, dest + offsetPosBytes);
+            // texture coordinates
+            if (indexUV != UINT16_MAX)
+                std::copy(srcNor, srcNor + 8, dest + offsetUVBytes);
+            // normals
+            if (indexNorm != UINT16_MAX)
+                std::copy(srcNor, srcNor + 12, dest + offsetNormBytes);
+        }
+    }
+    // tangents and bitangents
+    CalculateTangentsAndBiTangents();
+
+    // update the bounding geometry
+    CalculateBoundingBox();
+
+    // return the mesh index
+    return _meshes.size() - 1;
 }
 /******************************************************************************
 *    Method:    operator= ; copy assignment
@@ -3184,15 +3373,15 @@ bool King::ModelScaffold::Write_v1(ofstream& outfileIn)
 //		for collision detection rather than converting all of the meshes verticies to
 //		world space.  Included here for convience and completeness.
 ******************************************************************************/
-Position King::ModelScaffold::ConvertWorldPointToObjectSpace(const Position& worldPointIn, const DirectX::XMMATRIX transformIn)
+Position King::ModelScaffold::ConvertWorldPointToObjectSpace(const Position& worldPointIn, const DirectX::XMMATRIX worldMatrixIn)
 {
-    DirectX::XMMATRIX invWorldMatrix = XMMatrixInverse(nullptr, transformIn);
+    DirectX::XMMATRIX invWorldMatrix = XMMatrixInverse(nullptr, worldMatrixIn);
     Position rtn = worldPointIn * invWorldMatrix;
     return rtn;
 }
-Ray King::ModelScaffold::ConvertWorldRayToObjectSpace(const Ray& worldRayIn, const DirectX::XMMATRIX transformIn)
+Ray King::ModelScaffold::ConvertWorldRayToObjectSpace(const Ray& worldRayIn, const DirectX::XMMATRIX worldMatrixIn)
 {
-    DirectX::XMMATRIX invWorldMatrix = XMMatrixInverse(nullptr, transformIn);
+    DirectX::XMMATRIX invWorldMatrix = XMMatrixInverse(nullptr, worldMatrixIn);
     Ray rtn = worldRayIn * invWorldMatrix;
     return rtn;
 }
@@ -3401,11 +3590,12 @@ int King::Model::CreateMeshFrom(const Line& l, Distance d)
 int King::Model::CreateMeshFrom(const Path& p)
 {
     assert(p.size() > 2);
-
     auto numPathVerts = p.size();
 
+    _modelName = "ClosedPath";
+
     vector<float3> verticies;
-    vector<int32_t> indicies;
+    vector<uint32_t> indicies;
     vector<float2> textureCoordinates;
     vector<float3> normals;
 
@@ -3465,85 +3655,7 @@ int King::Model::CreateMeshFrom(const Path& p)
     normals[0] = normals[2];
     normals[1] = normals[2];
 
-    // Buffers and format for model
-    // use existing format
-    auto stride = _vertexFormat.GetByteSize();
-    // is a model vertex buffer already setup?
-    assert(stride == GetVertexBufferMaster().GetStride());
-    auto indexPos = _vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::enumDesc::position); // UINT16_MAX did not find
-    auto indexUV = _vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::enumDesc::textureCoord); // UINT16_MAX did not find
-    auto indexNorm = _vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::enumDesc::normal); // UINT16_MAX did not find
-
-    if (indexPos == UINT16_MAX)
-    {
-        // minimum is not present, reset the master and add position as minimum
-        _vertexBufferMaster.Destroy();
-        _indexBufferMaster.Destroy();
-        _vertexFormat.SetNext(VertexAttrib::enumDesc::position, VertexAttrib::enumFormat::format_float32x3);
-        stride = _vertexFormat.GetByteSize();
-        _vertexBufferMaster.SetStride(stride);
-    }
-
-    // define size of elements
-    const size_t numVertex = verticies.size();
-    size_t numTriangles = indicies.size() / 3;
-
-    // start where the last mesh left off
-    const uint32_t vbStart(_vertexBufferMaster.GetElements()); // zero based to this start position for mesh
-    const uint32_t ibStart(_indexBufferMaster.GetElements()); // zero based to this start position for mesh
-    // create our mesh and allocate memory
-    {
-        // total vertex and indicies for our mesh matching our model's master format
-        MemoryBlock<uint8_t> vb(numVertex, GetVertexStride());
-        MemoryBlock<uint32_t> ib(3 * numTriangles);
-        // store our data into the model master buffers
-        AddMasterVertexData(vb);
-        AddMasterIndexData(ib);
-        // our mesh!
-        auto tm = CreateMesh(numTriangles, vbStart, ibStart);
-        tm->Set_name("CreateMeshFrom(path)");
-        tm->Set_materialName("default");
-    }
-
-    // indicies, RH CCW
-    MemoryBlock<uint32_t> ib(3);
-    for (size_t c = 0; c < numTriangles; c += 3)
-    {
-        ib[0] = indicies[c + 0]; ib[1] = indicies[c + 1]; ib[2] = indicies[c + 2];
-        _indexBufferMaster.Copy(ibStart + c, &ib.GetData(), ib.GetElements());
-    }
-
-    // verticies
-    const auto offsetPosBytes = _vertexFormat.GetAttributeByteStart(indexPos);
-    const auto offsetUVBytes = _vertexFormat.GetAttributeByteStart(indexUV);
-    const auto offsetNormBytes = _vertexFormat.GetAttributeByteStart(indexNorm);
-        
-    assert(indexPos != UINT16_MAX);
-
-    auto srcPos = reinterpret_cast<uint8_t*>(verticies.data());
-    auto srcUV = reinterpret_cast<uint8_t*>(textureCoordinates.data());
-    auto srcNor = reinterpret_cast<uint8_t*>(normals.data());
-
-    for (size_t i = 0; i < verticies.size(); ++i)
-    {
-        auto dest = GetVertexAddr(i, vbStart);
-        // positions
-        std::copy(srcPos, srcPos + 12, dest + offsetPosBytes);
-        // texture coordinates
-        if (indexUV != UINT16_MAX)
-            std::copy(srcNor, srcNor + 8, dest + offsetUVBytes);
-        // normals
-        if (indexNorm != UINT16_MAX)
-            std::copy(srcNor, srcNor + 12, dest + offsetNormBytes);
-    }
-    // tangents and bitangents
-    CalculateTangentsAndBiTangents();
-
-    // update the bounding geometry
-    CalculateBoundingBox();
-
-    // return the mesh index
-    return _meshes.size() - 1;
+    return HelperCreateMeshFrom(verticies, indicies, textureCoordinates, normals);
 }
 /******************************************************************************
 *    Method:    CreateMeshFrom
