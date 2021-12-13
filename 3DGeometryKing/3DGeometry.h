@@ -83,6 +83,7 @@ SOFTWARE.
         triangulate.
     12/12/2021 - Version 2.2 - Classes Model & SkinnedModel (derived) gained method CreateMeshFrom(const Triangle& tri); 
         CreateMeshFrom(const Quad& quad);
+        Added additional initializer lists to class constructors for Point, Line, Ray, Triangle, Quad and Path
 */
 
 constexpr auto KING_3DGEOMETRY_VERSION_MAJOR = 2;
@@ -414,6 +415,7 @@ namespace King {
         explicit inline Point(const FloatPoint4 &ptIn) : Position(ptIn) { ; }
         explicit inline Point(const Point &in) { *this = in; } // forward to copy assignment
         explicit inline Point(Point &&in) noexcept { *this = std::move(in); } // forward to move assignment
+        explicit Point(std::initializer_list<float3> il) { assert(il.size() == 1); Set(*il.begin()); }
 
         virtual ~Point() = default;
 
@@ -512,6 +514,7 @@ namespace King {
         Line(const Line &in) { *this = in; } // forward to copy assignment
         Line(Line &&in) noexcept { *this = std::move(in); } // forward to move assignment
         Line(const FloatPoint3 &pt1In, const FloatPoint3 &pt2In) { pt[0] = pt1In; pt[1] = pt2In; }
+        explicit Line(std::initializer_list<float3> il) { assert(il.size() == 2); pt[0] = *il.begin(); pt[1] = *il.end(); }
 
         virtual ~Line() = default;
 
@@ -627,6 +630,7 @@ namespace King {
         Path() = default;
         Path(const Path &in) { *this = in; } // forward to copy assignment
         Path(Path &&in) noexcept { *this = std::move(in); } // forward to move assignment
+        explicit Path(std::initializer_list<float3> il) { for (const auto& ea : il) { push_back(ea); } }
 
         virtual ~Path() = default;
 
@@ -666,8 +670,11 @@ namespace King {
         Ray() = default;
         Ray(const Ray &in) { *this = in; } // forward to copy assignment
         Ray(Ray &&in) noexcept { *this = std::move(in); } // forward to move assignment
-        Ray(const FloatPoint3 &originIn, const FloatPoint3 &directionIn) { origin = originIn; direction = directionIn; direction.MakeNormalize(); }
+        Ray(const float3 &originIn, const float3 &directionIn) { origin = originIn; direction = directionIn; direction.MakeNormalize(); }
+        explicit Ray(std::initializer_list<float3> il) { assert(il.size() == 2); origin = *il.begin(); direction = *il.end(); }
+
         virtual ~Ray() = default;
+
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<Ray*>(p)); }
@@ -858,7 +865,7 @@ namespace King {
         Triangle(TriangleIndexed &in) { pt[0] = in.GetVertex(0); pt[1] = in.GetVertex(1); pt[2] = in.GetVertex(2); }
         explicit Triangle(const FloatPoint3 &pt1In, const FloatPoint3 &pt2In, const FloatPoint3 &pt3In) { pt[0] = pt1In; pt[1] = pt2In; pt[2] = pt3In; }
         // Construction Initializer
-        Triangle(std::initializer_list<FloatPoint3> il) { assert(il.size() < 4); size_t count = 0; for (auto & each : il) { pt[count] = each; ++count; } }
+        Triangle(std::initializer_list<FloatPoint3> il) { assert(il.size() <= 3); size_t count = 0; for (auto & each : il) { pt[count] = each; ++count; } }
 
         virtual ~Triangle() = default;
 
