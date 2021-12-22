@@ -5,8 +5,8 @@ Title:          GeometryKing
 Description:    File to easily include all library headers
                 https://github.com/ChrisKing340/GeometryKing
 
-                2D and 3D geometry fundamentals and advanced modeling. C++ generic 
-                Classes with no rendering dependencies.
+                2D and 3D geometry fundamentals and advanced modeling. 
+                C++ classes with no rendering dependencies.
 
                 GeometryKing contains the base SIMD data types class wrappers to 
                 seamlessly accelerate your code using the popular DirectXMath 
@@ -14,7 +14,7 @@ Description:    File to easily include all library headers
                 defines geometry types, classes and methods that make the basis of
                 2D and 3D games, simulators, and engineering applications.
 
-                Compiled with Visual Studio 2019, inteded for 64 Bit Windows 10 but
+                Compiled with Visual Studio 2019, intended for 64 Bit Windows 10 but
                 may work just fine on 32 Bit Windows 10 or lesser machine.
 
                 This code is a small part of a fully functional DirectX 12 game 

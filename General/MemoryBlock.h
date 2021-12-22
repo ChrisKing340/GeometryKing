@@ -296,12 +296,13 @@ public:
     const auto      GetElements() const { return _length / _stride; } // number of stride elements
     // Assignments
     void            SetStride(const size_t & strideIn) { _stride = strideIn; }
+
     [[deprecated("Use Copy(...) instead.")]] void SetElementToValueByByteStride(const size_t & elementNumber, T* dataIn)
                     {
                         T* dest = &Get(elementNumber);
                         std::copy(dataIn, dataIn + _stride, dest);
                     }
-    void            Copy(const size_t& startElementNumber, const T* srcIn, const size_t size = 0)
+    void            Copy(const size_t& startElementNumber, const T* srcIn, size_t size = 0)
                     {
                         if (!size) size = _stride; // 1 element by default
                         T* dest = &Get(startElementNumber);

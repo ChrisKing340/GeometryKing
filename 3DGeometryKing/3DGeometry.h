@@ -126,6 +126,9 @@ using json = nlohmann::json;
 #include "..\Physics\UnitOfMeasure.h"
 #include "..\Physics\Physics.h"
 
+// Geometry building blocks
+#include "..\2DGeometryKing\2DGeometry.h"
+
 // WIP: Collsision testing, these are TEMPORARIES for experimentation
 #include "..\Physics\CK_Cube.h"
 #include "..\Physics\CK_CubeCollision.h"
@@ -1897,10 +1900,10 @@ namespace King {
         int                                 CreateMeshFrom(const Path& path, Distance d); // extrude d away from p as a series of perpendicular quads
         int                                 CreateMeshFrom(const Path& pFrom, const Path& pTo); // extrude pFrom to pTo as a series of connected quads
     protected:
-        std::vector<float2>                 HelperCreateTextureCoordinatesFor(const vector<float3>& positions);
+        std::vector<King::float2>           HelperCreateTextureCoordinatesFor(const std::vector<King::float3>& pt);
         int                                 HelperCreateMeshFrom(const vector<float3>& positionsIn, const vector<uint32_t>& indiciesIn, const vector<float2>& uvIn, const vector<float3>& normalsIn);
     };                                                     
-
+    
     /******************************************************************************
     *    BoneHierarchy
     *       Modifier for geometry to allow skin transforms of a bone hierarchy.

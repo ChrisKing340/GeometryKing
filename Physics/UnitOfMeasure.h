@@ -175,6 +175,13 @@ namespace UnitOfMeasure
     const float tonsTokg = tonsTolbm * lbmTokg; // slug
     // ANGLE
     const float PI = 3.141592f; // highest precision for 32 bit floating point value
+    const float PI_DIV2 = PI / 2.f; // 90 deg
+    const float PI_DIV4 = PI / 4.f; // 45 deg
+    const float PI_DIV6 = PI / 6.f; // 30 deg
+    const float PI_DIV12 = PI / 12.f; // 15 deg
+    const float PI_DIV18 = PI / 18.f; // 10 deg
+    const float PI_DIV36 = PI / 36.f; // 5 deg
+    const float PI_DIV180 = PI / 180.f; // 1 deg
     const float degTorad = PI / 180.f; // rad
     const float radTodeg = 180.f / PI; // deg  
     // DENSITY

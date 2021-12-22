@@ -63,7 +63,7 @@ void King::from_json(const json& j, Quaternion& to) { j.at("x").get_to(to.f[0]);
 /******************************************************************************
 *   Math functions and methods
 ******************************************************************************/
-inline King::IntPoint3::IntPoint3(const FloatPoint3& in)
+King::IntPoint3::IntPoint3(const FloatPoint3& in)
 {
     auto f = in.Get_XMFLOAT3();
     i[0] = static_cast<int>(f.x);
@@ -71,14 +71,14 @@ inline King::IntPoint3::IntPoint3(const FloatPoint3& in)
     i[2] = static_cast<int>(f.z);
 }
 
-inline King::FloatPoint2::FloatPoint2(FloatPoint3 vecIn)
+King::FloatPoint2::FloatPoint2(FloatPoint3 vecIn)
 {
     v = vecIn;
     DirectX::XMVectorSetZ(v, 0.f);
     DirectX::XMVectorSetW(v, 0.f);
 }
 
-inline King::FloatPoint3::FloatPoint3(FloatPoint4 vecIn)
+King::FloatPoint3::FloatPoint3(FloatPoint4 vecIn)
 {
     v = vecIn;
     DirectX::XMVectorSetW(v, 0.f);

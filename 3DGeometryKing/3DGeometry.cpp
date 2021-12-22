@@ -1721,10 +1721,12 @@ int King::Model::CreateMeshFrom(const Quad& q)
 
     return HelperCreateMeshFrom(positions, indicies, textureCoordinates, normals);
 }
+
+
 /******************************************************************************
 *    Method:    HelperCreateTextureCoordinatesFor
 ******************************************************************************/
-vector<float2> King::Model::HelperCreateTextureCoordinatesFor(const vector<float3>& pt)
+std::vector<King::float2> King::Model::HelperCreateTextureCoordinatesFor(const std::vector<King::float3>& pt)
 {
     assert(pt.size() > 2);
     vector<float2> textureCoordinatesOut(pt.size());
