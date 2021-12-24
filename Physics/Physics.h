@@ -80,14 +80,10 @@ using json = nlohmann::json; // for convenience
 //        Trajectory
 
 namespace King {
-    // Curved motion, use component accelerations
+
     float3 __vectorcall UnitTangentVector(Velocity velIn); // The analogue to the slope of the tangent line is the direction of the tangent line. Since velocity is the derivative of position, it is a tangent function to position.
-    float3 __vectorcall UnitNormalPrincipleVector(Acceleration accIn); // principle unit vector. Geometrically, for a non straight curve, this vector is the unique vector that point into the curve.
-    // acceleration = ͢aT + ͢aN
-    // acceleration = (at * ͢T) + (an * ͢N) ; at = acceleration tangential magnitude component; an = acceleration normal magnitude component
-    //  ͢aT = (at * ͢T) ; magnitude and direction
+    float3 __vectorcall UnitNormalPrincipleVector(Acceleration accIn); // principle unit vector. Geometrically, for a curve, this vector is the unique vector that point into the curve.
     Acceleration __vectorcall AccelerationTangentialComponent(Acceleration accIn, Velocity velIn);
-    //  ͢aN = (an * ͢N) ; magnitude and direction
     Acceleration __vectorcall AccelerationNormalComponent(Acceleration accIn, Velocity velIn);
 
 namespace Physics {
@@ -98,26 +94,48 @@ namespace Physics {
     //*** MECHANICS ***
     // all of the below are a subset topics belonging to mechanics
 
-    //*** Kinematics *** 
+    //*** Trajectory *** 
     // Kinematics is most useful with the force on an object is constant, and therefore acceleration is constant (such as the force of gravity).
     // p = p0 + v0 t + 1/2 a t^2
-    Position MechanicsKinematics_Trajectory(const Position& initialPosIn, const Velocity& initialVelIn, const Acceleration& constAccelIn, const UnitOfMeasure::Time& tIn);
+    Position Mechanics_Trajectory(const Position& initialPosIn, const Velocity& initialVelIn, const Acceleration& constAccelIn, const UnitOfMeasure::Time& tIn);
     // p = p0 + v0 t + 1/2 g t^2
-    Position MechanicsKinematics_TrajectoryPositionAtTimeWithNegativeYGravity(const Position& initialPosIn, const Velocity& initialVelIn, const UnitOfMeasure::Time& tIn);
+    Position Mechanics_TrajectoryPositionAtTimeWithNegativeYGravity(const Position& initialPosIn, const Velocity& initialVelIn, const UnitOfMeasure::Time& tIn);
     // t1 = v0Y / g
-    UnitOfMeasure::Time MechanicsKinematics_TrajectoryTimeAtMaximumHeightWithNegativeYGravity(const Velocity& initialVelIn);
+    UnitOfMeasure::Time Mechanics_TrajectoryTimeAtMaximumHeightWithNegativeYGravity(const Velocity& initialVelIn);
     // h = v0Y^2 / 2g
-    UnitOfMeasure::Length MechanicsKinematics_TrajectoryHeightAtMaximumHeightWithNegativeYGravity(const Velocity& initialVelIn);
+    UnitOfMeasure::Length Mechanics_TrajectoryHeightAtMaximumHeightWithNegativeYGravity(const Velocity& initialVelIn);
     
-    // *** Dynamics of Rotations ***
-    // AngularVelocity class has methods to calculate linear acceleration from the rotational motion
+    // *** Dynamics ***  
+    // Acceleration of motion has two components, one normal to the direction of motion (velocity) and one tangential
+    // accIn = (an * ͢N) + (at * ͢T);  ͢N and ͢T are relative to the velocity vector
+    // ͢aN = (an * ͢N) ; magnitude and direction
+    Acceleration a0;
+    Acceleration an = AccelerationNormalComponent(a0, v);
+    // ͢aT = (at * ͢T) ; magnitude and direction
+    Acceleration at = AccelerationTangentialComponent(a0, v);
+
+    // *** Dynamics of Rotations ***   
+    Length l(10._m);
+    AngularAccel aa(1._radPerSecSq);
+    AngularSpeed as(1._radPerSec);
+
+    Distance r(l, float3(0.f, 1.f, 0.f));
+    float3 axis(1.f, 0.f, 0.f);
+    AngularAcceleration 𝛼(aa, axis);
+    AngularVelocity 𝜔(as, axis);
+
+    // AngularVelocity class has methods to calculate linear accelerations of the rotational motion
     // ͢a = ͢a0 + 𝛼 x ͢r + ͢𝜔 x ( ͢𝜔 x ͢r )
-    // ͢a = King::AngularVelocity::CalculateLinearAccelerationFrom(const Acceleration& a0In, const AngularAcceleration& alphaIn, const Distance& rIn)
-    // recall that ͢a = ͢at + ͢an
+    Acceleration a = 𝜔.CalculateLinearAccelerationFrom(a0, 𝛼, r);
+
     // ͢an = r • | ͢𝜔|^2 ; with direction along radius (and opposite) to maintain curviture
-    //  ͢at = ͢a - ͢an
-    // AngularVelocity class also has a method to calculate the linear velocity at the end of a radius about the angular velocity axis of rotation
-    // v = ͢𝜔 x ͢r ; 
+    Acceleration an = 𝜔.CalculateNormalAccelerationAlong_radius(r);
+    // since ͢a = ͢at + ͢an,
+    // ͢at = ͢a - ͢an
+    Acceleration at = a - an;
+
+    // ͢v = ͢𝜔 x ͢r ; 
+    Velocity v = 𝜔.CalculateTangentialVelocityAtEndOf_radius(r);
 
     //*** Work ***
     // Work links the concept of force and energy and is most useful when force varies with time, and therefore acceleration is not constant

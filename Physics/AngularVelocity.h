@@ -68,7 +68,7 @@ using json = nlohmann::json;
 *       𝜃f - 𝜃i = 𝜔 • 𝛥t + 1/2 • 𝛼 • 𝛥t^2; radians with constant 𝛼
 *
 *   Back to Linear:
-*       ͢an = r • 𝜔^2 ; normal acceleration in m/s^2
+*       ͢an = r • 𝜔^2 ; normal acceleration in m/s^2, with direction along the raius
 *
 ******************************************************************************/
 

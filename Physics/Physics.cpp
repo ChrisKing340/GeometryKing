@@ -326,14 +326,14 @@ void Position::Set_SphericalCoordinates(const float& rhoIn, const float& thetaIn
     _position.Set(cartesian, 1.0f);
 }
 // functions
-Position King::Physics::MechanicsKinematics_Trajectory(const Position& initialPosIn, const Velocity& initialVelIn, const Acceleration& constAccelIn, const UnitOfMeasure::Time& tIn)
+Position King::Physics::Mechanics_Trajectory(const Position& initialPosIn, const Velocity& initialVelIn, const Acceleration& constAccelIn, const UnitOfMeasure::Time& tIn)
 {
     // p = p0 + v0 t + 1/2 a t^2
     Position p = initialPosIn + initialVelIn * tIn + constAccelIn * tIn * tIn * 0.5f;
     return p;
 }
 
-Position King::Physics::MechanicsKinematics_TrajectoryPositionAtTimeWithNegativeYGravity(const Position& initialPosIn, const Velocity& initialVelIn, const UnitOfMeasure::Time& tIn)
+Position King::Physics::Mechanics_TrajectoryPositionAtTimeWithNegativeYGravity(const Position& initialPosIn, const Velocity& initialVelIn, const UnitOfMeasure::Time& tIn)
 {
     // p = p0 + v0 t + 1/2 g t^2
     auto g = Acceleration(UnitOfMeasure::gravity, float3(0.f, -1.0f, 0.f));
@@ -341,7 +341,7 @@ Position King::Physics::MechanicsKinematics_TrajectoryPositionAtTimeWithNegative
     return p;
 }
 
-UnitOfMeasure::Time King::Physics::MechanicsKinematics_TrajectoryTimeAtMaximumHeightWithNegativeYGravity(const Velocity& initialVelIn)
+UnitOfMeasure::Time King::Physics::Mechanics_TrajectoryTimeAtMaximumHeightWithNegativeYGravity(const Velocity& initialVelIn)
 {
     // t1 = v0Y / g
     // t1 = v0 sin(theta) / g
@@ -349,7 +349,7 @@ UnitOfMeasure::Time King::Physics::MechanicsKinematics_TrajectoryTimeAtMaximumHe
     return t1;
 }
 // h = v0Y^2 / 2g
-UnitOfMeasure::Length King::Physics::MechanicsKinematics_TrajectoryHeightAtMaximumHeightWithNegativeYGravity(const Velocity& initialVelIn)
+UnitOfMeasure::Length King::Physics::Mechanics_TrajectoryHeightAtMaximumHeightWithNegativeYGravity(const Velocity& initialVelIn)
 {
     UnitOfMeasure::Speed v0Y(initialVelIn.GetVector().GetY());
     UnitOfMeasure::Length dy = (v0Y * v0Y) / (gravity * 2.f);
