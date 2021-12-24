@@ -284,4 +284,33 @@ inline King::IntPoint2 King::Rectangle2D::FindNearestPoint(const King::IntPoint2
     return Max(lt, Min(pt2In, rb));
 }
 
+/******************************************************************************
+*    Polygon2DF::Contains
+*        Desc:       Is the point inside the polygon? For convex and concave polygons.
+*        Input:      a point in 2-dimensional space
+*        Output:     none
+*        Returns:    true or false
+*        Remarks:    Based on the work of https://wrf.ecse.rpi.edu/Research/Short_Notes/pnpoly.html
+******************************************************************************/
+bool __vectorcall King::Polygon2DF::Contains(const FloatPoint2 ptIn) const
+{
+    bool collision(false);
 
+    for (auto it = _pt.begin(); it != _pt.end(); ++it)
+    {
+        auto next = std::next(it, 1);
+
+        if (it == _pt.end()) 
+            next = _pt.begin();
+    
+        const DirectX::XMFLOAT2 pt = ptIn;
+        const DirectX::XMFLOAT2 vc = *it;
+        const DirectX::XMFLOAT2 vn = *next;
+
+        if (((vc.y >= pt.y && vn.y < pt.y) || (vc.y < pt.y && vn.y >= pt.y)) &&
+            (pt.x < (vn.x - vc.x) * (pt.y - vc.y) / (vn.y - vc.y) + vc.x)) {
+            collision = !collision;
+    }
+
+    return collision;
+}

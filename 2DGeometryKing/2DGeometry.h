@@ -52,15 +52,16 @@ SOFTWARE.
 #endif
 
 #define KING_2DGEOMETRY_VERSION_MAJOR 1
-#define KING_2DGEOMETRY_VERSION_MINOR 2
+#define KING_2DGEOMETRY_VERSION_MINOR 3
 #define KING_2DGEOMETRY_VERSION_PATCH 0
-
 /*
     History:
         KING_2DGEOMETRY_VERSION_MINOR 1 Release:
             Authored circle 2D class
         KING_2DGEOMETRY_VERSION_MINOR 2 Release:
             Authored std:cout functionality with ostream and istream to all 2D classes
+        KING_2DGEOMETRY_VERSION_MINOR 3 Release 12/24/2021:
+            Authored polygon 2D class Polygon2DF
 */
 
 #include "..\MathSIMD\MathSIMD.h"
@@ -74,8 +75,9 @@ namespace King {
     class Line2DF; // SIMD
     class Triangle2DF; // SIMD
     class Rectangle2DF; // SIMD
-    class Rectangle2D; // not accelerated, replaces Windows RECT class thourgh conversions
+    class Rectangle2D; // not accelerated, replaces Windows RECT class
     class Circle2DF; // SIMD
+    class Polygon2DF; // SIMD
 
     // alias
     typedef Line2DF         lineF; // float data types
@@ -83,6 +85,7 @@ namespace King {
     typedef Rectangle2DF    rectF; // float data types
     typedef Rectangle2D     rect; // integer data types
     typedef Circle2DF       circleF; // float data types
+    typedef Polygon2DF      polygonF; // float data types
 
     /******************************************************************************
     *   Line2DF
@@ -413,7 +416,7 @@ namespace King {
         // Construction/Destruction
         Circle2DF() = default;
         Circle2DF(const Circle2DF &in) { *this = in; } // copy, involk operator=(&int)
-        Circle2DF(Circle2DF &&in) { *this = std::move(in); } // move, involk operator=(&&in)
+        Circle2DF(Circle2DF &&in) noexcept { *this = std::move(in); } // move, involk operator=(&&in)
         Circle2DF(const FloatPoint2 &centerIn, const float &radiusIn) { _centerXYradiusZ = DirectX::XMVectorSet(centerIn.GetX(), centerIn.GetY(), radiusIn, 0.0f); }
 
         virtual ~Circle2DF() = default;
@@ -438,6 +441,47 @@ namespace King {
         inline void __vectorcall            SetCenter(const FloatPoint3 c) { _centerXYradiusZ.SetX(c.GetX());  _centerXYradiusZ.SetY(c.GetY()); }
         inline void __vectorcall            SetRadius(const float r) { _centerXYradiusZ.SetZ(r); }
         inline void __vectorcall            Set_centerXYradiusZ(const FloatPoint3 in) { _centerXYradiusZ = in; }
+    };
+    /******************************************************************************
+    *   Polygon2DF
+    *   pt1 ------- pt2
+    *       \       \
+    *    pt4 -------- pt3       
+    ******************************************************************************/
+    class alignas(16) Polygon2DF
+    {
+        /* variables */
+    public:
+        std::vector<FloatPoint2> _pt;
+
+        /* methods */
+    public:
+        // Creation/Life cycle
+        static std::shared_ptr<Polygon2DF> Create() { return std::make_shared<Polygon2DF>(); }
+        static std::unique_ptr<Polygon2DF> CreateUnique() { return std::make_unique<Polygon2DF>(); }
+        // Construction/Destruction
+        Polygon2DF() = default;
+        Polygon2DF(const Polygon2DF& in) { *this = in; } // copy, involk operator=(&int)
+        Polygon2DF(Polygon2DF&& in) noexcept { *this = std::move(in); } // move, involk operator=(&&in)
+        Polygon2DF(const std::vector<FloatPoint3>& pts) { _pt = pts; }
+
+        virtual ~Polygon2DF() = default;
+
+        // Operators 
+        void* operator new (std::size_t size) { return _aligned_malloc(size, 16); }
+        void   operator delete (void* p) { _aligned_free(static_cast<Polygon2DF*>(p)); }
+        inline Polygon2DF& operator= (const Polygon2DF& in) { Set(in); } // copy assignment
+        inline Polygon2DF& operator= (Polygon2DF&& in) = default; // move assignment
+        // Functionality
+        bool __vectorcall                   Contains(const FloatPoint2 ptIn) const;
+
+        inline void __vectorcall            Add_pt(const FloatPoint3 val) { _pt.push_back(val); }
+        inline void __vectorcall            Remove_pt(const FloatPoint3 val) { auto it = std::find(std::begin(_pt), std::end(_pt), val); if (it != std::end(_pt)) _pt.erase(it); }
+        inline void                         Remove_pt(const size_t index) { assert(index < _pt.size()); _pt.erase(std::next(_pt.begin(), index)); }
+        // Accessors
+         // Assignments
+        inline void __vectorcall            Set(const Polygon2DF in) { _pt = in._pt; }
+        inline void __vectorcall            Set_pt(const size_t index, const FloatPoint3 def) { assert(index < _pt.size()); _pt[index] = def; }
     };
     /******************************************************************************
     *   streams to enable std::cout and std::cin
