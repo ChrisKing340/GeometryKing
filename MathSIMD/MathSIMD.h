@@ -162,6 +162,10 @@ namespace King {
         inline operator DirectX::XMVECTOR() const { DirectX::XMVECTORU32 r; r.u[0] = u[0]; r.u[1] = u[1]; r.u[2] = r.u[3] = 0; return r; }
         inline operator DirectX::XMUINT2() const { return Get_XMUINT2(); }
         inline operator DirectX::XMFLOAT2() const { return Get_XMFLOAT2(); }
+        inline const POINT                      Get_POINT() const { POINT pt = { static_cast<long>(u[0]), static_cast<long>(u[1]) }; return pt; }
+        inline const DirectX::XMINT2            Get_XMINT2() const { DirectX::XMINT2 rtn; rtn = { static_cast<int>(u[0]), static_cast<int>(u[1]) }; return rtn; }
+        inline const DirectX::XMUINT2           Get_XMUINT2() const { DirectX::XMUINT2 rtn; rtn = { static_cast<unsigned int>(u[0]), static_cast<unsigned int>(u[1]) }; return rtn; }
+        inline const DirectX::XMFLOAT2          Get_XMFLOAT2() const { DirectX::XMFLOAT2 rtn; rtn = { static_cast<float>(u[0]), static_cast<float>(u[1]) }; return rtn; }
         // Comparators
         inline bool operator==  (const UIntPoint2& rhs) { return u[0] == rhs.u[0] && u[1] == rhs.u[1]; }
         inline bool operator!=  (const UIntPoint2& rhs) { return u[0] != rhs.u[0] || u[1] != rhs.u[1]; }
@@ -215,11 +219,7 @@ namespace King {
         inline void                             Set(const DirectX::XMUINT2 & point) { u[0] = point.x; u[1] = point.y; }
         inline void                             Set(const POINT & point) { u[0] = static_cast<unsigned int>(point.x); u[1] = static_cast<unsigned int>(point.y); }
         // Accessors
-        unsigned int* GetPtr() { return reinterpret_cast<unsigned int*>(this); }
-        inline const POINT                      Get_POINT() const { POINT pt = { static_cast<long>(u[0]), static_cast<long>(u[1]) }; return pt; }
-        inline const DirectX::XMINT2            Get_XMINT2() const { DirectX::XMINT2 rtn; rtn = { static_cast<int>(u[0]), static_cast<int>(u[1]) }; return rtn; }
-        inline const DirectX::XMUINT2           Get_XMUINT2() const { DirectX::XMUINT2 rtn; rtn = { static_cast<unsigned int>(u[0]), static_cast<unsigned int>(u[1]) }; return rtn; }
-        inline const DirectX::XMFLOAT2          Get_XMFLOAT2() const { DirectX::XMFLOAT2 rtn; rtn = { static_cast<float>(u[0]), static_cast<float>(u[1]) }; return rtn; }
+        unsigned int*                           GetPtr() { return reinterpret_cast<unsigned int*>(this); }
         inline const unsigned long              GetX() const { return (unsigned long)u[0]; }
         inline const unsigned long              GetY() const { return (unsigned long)u[1]; }
         // Functionality
@@ -273,6 +273,10 @@ namespace King {
         inline operator DirectX::XMVECTOR() const { DirectX::XMVECTORI32 r; r.i[0] = i[0]; r.i[1] = i[1]; r.i[2] = r.i[3] = 0; return r.v; }
         inline operator DirectX::XMINT2() const { return Get_XMINT2(); }
         inline operator DirectX::XMFLOAT2() const { return Get_XMFLOAT2(); }
+        inline const POINT                      Get_POINT() const { POINT pt = { static_cast<long>(i[0]), static_cast<long>(i[1]) }; return pt; }
+        inline const DirectX::XMINT2            Get_XMINT2() const { DirectX::XMINT2 rtn; rtn = { static_cast<int>(i[0]), static_cast<int>(i[1]) }; return rtn; }
+        inline const DirectX::XMUINT2           Get_XMUINT2() const { DirectX::XMUINT2 rtn; rtn = { static_cast<unsigned int>(i[0]), static_cast<unsigned int>(i[1]) }; return rtn; }
+        inline const DirectX::XMFLOAT2          Get_XMFLOAT2() const { DirectX::XMFLOAT2 rtn; rtn = { static_cast<float>(i[0]), static_cast<float>(i[1]) }; return rtn; }
         // Comparators
         inline bool operator==  (const IntPoint2& rhs) { return i[0] == rhs.i[0] && i[1] == rhs.i[1]; }
         inline bool operator!=  (const IntPoint2& rhs) { return i[0] != rhs.i[0] || i[1] != rhs.i[1]; }
@@ -333,11 +337,7 @@ namespace King {
         inline void                             Set(const DirectX::XMINT2 & point) { i[0] = point.x; i[1] = point.y; }
         inline void                             Set(const POINT & point) { i[0] = static_cast<int>(point.x); i[1] = static_cast<int>(point.y); }
         // Accessors
-        int* GetPtr() { return reinterpret_cast<int*>(this); }
-        inline const POINT                      Get_POINT() const { POINT pt = { static_cast<long>(i[0]), static_cast<long>(i[1]) }; return pt; }
-        inline const DirectX::XMINT2            Get_XMINT2() const { DirectX::XMINT2 rtn; rtn = { static_cast<int>(i[0]), static_cast<int>(i[1]) }; return rtn; }
-        inline const DirectX::XMUINT2           Get_XMUINT2() const { DirectX::XMUINT2 rtn; rtn = { static_cast<unsigned int>(i[0]), static_cast<unsigned int>(i[1]) }; return rtn; }
-        inline const DirectX::XMFLOAT2          Get_XMFLOAT2() const { DirectX::XMFLOAT2 rtn; rtn = { static_cast<float>(i[0]), static_cast<float>(i[1]) }; return rtn; }
+        int*                                    GetPtr() { return reinterpret_cast<int*>(this); }
         inline const int                        GetX() const { return (int)i[0]; }
         inline const int                        GetY() const { return (int)i[1]; }
         // Functionality
@@ -390,6 +390,9 @@ namespace King {
         inline operator DirectX::XMVECTOR() const { DirectX::XMVECTORI32 r; r.i[0] = i[0]; r.i[1] = i[1]; r.i[2] = i[2]; r.i[3] = 0; return r.v; }
         inline operator DirectX::XMINT3() const { return Get_XMINT3(); }
         inline operator DirectX::XMFLOAT3() const { return Get_XMFLOAT3(); }
+        inline const DirectX::XMINT3            Get_XMINT3() const { DirectX::XMINT3 rtn; rtn = { static_cast<int>(i[0]), static_cast<int>(i[1]), static_cast<int>(i[2]) }; return rtn; }
+        inline const DirectX::XMUINT3           Get_XMUINT3() const { DirectX::XMUINT3 rtn; rtn = { static_cast<unsigned int>(i[0]), static_cast<unsigned int>(i[1]), static_cast<unsigned int>(i[2]) }; return rtn; }
+        inline const DirectX::XMFLOAT3          Get_XMFLOAT3() const { DirectX::XMFLOAT3 rtn; rtn = { static_cast<float>(i[0]), static_cast<float>(i[1]), static_cast<float>(i[2]) }; return rtn; }
         // Comparators
         inline bool operator==  (const IntPoint3& rhs) { return i[0] == rhs.i[0] && i[1] == rhs.i[1] && i[2] == rhs.i[2]; }
         inline bool operator!=  (const IntPoint3& rhs) { return i[0] != rhs.i[0] || i[1] != rhs.i[1] || i[2] != rhs.i[2]; }
@@ -449,10 +452,7 @@ namespace King {
         //      inline void                             Set(const UIntPoint3 &in) { i[0] = static_cast<int>(in.u[0]); i[1] = static_cast<int>(in.u[1]); i[2] = static_cast<int>(in.u[2]); }
         inline void                             Set(const DirectX::XMINT3 & point) { i[0] = point.x; i[1] = point.y; i[2] = point.z; }
         // Accessors
-        int* GetPtr() { return reinterpret_cast<int*>(this); }
-        inline const DirectX::XMINT3            Get_XMINT3() const { DirectX::XMINT3 rtn; rtn = { static_cast<int>(i[0]), static_cast<int>(i[1]), static_cast<int>(i[2]) }; return rtn; }
-        inline const DirectX::XMUINT3           Get_XMUINT3() const { DirectX::XMUINT3 rtn; rtn = { static_cast<unsigned int>(i[0]), static_cast<unsigned int>(i[1]), static_cast<unsigned int>(i[2]) }; return rtn; }
-        inline const DirectX::XMFLOAT3          Get_XMFLOAT3() const { DirectX::XMFLOAT3 rtn; rtn = { static_cast<float>(i[0]), static_cast<float>(i[1]), static_cast<float>(i[2]) }; return rtn; }
+        int*                                    GetPtr() { return reinterpret_cast<int*>(this); }
         inline const int                        GetX() const { return (int)i[0]; }
         inline const int                        GetY() const { return (int)i[1]; }
         inline const int                        GetZ() const { return (int)i[2]; }
