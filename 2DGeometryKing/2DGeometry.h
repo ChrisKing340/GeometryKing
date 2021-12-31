@@ -463,7 +463,9 @@ namespace King {
         Polygon2DF() = default;
         Polygon2DF(const Polygon2DF& in) { *this = in; } // copy, involk operator=(&int)
         Polygon2DF(Polygon2DF&& in) noexcept { *this = std::move(in); } // move, involk operator=(&&in)
-        Polygon2DF(const std::vector<FloatPoint3>& pts) { _pt = pts; }
+        explicit Polygon2DF(std::initializer_list<float2> il) { for (const auto& ea : il) { _pt.clear(); _pt.reserve(il.size()); _pt.push_back(ea); } }
+        Polygon2DF(const std::vector<FloatPoint2>& pts) { _pt.clear(); _pt.reserve(pts.size()); for (const auto& ea : pts) _pt.push_back(ea); }
+        Polygon2DF(std::vector<FloatPoint2>&& pts) noexcept { std::swap(pts, _pt); }
 
         virtual ~Polygon2DF() = default;
 

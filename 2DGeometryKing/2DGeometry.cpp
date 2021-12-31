@@ -308,8 +308,10 @@ bool __vectorcall King::Polygon2DF::Contains(const FloatPoint2 ptIn) const
         const DirectX::XMFLOAT2 vn = *next;
 
         if (((vc.y >= pt.y && vn.y < pt.y) || (vc.y < pt.y && vn.y >= pt.y)) &&
-            (pt.x < (vn.x - vc.x) * (pt.y - vc.y) / (vn.y - vc.y) + vc.x)) {
+            (pt.x < (vn.x - vc.x) * (pt.y - vc.y) / (vn.y - vc.y) + vc.x)) 
+        {
             collision = !collision;
+        }
     }
 
     return collision;

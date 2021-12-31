@@ -91,6 +91,8 @@ SOFTWARE.
         CreateMeshFrom(const Quad& quad);
         Added additional initializer lists to class constructors for Point, Line, Ray, Triangle, Quad and Path
     12/13/2021 - Version 2.2.1 - Corrections/edits to 2.2
+    12/20/2021 - Version 2.3 - Class Path gain method to convert the 3D Path to a 2D Polygon2DF (in XY plane). Works best
+        for a planar Path and this conversion rotates it into the XY plane.
 
     Version 3.0 Planned release - oriented box on oriented box and sphere collision tests. Previously extended our axis 
         aligned bounding box in version 1 to oriented by passing in a orientation quaterion. WIP code to implement
@@ -104,7 +106,7 @@ SOFTWARE.
 */
 
 constexpr auto KING_3DGEOMETRY_VERSION_MAJOR = 2;
-constexpr auto KING_3DGEOMETRY_VERSION_MINOR = 2;
+constexpr auto KING_3DGEOMETRY_VERSION_MINOR = 3;
 constexpr auto KING_3DGEOMETRY_VERSION_PATCH = 1;
 
 #include <DirectXCollision.h>
@@ -652,7 +654,7 @@ namespace King {
         Path() = default;
         Path(const Path &in) { *this = in; } // forward to copy assignment
         Path(Path &&in) noexcept { *this = std::move(in); } // forward to move assignment
-        explicit Path(std::initializer_list<float3> il) { for (const auto& ea : il) { push_back(ea); } }
+        explicit Path(std::initializer_list<float3> il) { clear(); reserve(il.size()); for (const auto& ea : il) { push_back(ea); } }
 
         virtual ~Path() = default;
 
@@ -667,7 +669,9 @@ namespace King {
         friend Path operator+ (Path lhs, const float3 in) { lhs += in; return lhs; } // invokes std::move(lhs)
         inline Path& operator*= (const DirectX::XMMATRIX &m) { for(Position& pt : *this) pt.Set( DirectX::XMVector4Transform(pt.GetVecConst(), m) ); return *this; }
         friend Path operator* (Path lhs, const DirectX::XMMATRIX &m) { lhs *= m; return lhs; } // invokes std::move(lhs)
-
+        // Conversions
+        inline operator King::Polygon2DF() const { return Get_Polygon2DF(); }
+        Polygon2DF __vectorcall             Get_Polygon2DF() const;
         // Functionality
         // Accessors
         // Assignments

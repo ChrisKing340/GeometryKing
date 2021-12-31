@@ -6419,3 +6419,36 @@ uint32_t King::VertexAttrib::GetByteSize() const
     }
     return bytes;
 }
+/******************************************************************************
+*    Path:    Get_Polygon2DF
+*       convert a 3D Path that is planar to the XY plane
+*       Note, if all the points are not in a plane then they will be rotates
+*       and z and w will be zero'd out regardless, this projects the Path
+*       onto the xy plane using the first, second, and last points to form
+*       the plane normal to align with the XY plane first.
+******************************************************************************/
+Polygon2DF __vectorcall King::Path::Get_Polygon2DF() const
+{
+    assert(size() > 2);
+    vector<float2> out(size());
+
+    const auto& b = begin();
+    const auto& n = std::next(b,1);
+    const auto& e = end();
+    // RHS CCW
+    auto normal = Cross(*n - *b, *e - *b);
+    normal.MakeNormalize();
+    // from / to rotation
+    const float3 to = float3(0.f, 0.f, 1.f);
+    Quaternion toPlanarSpace(normal, to);
+
+    const DirectX::XMMATRIX m = toPlanarSpace;
+    const auto p2 = *this * m;
+
+    for (const auto& ea : p2)
+    {
+        out.push_back(float2(ea));
+    }
+
+    return Polygon2DF();
+}
