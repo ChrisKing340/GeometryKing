@@ -59,6 +59,7 @@ SOFTWARE.
 #include <fstream>
 #include <string>
 #include <emmintrin.h>
+#include <mutex>
 
 namespace King 
 {
@@ -67,10 +68,10 @@ class alignas(align) MemoryBlock
 {
     /* variables */
 private:
-    size_t    _length = 0; // number of T elements in data allocation
-    size_t    _stride = 1; // number of T elements to skip per operator [] indexing (convenient)
-    T* _data = nullptr; // pointer is a multiple of alignment and only alligned if T new operator is also aligned
-
+    size_t          _length = 0; // number of T elements in data allocation
+    size_t          _stride = 1; // number of T elements to skip per operator [] indexing (convenient)
+    T*              _data = nullptr; // pointer is a multiple of alignment and only alligned if T new operator is also aligned
+    std::mutex      _mutex;
     /* methods */
 public:
     // construction/life cycle
@@ -99,6 +100,9 @@ public:
     // allow nullptr assignment (for clearing)
     MemoryBlock& operator = (nullptr_t) 
     {
+
+        std::lock_guard<std::mutex> guard(_mutex);
+
         if (_data) 
         {
             delete[] _data;
@@ -112,6 +116,7 @@ public:
     MemoryBlock & operator=(const T* other)
     {
         assert(_length > 0); // should be pre-initialized
+        std::lock_guard<std::mutex> guard(out->_mutex);
         std::copy(other, other + _length, _data);
         return *this;
     }    
@@ -161,8 +166,8 @@ public:
     }
     // Functionality
     inline void     Initialize(size_t lengthIn) { Destroy(); _length = lengthIn; _data = new T[_length]; }
-    inline void     Destroy() { if (_data != nullptr) { delete[] _data; _data = nullptr; _length = 0; _stride = 1; } }
-    inline void     Fill(T valueIn) { for (size_t i = 0; i < _length; ++i) _data[i] = valueIn; }
+    inline void     Destroy() { if (_data != nullptr) { std::lock_guard<std::mutex> guard(_mutex); delete[] _data; _data = nullptr; _length = 0; _stride = 1; } }
+    inline void     Fill(T valueIn) { std::lock_guard<std::mutex> guard(_mutex); for (size_t i = 0; i < _length; ++i) _data[i] = valueIn; }
     inline void     Split(size_t elementIndex, MemoryBlock<T> *out)
                     {
                         assert (elementIndex * _stride != _length);
@@ -171,18 +176,24 @@ public:
                         assert(elementIndex * _stride < _length);
                         assert(out != nullptr);
 
-                        out->_stride = _stride;
-                        // include elementIndex in the right side split [begin to elementIndex - 1 : elementIndex to end]
-                        out->_length = (GetElements() - elementIndex - 1) * _stride;
-                        _length -= out->_length;
+                        {
+                            // lock the out object
+                            std::lock_guard<std::mutex> guard(out->_mutex);
 
-                        out->_data = new T[out->_length];
-                        out->Copy(0, _data, out->_length);
+                            out->_stride = _stride;
+                            // include elementIndex in the right side split [begin to elementIndex - 1 : elementIndex to end]
+                            out->_length = (GetElements() - elementIndex - 1) * _stride;
+                            _length -= out->_length;
+
+                            out->_data = new T[out->_length];
+                            out->Copy(0, _data, out->_length);
+                        }
                         
                         // now we need to copy our remaining memory to a newly allocated buffer and then free the larger block
                         T* _smallerBuffer = new T[_length];
                         std::copy(_data, _data + _length, _smallerBuffer);
 
+                        std::lock_guard<std::mutex> guard(_mutex);
                         if (_data != nullptr)
                         {
                             delete[] _data;
@@ -211,6 +222,7 @@ public:
 
                             Destroy();
 
+                            std::lock_guard<std::mutex> guard(_mutex);
                             _length = length;
                             _data = data;
                             _stride = other._stride;
@@ -228,8 +240,10 @@ public:
                         dataFileIn.read(reinterpret_cast<char*>(&readStride), sizeof(size_t));
 
                         if (dataFileIn.fail()) return false;                  
-                        
+
                         if(readLength != _length) Initialize(readLength);                 
+
+                        std::lock_guard<std::mutex> guard(_mutex);
                         dataFileIn.read(reinterpret_cast<char*>(_data), _length * sizeof(T));
 
                         _stride = readStride;
@@ -256,6 +270,9 @@ public:
                         infile.seekg(0);
         
                         Initialize(size);
+
+                        std::lock_guard<std::mutex> guard(_mutex);
+
                         infile.read(_data, _length);
                         infile.close();
                         if (infile.fail()) return false;
@@ -300,12 +317,14 @@ public:
     [[deprecated("Use Copy(...) instead.")]] void SetElementToValueByByteStride(const size_t & elementNumber, T* dataIn)
                     {
                         T* dest = &Get(elementNumber);
+                        std::lock_guard<std::mutex> guard(_mutex);
                         std::copy(dataIn, dataIn + _stride, dest);
                     }
     void            Copy(const size_t& startElementNumber, const T* srcIn, size_t size = 0)
                     {
                         if (!size) size = _stride; // 1 element by default
                         T* dest = &Get(startElementNumber);
+                        std::lock_guard<std::mutex> guard(_mutex);
                         std::copy(srcIn, srcIn + size, dest);
                     }
     void            MinMax(T* minOut, T* maxOut)
