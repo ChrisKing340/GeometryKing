@@ -68,7 +68,7 @@ using json = nlohmann::json;
 *       𝜃f - 𝜃i = 𝜔 • 𝛥t + 1/2 • 𝛼 • 𝛥t^2; radians with constant 𝛼
 *
 *   Back to Linear:
-*       ͢an = r • 𝜔^2 ; normal acceleration in m/s^2, with direction along the raius
+*       ͢an = r • 𝜔^2 ; normal acceleration in m/s^2, with direction along the radius
 *
 ******************************************************************************/
 
@@ -78,10 +78,13 @@ namespace King {
     *    AngularVelocity  
     *       radians / sec    
     ******************************************************************************/
+    class AngularAcceleration;
     class AngularVelocity;
     class Distance;
     AngularVelocity operator*(const UnitOfMeasure::Time &t, const AngularAcceleration & accIn); 
-    AngularVelocity operator*(const AngularAcceleration & accIn, const UnitOfMeasure::Time &t); 
+    AngularVelocity operator*(const AngularAcceleration& accIn, const UnitOfMeasure::Time& t);
+    // for ͢an = r • 𝜔^2, use AngularVelocity::CalculateNormalAccelerationAlong_radius(const Distance& rIn)
+
 
     class alignas(16) AngularVelocity
     {
@@ -148,13 +151,30 @@ namespace King {
         inline AngularVelocity operator- () const { return AngularVelocity(-_unit_direction); }
         inline AngularVelocity operator+ (const AngularVelocity& in) const { return AngularVelocity(GetVector() + in.GetVector()); }
         inline AngularVelocity operator- (const AngularVelocity& in) const { return AngularVelocity(GetVector() - in.GetVector()); }
-        inline AngularVelocity operator* (const AngularVelocity& in) const { return AngularVelocity(GetVector() * in.GetVector()); }
-        inline AngularVelocity operator/ (const AngularVelocity& in) const { return AngularVelocity(GetVector() / in.GetVector()); }
+        inline AngularVelocity operator* (const AngularVelocity& in) const { return AngularVelocity(GetVector() * in.GetVector()); } // AngularSpeedSq
+        inline AngularVelocity operator/ (const AngularVelocity& in) const { return AngularVelocity(GetVector() / in.GetVector()); } // unitless
         inline AngularVelocity & operator+= (const AngularVelocity & in) { *this = *this + in; return *this; } 
         inline AngularVelocity & operator-= (const AngularVelocity & in) { *this = *this - in; return *this; }
         inline AngularVelocity & operator*= (const AngularVelocity & in) { *this = *this * in; return *this; } // AngularSpeedSq
-        inline AngularVelocity & operator/= (const AngularVelocity & in) { *this = *this / in; return *this; }
-        inline AngularVelocity operator* (const float & in) const { return AngularVelocity(_magnitude * in, _unit_direction); }
+        inline AngularVelocity & operator/= (const AngularVelocity & in) { *this = *this / in; return *this; } // unitless
+
+        inline AngularVelocity operator+ (const float& in) const { return AngularVelocity(_magnitude + in, _unit_direction); }
+        inline AngularVelocity operator- (const float& in) const { return AngularVelocity(_magnitude - in, _unit_direction); }
+        inline AngularVelocity operator* (const float& in) const { return AngularVelocity(_magnitude * in, _unit_direction); }
+        inline AngularVelocity operator/ (const float& in) const { return AngularVelocity(_magnitude / in, _unit_direction); }
+        inline AngularVelocity& operator+= (const float& in) { *this = *this + in; return *this; }
+        inline AngularVelocity& operator-= (const float& in) { *this = *this - in; return *this; }
+        inline AngularVelocity& operator*= (const float& in) { *this = *this * in; return *this; }
+        inline AngularVelocity& operator/= (const float& in) { *this = *this / in; return *this; }
+
+        inline AngularVelocity operator+ (const Quaternion& in) const { return AngularVelocity(GetVector() + AngularVelocity(in).GetVector()); }
+        inline AngularVelocity operator- (const Quaternion& in) const { return AngularVelocity(GetVector() - AngularVelocity(in).GetVector()); }
+        inline AngularVelocity operator* (const Quaternion& in) const { return AngularVelocity(GetVector() * AngularVelocity(in).GetVector()); }
+        inline AngularVelocity operator/ (const Quaternion& in) const { return AngularVelocity(GetVector() / AngularVelocity(in).GetVector()); }
+        inline AngularVelocity& operator+= (const Quaternion& in) { *this = *this + in; return *this; }
+        inline AngularVelocity& operator-= (const Quaternion& in) { *this = *this - in; return *this; }
+        inline AngularVelocity& operator*= (const Quaternion& in) { *this = *this * in; return *this; }
+        inline AngularVelocity& operator/= (const Quaternion& in) { *this = *this / in; return *this; }
         // Init/Start/Stop/Destroy
         // Functionality
         bool                                IsZero() const { return _magnitude == 0.f; }

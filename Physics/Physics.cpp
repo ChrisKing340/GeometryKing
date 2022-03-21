@@ -333,7 +333,7 @@ Position King::Physics::Mechanics_Trajectory(const Position& initialPosIn, const
     return p;
 }
 
-Position King::Physics::Mechanics_TrajectoryPositionAtTimeWithNegativeYGravity(const Position& initialPosIn, const Velocity& initialVelIn, const UnitOfMeasure::Time& tIn)
+Position King::Physics::Mechanics_TrajectoryNegativeYGravity(const Position& initialPosIn, const Velocity& initialVelIn, const UnitOfMeasure::Time& tIn)
 {
     // p = p0 + v0 t + 1/2 g t^2
     auto g = Acceleration(UnitOfMeasure::gravity, float3(0.f, -1.0f, 0.f));
@@ -349,7 +349,7 @@ UnitOfMeasure::Time King::Physics::Mechanics_TrajectoryTimeAtMaximumHeightWithNe
     return t1;
 }
 // h = v0Y^2 / 2g
-UnitOfMeasure::Length King::Physics::Mechanics_TrajectoryHeightAtMaximumHeightWithNegativeYGravity(const Velocity& initialVelIn)
+UnitOfMeasure::Length King::Physics::Mechanics_TrajectoryMaximumHeightWithNegativeYGravity(const Velocity& initialVelIn)
 {
     UnitOfMeasure::Speed v0Y(initialVelIn.GetVector().GetY());
     UnitOfMeasure::Length dy = (v0Y * v0Y) / (gravity * 2.f);
@@ -492,7 +492,142 @@ void King::PhysicsRigidBody::Update(const UnitOfMeasure::Time& dtIn)
     //f._angularKineticEnergy;
 }
 
+/*
+*  License:
+    The method below is very special. It is a full collision processor using the impulse method developed.
+    Sources do partial implementations that were used as reference (Game Programming Gems 4 foundation to start) and was
+    expanded to what we have here by applying a full Physics modeling of an oblique collision, material restitution, friction, linear and
+    rotational reactions resulting from collisions. None of that was in the base started with Gems4 (ex: collisions were
+    assumed along the line of contact and not oblique). You are free to distribute this code and use it without any
+    expressed warranty for fitness of use and purpose and you must cite the author and include this license in the code
+    Author: Christopher H. King, P.E. (c) Copyright 2022
+*/
+void King::PhysicsRigidBody::ProcessCollisionWithObject(PhysicsRigidBody& moInOut, const float e, const UnitOfMeasure::Time& dt, float3 collisionPtIN, const float penetrationIn)
+{
+    // Oblique hit, restitution, friction, linear and rotational reactions from collisions
+    // Master work!
 
+    // Inputs
+    const auto& v1i = GetInitialState().Get_linearVelocity();
+    const auto& v2i = moInOut.GetInitialState().Get_linearVelocity();
+    const auto& ω1i = GetInitialState().Get_angularVelocity();
+    const auto& ω2i = moInOut.GetInitialState().Get_angularVelocity();
+    const auto& m1 = Get_mass();
+    const auto& m2 = moInOut.Get_mass();
+    const auto& m1_inv = Get_invMass();
+    const auto& m2_inv = moInOut.Get_invMass();
+    // Outputs
+    Velocity v1f, v2f;
+    AngularVelocity ω1f, ω2f;
+
+    // Assumption:, the collision has already been verified to occur
+    // determin the normal direction at the point of collision.
+    // line of impact
+    float3 n_axis = GetInitialState().Get_positionWorldSpace() - moInOut.GetInitialState().Get_positionWorldSpace(); // o2 -> o1 ; (o1 - o2)
+    n_axis.MakeNormalize();
+    // collision point must be an input
+    float3 r1 = collisionPtIN - GetInitialState().Get_positionWorldSpace(); // Note: PhysicsBody will have a local offset to center of mass we would also need to subtract
+    float3 r2 = collisionPtIN - moInOut.GetInitialState().Get_positionWorldSpace();
+
+    // Works out the bias to prevent sinking over time
+    const float allowedPenetration = 0.1f;
+    const float biasFactor = 0.1f; // 0.1 to 0.3
+    float biasFactorValue = posCorrectOnOff ? biasFactor : 0.0f;
+    float inv_dt = dt > 0.0f ? 1.0f / dt : 0.0f;
+    auto val = penetrationIn - allowedPenetration;
+    float bias = biasFactorValue * inv_dt * fmax(0.0f, val); // to add to normal axis momentum change
+
+    {
+        // calculate the impulse, J, required to prevent the objects intersecting 
+        float3 J; // ͢J = ͢Fave * 𝛥t; since F = ma,  ͢J = m * 𝛥v ; through integration over time, ti, to time, tf.
+        float J_num, J_dem;
+        // calculate the relative velocities along the normal axis
+        float3 v1atCollisionPt = (float3)v1i + float3::CrossProduct(ω1i, r1); // v = vi + ͢𝜔 x ͢r
+        float3 v2atCollisionPt = (float3)v2i + float3::CrossProduct(ω2i, r2); // v = vi + ͢𝜔 x ͢r
+        float3 v_rel = (v1atCollisionPt - v2atCollisionPt);
+        float vn = v_rel.DotProduct(n_axis);
+
+        // rotation about point of collision
+        float3 r1_n_axis = r1.CrossProduct(n_axis);
+        float3 r2_n_axis = r2.CrossProduct(n_axis);
+        // inertia
+        // use King::Box::MomentsOfInertiaRotated(const DirectX::XMMATRIX& Iin, const DirectX::XMMATRIX& rotationIn)
+        // or  King::Sphere::MomentsOfInertia(const float& densityIn);
+        // for Sphere (uniform):
+        auto i1 = 2.0f / 5.0f * m1;
+        auto I = DirectX::XMMATRIX(i1, 0, 0, 0,
+            0, i1, 0, 0,
+            0, 0, i1, 0,
+            0, 0, 0, 1.f);
+        auto I1_inv = DirectX::XMMatrixInverse(nullptr, I);
+        // replace with _inertiaTensorInverse when implemented
+
+        auto i2 = 2.0f / 5.0f * m2;
+        I = DirectX::XMMATRIX(i2, 0, 0, 0,
+            0, i2, 0, 0,
+            0, 0, i2, 0,
+            0, 0, 0, 1.f);
+        auto I2_inv = DirectX::XMMatrixInverse(nullptr, I);
+        // replace with moInOut._inertiaTensorInverse when implemented
+
+        // NORMAL contact impulse
+        // given n axis is defined as o2 -> o1 ; (o1 - o2); may need to assess signs of + ω1_c_dot and - ω2_c_dot
+        J_num = -(1.f + e) * vn + bias; // add a bias to prevent sinking (constant repulsive force)
+        J_dem = m1_inv + m2_inv + n_axis.DotProduct(float3::CrossProduct(r1_n_axis * I1_inv, r1) + float3::CrossProduct(r2_n_axis * I2_inv, r2));
+        float j = J_num / J_dem;
+        j = fmaxf(j, 0.0f);
+
+        J = j * n_axis;
+        // solve for final states
+        auto v1n_f = J * m1_inv;
+        auto ω1n_f = r1.CrossProduct(J) * I1_inv;
+        auto v2n_f = J * m2_inv;
+        auto ω2n_f = r2.CrossProduct(J) * I2_inv;
+
+        // TANGENT contact impulse
+        // perpendicular to our line of impact
+        float3 t_axis = v_rel - (v_rel.DotProduct(n_axis) * n_axis); // subtract the projected relative velocity at point of collision on the normal axis from the relavtive velocity to get the tangential component
+        t_axis.MakeNormalize();
+
+        float vt = v_rel.DotProduct(t_axis);
+        J_num = -(1.f + e) * vt;
+
+        float3 r1_t_axis = r1.CrossProduct(t_axis);
+        float3 r2_t_axis = r2.CrossProduct(t_axis);
+        J_dem = m1_inv + m2_inv + t_axis.DotProduct(float3::CrossProduct(r1_t_axis * I1_inv, r1) + float3::CrossProduct(r2_t_axis * I2_inv, r2));
+        j = J_num / J_dem;
+
+        float frictionCoeff = 0.1f;
+        float maxJ = frictionCoeff * j;
+        j = Clamp(j, -maxJ, maxJ);
+
+        J = j * t_axis;
+        // solve for final states
+        auto v1t_f = J * m1_inv;
+        auto ω1t_f = r1.CrossProduct(J) * I1_inv;
+        // v2 is opposite v1 changes
+        auto v2t_f = J * m2_inv;
+        auto ω2t_f = r2.CrossProduct(J) * I2_inv;
+
+        // Final
+        // Note: changes to object 2 are opposite of those to object 1
+        v1f = v1i + v1n_f + v1t_f;
+        v2f = v2i - v2n_f - v2t_f;
+
+        ω1f = ω1i + ω2n_f + ω2t_f;
+        ω2f = ω1i - ω2n_f - ω2t_f;
+
+        // Output
+        auto& f1 = GetFinalState();
+        auto& f2 = moInOut.GetFinalState();
+
+        f1.Set_linearVelocity(v1f);
+        f1.Set_angularVelocity(ω1f);
+
+        f2.Set_linearVelocity(v2f);
+        f2.Set_angularVelocity(ω2f);
+    }
+}
 // functions
 
 // Functions to remind us of what velocity and acceleration is without their magnitudes, the tangent and principle unit vector of motion.  If Acceleration is zero, we are moving in a straight line.

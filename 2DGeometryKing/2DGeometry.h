@@ -242,11 +242,11 @@ namespace King {
 
         inline void __vectorcall            Grow(const FloatPoint2 &scale3In) { auto s = scale3In * GetSize(); SetWH(s); }
 
-        inline bool                         Intersects(const Rectangle2DF &rectIn) const;
-        inline bool                         Intersects(const RECT &rectIn) const;
-        inline bool __vectorcall            Intersects(const FloatPoint2 &pt2In) const { return (lt.GetX() <= pt2In.GetX()) && (pt2In.GetX() < rb.GetX()) && (lt.GetY() <= pt2In.GetY()) && (pt2In.GetY() < rb.GetY()); };
-        inline bool                         Intersects(const float &xIn, const float &yIn) const;
-        inline bool                         Intersects(const Circle2DF & circleIn) const;
+        bool                                Intersects(const Rectangle2DF &rectIn) const;
+        bool                                Intersects(const RECT &rectIn) const;
+        bool __vectorcall                   Intersects(const FloatPoint2 &pt2In) const { return (lt.GetX() <= pt2In.GetX()) && (pt2In.GetX() < rb.GetX()) && (lt.GetY() <= pt2In.GetY()) && (pt2In.GetY() < rb.GetY()); };
+        bool                                Intersects(const float &xIn, const float &yIn) const;
+        bool                                Intersects(const Circle2DF & circleIn) const;
 
         inline void                         ClipTo(const Rectangle2DF& rectIn);
 
@@ -362,7 +362,7 @@ namespace King {
 
         inline void __vectorcall            Grow(const FloatPoint2 scale3In) { auto s = scale3In * GetSize().Get_XMFLOAT2(); SetWH(s); }
 
-        inline bool                         Intersects(const Rectangle2D &rectIn) const { return (rectIn.lt.GetX() < rb.GetX()) && (lt.GetX() < rectIn.rb.GetX()) && (rectIn.lt.GetY() < rb.GetY()) && (lt.GetY() < rectIn.rb.GetY()); }
+        bool                                Intersects(const Rectangle2D &rectIn) const { return (rectIn.lt.GetX() < rb.GetX()) && (lt.GetX() < rectIn.rb.GetX()) && (rectIn.lt.GetY() < rb.GetY()) && (lt.GetY() < rectIn.rb.GetY()); }
         inline bool                         Contains(const IntPoint2 pt2In) const { return (lt.GetX() <= pt2In.GetX()) && (pt2In.GetX() < rb.GetX()) && (lt.GetY() <= pt2In.GetY()) && (pt2In.GetY() < rb.GetY()); }
         
         inline void                         ClipTo(const Rectangle2D& rectIn) { SetLT(Max(GetLT(), rectIn.GetLT())); SetRB(Min(GetRB(), rectIn.GetRB()));}
@@ -427,9 +427,9 @@ namespace King {
         inline Circle2DF & operator= (const Circle2DF &in) { Set(in); } // copy assignment
         inline Circle2DF & operator= (Circle2DF &&in) = default; // move assignment
         // Functionality
-        inline bool __vectorcall            Intersects(const FloatPoint2 &pt2In) const;
-        inline bool                         Intersects(const float &xIn, const float &yIn) const;
-        inline bool                         Intersects(const Rectangle2DF &rectIn) const;
+        bool __vectorcall                   Intersects(const FloatPoint2 pt2In) const;
+        bool                                Intersects(const float &xIn, const float &yIn) const;
+        bool                                Intersects(const Rectangle2DF &rectIn) const;
         
         inline FloatPoint2                  FindNearestPoint(const FloatPoint2 &pt2In) const;
         // Accessors

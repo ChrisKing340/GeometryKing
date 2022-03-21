@@ -292,6 +292,7 @@ uint32_t King::TriangleMesh::GetNumVerticies() const
 
     for (uint32_t i = 0; i < ni; ++i)
     {
+        // highest index referenced
         numVerticies = lambdaMax(*(ib+i), numVerticies);
     }
     return ni > 0 ? numVerticies+1 : 0; // indexing is zero based, size is therefore +1
@@ -751,6 +752,27 @@ std::vector<Quad> King::Quad::SubDivide()
     return quadsOut;
 }
 /******************************************************************************
+*    Method:    MomentsOfInertia
+*       Returns the momement of inertia of our Sphere
+******************************************************************************/
+DirectX::XMMATRIX King::Sphere::MomentsOfInertia(const float& densityIn)
+{
+    float r = GetRadius();
+    float v = GetVolume();
+    float m = densityIn * v;
+
+    auto r_sq = r * r;
+    auto i = 2.0f / 5.0f * m * r_sq;
+
+    // Inertia tensor
+    DirectX::XMMATRIX I(i, 0, 0, 0,
+        0, i, 0, 0,
+        0, 0, i, 0,
+        0, 0, 0, 1);
+
+    return I;
+}
+/******************************************************************************
 *    Method:    Intersects
 *       Sphere vs. Point
 ******************************************************************************/
@@ -1127,7 +1149,7 @@ DirectX::XMMATRIX King::Box::MomentsOfInertia(const float& densityIn)
 }
 /******************************************************************************
 *    Method:    MomentsOfInertiaRotated
-*       Rotated about and arbitrary axis
+*       Rotated about an arbitrary axis
 ******************************************************************************/
 DirectX::XMMATRIX King::Box::MomentsOfInertiaRotated(const DirectX::XMMATRIX& Iin, const DirectX::XMMATRIX& rotationIn)
 {
@@ -1693,7 +1715,7 @@ int King::Model::CreateMeshFrom(const Triangle& tri)
         normals.push_back(normal);
     }
 
-    auto textureCoordinates = HelperCreateTextureCoordinatesFor(positions);
+    auto textureCoordinates = HelperCreateTextureCoordinatesForTriOrQuad(positions);
 
     return HelperCreateMeshFrom(positions, indicies, textureCoordinates, normals);
 }
@@ -1717,21 +1739,20 @@ int King::Model::CreateMeshFrom(const Quad& q)
         normals.push_back(normal);
     }
 
-    auto textureCoordinates = HelperCreateTextureCoordinatesFor(positions);
+    auto textureCoordinates = HelperCreateTextureCoordinatesForTriOrQuad(positions);
 
     return HelperCreateMeshFrom(positions, indicies, textureCoordinates, normals);
 }
 
 
 /******************************************************************************
-*    Method:    HelperCreateTextureCoordinatesFor
+*    Method:    HelperCreateTextureCoordinatesForTriOrQuad
 ******************************************************************************/
-std::vector<King::float2> King::Model::HelperCreateTextureCoordinatesFor(const std::vector<King::float3>& pt)
+std::vector<King::float2> King::Model::HelperCreateTextureCoordinatesForTriOrQuad(const std::vector<King::float3>& pt)
 {
     assert(pt.size() > 2);
     vector<float2> textureCoordinatesOut(pt.size());
 
-    // *** TO DO *** this works for triangles and quads, extend to an arbitrary plannar path
     // RHS CCW
     auto normal = Cross(pt[1] - pt[0], pt[2] - pt[0]);
     normal.MakeNormalize();
@@ -1767,7 +1788,7 @@ std::vector<King::float2> King::Model::HelperCreateTextureCoordinatesFor(const s
         auto textureCoord = float2(uv);
         float2::Absolute(textureCoord);
         //textureCoord.SetY(-textureCoord.GetY()); // ??? invert y or 1-y ???
-        textureCoordinatesOut.emplace_back();
+        textureCoordinatesOut.push_back(textureCoord);
     }
     // translate min x to 0 and min y to 0 (max since 0 to -1)
     float2 t(FLT_MAX, -FLT_MAX);
@@ -1783,6 +1804,61 @@ std::vector<King::float2> King::Model::HelperCreateTextureCoordinatesFor(const s
 
     // *** TO DO *** uv creation is untested
     return textureCoordinatesOut;
+}
+/******************************************************************************
+*    Method:    HelperCreateTextureCoordinatesForSphere
+*          \ /
+*    TOP:---*---
+*          / \
+*         |   |
+*         |   |
+*          \ /
+*        ---*---  :BOTTOM
+*          / \
+*   Uses the cube map method
+******************************************************************************/
+void King::Model::HelperCreateTextureCoordinatesForSphere()
+{
+    auto c = GetBoundingBox().GetCenter();
+    c = DirectX::XMVectorSelect(g_XMZero, c, DirectX::XMVectorNearEqual(c, g_XMZero, float3(0.1e-7)));
+
+    cout << "Sphere center: " << c << "\n";
+    auto pts = GetPositions();
+    cout << "pts: " << pts.size() << "\n";
+    assert(pts.size() > 2);
+    vector<vector<float>> uvs(pts.size());
+
+    float3 uV, uv;
+    for (auto& pt : pts)
+    {
+        int index = &pt - &pts[0];
+        
+        uv = uV = float3(pt) - c;
+        uV.MakeNormalize();
+        uV.MakeAbsolute();
+        auto t = max(uV.GetX(), uV.GetY());
+        t = max(uV.GetZ(), t);
+
+        uv = uv / (2.f * t) + 0.5f;
+        // one coordinate will then be 0 or 1 indicating which texture of the cube map it maps to
+        // the other two will be in the range of 0 to +1
+        auto d = uv.Get_XMFLOAT3();
+        auto ct = uV.Get_XMFLOAT3();
+        if (ct.x == 1.f) { uvs[index].push_back(d.y); uvs[index].push_back(d.z); }
+        else if (ct.y == 1.f) { uvs[index].push_back(d.x); uvs[index].push_back(d.z); }
+        else if (ct.z == 1.f) { uvs[index].push_back(d.x); uvs[index].push_back(d.y); }
+        else
+        {
+            // should not hit this!!!!
+            uvs[index].push_back(d.x); uvs[index].push_back(d.y);
+        }
+        // *** TO DO *** Untested
+        //cout << "UV: " << index << " " << float2(uvs[index]) << "\n";
+    }
+
+    SetDataAttribute(uvs, VertexAttrib::enumDesc::textureCoord, true);
+
+    return;
 }
 /******************************************************************************
 *    Method:    HelperCreateMeshFrom
@@ -2031,13 +2107,15 @@ int King::Model::CreateMeshFrom(const King::Sphere& sphereIn, const uint32_t seg
     const float radius = sphereIn.GetRadius();
     float theta = XM_2PI / (float)segmentsIn;
     Path p;
-    for (size_t j = 0; j < segmentsIn / 2 + 1; ++j)
+    for (size_t j = 0; j < segmentsIn / 2u + 1u; ++j)
     {
         const float cosTheta = cos(theta * (float)j);
         const float sinTheta = sin(theta * (float)j);
         float x = (sinTheta) * radius;
         float y = (cosTheta) * radius;
         p.push_back(float3(x, y, 0.f));
+        // p1: sin(0) = 0, cos(0) = r, (0, r, 0)
+        // pn: sin(XM_2PI) = 0, cos(XM_2PI) = -r, (0, -r, 0)
     }
 
     auto firstIndex = _meshes.size();
@@ -2059,11 +2137,16 @@ int King::Model::CreateMeshFrom(const King::Sphere& sphereIn, const uint32_t seg
         assert(a < b);
     }
 
+    // optimize
     RemoveDuplicateVerticies();
 
     _meshes[firstIndex]->CalculateBoundingBox();
 
     Translate(sphereIn.GetCenter());
+
+    // texture coordinates
+    if (_vertexFormat.Has(VertexAttrib::enumDesc::textureCoord))
+        HelperCreateTextureCoordinatesForSphere();
 
     return (int)firstIndex;
 }
@@ -2178,9 +2261,8 @@ bool King::Model::Load(std::string fileNameIN)
         infile.close();
 
     }
-    
     // simple models and a very common file format for inter-operability
-    if ((p.extension() == ".obj" || p.extension() == ".OBJ" || p.extension() == ".Obj"))
+    else if ((p.extension() == ".obj" || p.extension() == ".OBJ" || p.extension() == ".Obj"))
     {
         Model_IO m;
         auto models = m.Load_OBJ(fileNameIN, &_vertexFormat); // returns a standard model
@@ -2191,7 +2273,7 @@ bool King::Model::Load(std::string fileNameIN)
         if (models.size()) return true;
     }
     // complex models with bones and animation clips with a good readable file format but poorly supported (quake 3 arena format)
-    if ((p.extension() == ".m3d" || p.extension() == ".M3D" || p.extension() == ".M3d" || p.extension() == ".m3D"))
+    else if ((p.extension() == ".m3d" || p.extension() == ".M3D" || p.extension() == ".M3d" || p.extension() == ".m3D"))
     {
         Model_IO m;
         //auto models = m.Load_M3D(fileNameIN, &_vertexFormat); // returns a standard model
@@ -2207,7 +2289,7 @@ bool King::Model::Load(std::string fileNameIN)
 /******************************************************************************
 *    Method:    Save
 ******************************************************************************/
-bool King::Model::Save(std::string fileNameIN) 
+bool King::Model::Save(std::string fileNameIN)
 { 
     bool rtn(false);
 
@@ -2216,8 +2298,8 @@ bool King::Model::Save(std::string fileNameIN)
     // native file format in binary
     if ((p.extension() == ".kng" || p.extension() == ".KNG" || p.extension() == ".Kng"))
     {
-        ofstream outfile(fileNameIN, std::ios_base::binary | std::ios_base::trunc);
-
+        ofstream outfile;
+        outfile.open(fileNameIN, std::ios_base::binary | std::ios_base::trunc);
         //cout << "Saving file: " << fileNameIN << '\n';
 
         if (outfile.is_open())
@@ -2244,7 +2326,7 @@ bool King::Model::Save(std::string fileNameIN)
     else if ((p.extension() == ".obj" || p.extension() == ".OBJ" || p.extension() == ".Obj"))
     {
         Model_IO m;
-        std::vector<std::shared_ptr<Model>> models;
+        std::vector<std::shared_ptr<ModelScaffold>> models;
         models.push_back(std::dynamic_pointer_cast<Model>(shared_from_this()));
 
         rtn = m.Save_OBJ(fileNameIN, models);
@@ -2412,7 +2494,7 @@ void King::Model::CalculateNormals()
     if (!(_vertexFormat.Has(VertexAttrib::position) && _vertexFormat.Has(VertexAttrib::normal) ))
         return;
 
-    const auto& ib = _indexBufferMaster;
+    auto& ib = _indexBufferMaster;
     auto& vb = _vertexBufferMaster;
     const auto positionAttribute = _vertexFormat.GetAttribute(_vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::position));
     const auto normalAttribute = _vertexFormat.GetAttribute(_vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::normal));
@@ -2420,28 +2502,59 @@ void King::Model::CalculateNormals()
     for (size_t i = 0; i < ib.GetElements(); ++i)
     {
         auto n = reinterpret_cast<float*>(&vb[ib[i]] + normalAttribute.GetOffset());
-        *n = 0.0f;
+        n[0] = 0.0f; n[1] = 0.0f; n[2] = 0.0f;
     }
+    // calculate our center position
+    float3 center;
+    for (size_t i = 0; i < ib.GetElements(); ++i)
+    {
+        center += float3(reinterpret_cast<float*>(&vb[ib[i]] + positionAttribute.GetOffset()));
+    }
+    center /= ib.GetElements();
     // add face normal to vertex
     for (size_t i = 0; i < ib.GetElements(); i += 3)
     {
-        const float3 pt0(reinterpret_cast<float*>(&vb[ib[i + 0]] + positionAttribute.GetOffset()));
-        const float3 pt1(reinterpret_cast<float*>(&vb[ib[i + 1]] + positionAttribute.GetOffset()));
-        const float3 pt2(reinterpret_cast<float*>(&vb[ib[i + 2]] + positionAttribute.GetOffset()));
+        /*
+            5   4   3      4    5    4     3    4    3
+            ---------           -----           -----
+            |  /|  /|     /|    |  /      /|    |  / 
+            | / | / | =  / |  + | /   +  / |  + | / 
+            |/  |/  |   /  |    |/      /  |    |/   
+            ---------  -----           -----         
+            0   1   2  0   1    0      1   2    1
+
+            f 0 1 2 3 4 5
+         */
+        auto addr0 = &vb[ib[i + 0]];
+        auto addr1 = &vb[ib[i + 1]];
+        auto addr2 = &vb[ib[i + 2]];
+        const float3 pt0(reinterpret_cast<float*>(addr0 + positionAttribute.GetOffset()));
+        const float3 pt1(reinterpret_cast<float*>(addr1 + positionAttribute.GetOffset()));
+        const float3 pt2(reinterpret_cast<float*>(addr2 + positionAttribute.GetOffset()));
+        // #1f = 0 1 4, #2f = 0 4 5
         // face normal
-        auto c = Cross(pt1 - pt0, pt2 - pt0);
+        float3 c = Cross(pt1 - pt0, pt2 - pt0);
+        // reverse normal if not outward from the center of the object
+        //if (c.DotProduct(pt0 - center) < 0.f)
+        //{
+        //    c *= -1.0f;
+        //    // reverse winding to match normal
+        //    auto temp = ib[i + 1];
+        //    ib[i + 1] = ib[i + 2];
+        //    ib[i + 2] = temp;
+        //}
         {
-            float* n0 = reinterpret_cast<float*>(&vb[ib[i + 0]] + normalAttribute.GetOffset());
+            float* n0 = reinterpret_cast<float*>(addr0 + normalAttribute.GetOffset());
             float3 n(n0); n += c;
             n0[0] = n.GetX(); n0[1] = n.GetY(); n0[2] = n.GetZ();
         }
         {
-            float* n1 = reinterpret_cast<float*>(&vb[ib[i + 1]] + normalAttribute.GetOffset());
+            float* n1 = reinterpret_cast<float*>(addr1 + normalAttribute.GetOffset());
             float3 n(n1); n += c;
             n1[0] = n.GetX(); n1[1] = n.GetY(); n1[2] = n.GetZ();
         }
         {
-            float* n2 = reinterpret_cast<float*>(&vb[ib[i + 2]] + normalAttribute.GetOffset());
+            float* n2 = reinterpret_cast<float*>(addr2 + normalAttribute.GetOffset());
             float3 n(n2); n += c;
             n2[0] = n.GetX(); n2[1] = n.GetY(); n2[2] = n.GetZ();
         }
@@ -3076,7 +3189,7 @@ size_t King::Model::RemoveUnusedVerticies()
 
             indexValue += mesh->GetVBStart();
 
-            assert(indexValue < _vertexBufferMaster.Size());
+            assert(indexValue < _vertexBufferMaster.GetElements());
             *(indexAddr) = indexValue;
         }
         mesh->SetVBStart(0);
@@ -3084,12 +3197,12 @@ size_t King::Model::RemoveUnusedVerticies()
 
     // create a list of unique verticies
     auto stride = _vertexBufferMaster.GetStride();
-    MemoryBlock<uint8_t> uniqueVB(_vertexBufferMaster.Size(), stride);
+    MemoryBlock<uint8_t> uniqueVB(_vertexBufferMaster.GetElements(), stride);
     uint32_t numUniqueVerts(0);
 
     // main comparison pass
-    uint32_t numIndicies(_indexBufferMaster.Size());
-    uint32_t numOfVerticies(_vertexBufferMaster.Size());
+    uint32_t numIndicies(_indexBufferMaster.GetElements());
+    uint32_t numOfVerticies(_vertexBufferMaster.GetElements());
 
     for (uint32_t k = 0; k < numOfVerticies; ++k)
         for (uint32_t s = 0; s < numIndicies; ++s)
@@ -3111,7 +3224,7 @@ size_t King::Model::RemoveUnusedVerticies()
             }
         }
 
-    rtn = _vertexBufferMaster.Size() - uniqueVB.Size();
+    rtn = _vertexBufferMaster.GetElements() - uniqueVB.GetElements();
     _vertexBufferMaster = uniqueVB;
 
     return rtn;
@@ -3139,7 +3252,7 @@ size_t King::Model::RemoveDuplicateVerticies()
     auto c = &_vertexBufferMaster.GetData() + startC;
 
     // create a list of unique verticies
-    MemoryBlock<uint8_t> uniqueVB(_vertexBufferMaster.Size(), stride);
+    MemoryBlock<uint8_t> uniqueVB(_vertexBufferMaster.GetElements(), stride);
 
     auto pu = &uniqueVB.GetData() + startP;
     auto tu = &uniqueVB.GetData() + startT;
@@ -3202,7 +3315,7 @@ size_t King::Model::RemoveDuplicateVerticies()
 
             indexValue += mesh->GetVBStart();
 
-            assert(indexValue < _vertexBufferMaster.Size());
+            assert(indexValue < _vertexBufferMaster.GetElements());
             *(indexAddr) = indexValue;
         }
         mesh->SetVBStart(0);
@@ -3216,12 +3329,12 @@ size_t King::Model::RemoveDuplicateVerticies()
 
     // main comparison pass
     // loop through all verticies
-    uint32_t numOfVerticies(_vertexBufferMaster.Size());
+    uint32_t numOfVerticies(_vertexBufferMaster.GetElements());
 
     for (uint32_t k = 1; k < numOfVerticies; ++k)
     {
         auto d = reinterpret_cast<float*>(&_vertexBufferMaster[k]);
-        //cout << "Vertex " << k << ": " << float3(d) << ' ';
+        cout << "   " << (int)((float)k / numOfVerticies * (int)100) << "% " << '\r';// << "Vertex " << k << ": " << float3(d) << '\n';
 
         int newIndex(-1);
         // back search to identify as a duplicate against the unique buffer
@@ -3262,20 +3375,43 @@ size_t King::Model::RemoveDuplicateVerticies()
         uniqueVB.Split(numUniqueVerts, &discard);
     }
 
-    rtn = _vertexBufferMaster.Size() - uniqueVB.Size();
+    rtn = _vertexBufferMaster.GetElements() - uniqueVB.GetElements();
     _vertexBufferMaster = uniqueVB;
 
-    //for (uint32_t k = 0; k < _vertexBufferMaster.Size(); ++k)
+    //for (uint32_t k = 0; k < _vertexBufferMaster.GetElements(); ++k)
     //{
     //    auto d = reinterpret_cast<float*>(&_vertexBufferMaster[k]);
-    //    //cout << "Unique " << k << ": " << float3(d) << '\n';
+    //    cout << "Unique " << k << ": " << float3(d) << '\n';
     //}
 
-    cout << "REMOVED: " << rtn << '\n';
+    //cout << "REMOVED: " << rtn << '\n';
     return rtn;
 }
 /******************************************************************************
+*    Method:    Scale
+* // modifies the underlying data
+******************************************************************************/
+void King::ModelScaffold::Scale(const float3 scaleIn)
+{
+    if (!_vertexFormat.IsFirst(King::VertexAttrib::enumDesc::position)) return;
+
+    auto matrix = DirectX::XMMatrixAffineTransformation(scaleIn, float3(), float3(), float3());
+    Transform(matrix);
+}
+/******************************************************************************
+*    Method:    Rotate
+* // modifies the underlying data
+******************************************************************************/
+void King::ModelScaffold::Rotate(const float3 orignIn, const quat rIn)
+{
+    if (!_vertexFormat.IsFirst(King::VertexAttrib::enumDesc::position)) return;
+
+    auto matrix = DirectX::XMMatrixAffineTransformation(float3(1.0f), orignIn, rIn, float3());
+    Transform(matrix);
+}
+/******************************************************************************
 *    Method:    Translate
+* // modifies the underlying data
 ******************************************************************************/
 void King::ModelScaffold::Translate(const float3 transIn)
 {
@@ -3333,9 +3469,9 @@ bool King::ModelScaffold::Read_v1(ifstream& dataFileIn)
     // binary model bounding box
     dataFileIn.read(reinterpret_cast<char*>(&_boundingBox), sizeof(_boundingBox));
     // binary vetex data
-    rtn = _vertexBufferMaster.ReadMemoryBlock(dataFileIn);
+    rtn = _vertexBufferMaster.Read(dataFileIn);
     // binary index data
-    if (rtn) rtn = _indexBufferMaster.ReadMemoryBlock(dataFileIn);        
+    if (rtn) rtn = _indexBufferMaster.Read(dataFileIn);        
 
     if (dataFileIn.fail() || !rtn) return false;
     return true;
@@ -3356,23 +3492,28 @@ bool King::ModelScaffold::Write_v1(ofstream& outfileIn)
     };
     WriteString(_modelName);
 
+    // lambda
+    auto WriteInt = [&outfileIn](const int& in)
+    {
+        outfileIn.write(reinterpret_cast<const char*>(&in), sizeof(in));
+    };
+
     for (int i = 0; i < 8; ++i)
     {
         outfileIn.write(reinterpret_cast<char*>(&_vertexFormat.attributes[i]._offset), sizeof(uint16_t));
 
         int temp = _vertexFormat.attributes[i]._format;
-        outfileIn.write(reinterpret_cast<char*>(&temp), sizeof(temp));
-
+        WriteInt(temp);
         temp = _vertexFormat.attributes[i]._desc;
-        outfileIn.write(reinterpret_cast<char*>(&temp), sizeof(temp));
+        WriteInt(temp);
     }
     outfileIn.write(reinterpret_cast<char*>(&_vertexFormat.nextAttribute), sizeof(_vertexFormat.nextAttribute));
 
     outfileIn.write(reinterpret_cast<char*>(&_indexFormat), sizeof(_indexFormat));
     outfileIn.write(reinterpret_cast<char*>(&_boundingBox), sizeof(_boundingBox));
 
-    _vertexBufferMaster.WriteMemoryBlock(outfileIn);
-    _indexBufferMaster.WriteMemoryBlock(outfileIn);
+    _vertexBufferMaster.Write(outfileIn);
+    _indexBufferMaster.Write(outfileIn);
     
     if (outfileIn.fail()) return false;
     return true;
@@ -3892,7 +4033,7 @@ int King::Model::CreateMeshFrom(const Path& pFrom, const Path& pTo)
     // quad1 : (0, 2, 1, 1, 2, 3) ; near optimized because quad1 is not (need to swap 2 & 1)
     // quad2 : (2, 4, 3, 3, 4, 5) ; if we fully optimize, 2 & 1 swap will edit indexing in quad2
     // quad3 : (4, 6, 5, 5, 6, 7) ; starting with quad 3, and everyone after, the vertex order is in order of access
-    // since quad1 and quad2 verticies are very close to each other on GPU cache, there is no reasone to fully optimize here post loop
+    // since quad1 and quad2 verticies are very close to each other on GPU cache, there is no reason to fully optimize here post loop
     
     verts.push_back(pFrom[0]);
     verts.push_back(pTo[0]);
@@ -3900,7 +4041,7 @@ int King::Model::CreateMeshFrom(const Path& pFrom, const Path& pTo)
     {
         verts.push_back(pFrom[i]);
         
-        // if from == to, then we have a triangle and we only need only of them in the buffer
+        // if from == to, then we have a triangle and we only need one of them in the buffer
         if (DirectX::XMVector3NearEqual(pFrom[i].GetVecConst(), pTo[i].GetVecConst(), float3(FLT_EPSILON)))
             quadOrTri.push_back(false);
         else
@@ -4516,7 +4657,7 @@ bool King::HeightGrid::Load(const string& nameIn)
     std::ifstream infile(nameIn + ".mb", std::ifstream::binary);
     if (infile.bad()) return false;
 
-    _gridMem.ReadMemoryBlock(infile);
+    _gridMem.Read(infile);
 
     infile.read(reinterpret_cast<char*>(&(_xzSize.i[0])), sizeof(int));
     infile.read(reinterpret_cast<char*>(&(_xzSize.i[1])), sizeof(int));
@@ -4544,7 +4685,7 @@ void King::HeightGrid::Save(const string& nameIn)
     std::ofstream outfile(nameIn + ".mb", std::ofstream::binary | std::ofstream::trunc);
     if (outfile.bad()) return;
 
-    _gridMem.WriteMemoryBlock(outfile);
+    _gridMem.Write(outfile);
 
     outfile.write(reinterpret_cast<const char*>(&(_xzSize.i[0])), sizeof(int));
     outfile.write(reinterpret_cast<const char*>(&(_xzSize.i[1])), sizeof(int));
@@ -4899,8 +5040,9 @@ Pose King::Pose::Interpolate(const Pose &in, const float fractionIn) const
 *       attributeEnum       attribute data type to retrieve
 *       vbStartIn           vertex offset if master is assembled without index modification
 *       ibStartIn           index offset if indicies are shifted for a subset
+*       unique              true then retrieve each vertex in order, else use the index buffer and return vertex list with duplicates as referenced in the index buffer
 ******************************************************************************/
-vector<vector<float>> King::ModelScaffold::GetDataAttribute(VertexAttrib::enumDesc attributeEnum, uint32_t vbStartIn, uint32_t ibStartIn)
+vector<vector<float>> King::ModelScaffold::GetDataAttribute(VertexAttrib::enumDesc attributeEnum, uint32_t vbStartIn, uint32_t ibStartIn, bool unique)
 {
     assert(_vertexFormat.Has(attributeEnum));
 
@@ -4914,59 +5056,129 @@ vector<vector<float>> King::ModelScaffold::GetDataAttribute(VertexAttrib::enumDe
     const auto attribOffset = atrribute.GetOffset();
     const auto atrribFormat = atrribute.GetFormat();
 
+    auto lamda = [&](const uint32_t &i)
+    {
+        if (atrribFormat == VertexAttrib::enumFormat::format_float32x4)
+        {
+            {
+                float* v_data = reinterpret_cast<float*>(GetVertexAddr(i, vbStartIn, ibStartIn) + attribOffset);
+                vector<float> xyzw(4);
+                xyzw[0] = *v_data;
+                xyzw[1] = *(v_data + 1);
+                xyzw[2] = *(v_data + 2);
+                xyzw[3] = *(v_data + 3);
+                v.push_back(xyzw);
+            }
+        }
+        else if (atrribFormat == VertexAttrib::enumFormat::format_float32x3)
+        {
+            {
+                float* v_data = reinterpret_cast<float*>(GetVertexAddr(i, vbStartIn, ibStartIn) + attribOffset);
+                vector<float> xyz(3); // xyz
+                xyz[0] = *v_data;
+                xyz[1] = *(v_data + 1);
+                xyz[2] = *(v_data + 2);
+                v.push_back(xyz);
+            }
+        }
+        else if (atrribFormat == VertexAttrib::enumFormat::format_float32x2)
+        {
+            {
+                float* v_data = reinterpret_cast<float*>(GetVertexAddr(i, vbStartIn, ibStartIn) + attribOffset);
+                vector<float> xy(2);
+                xy[0] = *v_data;
+                xy[1] = *(v_data + 1);
+                v.push_back(xy);
+            }
+        }
+        else if (atrribFormat == VertexAttrib::enumFormat::format_float32)
+        {
+            {
+                float* v_data = reinterpret_cast<float*>(GetVertexAddr(i, vbStartIn, ibStartIn) + attribOffset);
+                vector<float> x(1);
+                x[0] = *v_data;
+                v.push_back(x);
+            }
+        }
+    };
+
     // cycle through indicies and store vertex info    
     const auto indexCount = GetIndexCount();
     const auto vertexCount = GetVertexCount();
 
-    if (atrribFormat == VertexAttrib::enumFormat::format_float32x4)
-    {
+    if (unique)
+        for (uint32_t i = 0; i < vertexCount; ++i)
+            lamda(i);
+    else
         for (uint32_t i = 0; i < indexCount; ++i)
-        {
-            assert(i < vertexCount);
-            float* v_data = reinterpret_cast<float*>(GetVertexAddr(i, vbStartIn, ibStartIn) + attribOffset);
-            vector<float> xyzw(4);
-            xyzw[0] = *v_data;
-            xyzw[1] = *(v_data + 1);
-            xyzw[2] = *(v_data + 2);
-            xyzw[3] = *(v_data + 3);
-            v.push_back(xyzw);
-        }
-    }
-    else if (atrribFormat == VertexAttrib::enumFormat::format_float32x3)
-    {
-        for (uint32_t i = 0; i < indexCount; ++i)
-        {
-            float* v_data = reinterpret_cast<float*>(GetVertexAddr(i, vbStartIn, ibStartIn) + attribOffset);
-            vector<float> xyz(3); // xyz
-            xyz[0] = *v_data;
-            xyz[1] = *(v_data + 1);
-            xyz[2] = *(v_data + 2);
-            v.push_back(xyz);
-        }
-    }
-    else if (atrribFormat == VertexAttrib::enumFormat::format_float32x2)
-    {
-        for (uint32_t i = 0; i < indexCount; ++i)
-        {
-            float* v_data = reinterpret_cast<float*>(GetVertexAddr(i, vbStartIn, ibStartIn) + attribOffset);
-            vector<float> xy(2);
-            xy[0] = *v_data;
-            xy[1] = *(v_data + 1);
-            v.push_back(xy);
-        }
-    }
-    else if (atrribFormat == VertexAttrib::enumFormat::format_float32)
-    {
-        for (uint32_t i = 0; i < indexCount; ++i)
-        {
-            float* v_data = reinterpret_cast<float*>(GetVertexAddr(i, vbStartIn, ibStartIn) + attribOffset);
-            vector<float> x(1);
-            x[0] = *v_data;
-            v.push_back(x);
-        }
-    }
+            lamda(_indexBufferMaster[i]);
 
     return v;
+}
+/******************************************************************************
+*    Method:    SetDataAttribute
+*       Sets the data of one attribute.
+*   INPUTS:
+*       dataIn              data to copy
+*       attributeEnum       attribute data type to retrieve
+*       vbStartIn           vertex offset if master is assembled without index modification
+*       ibStartIn           index offset if indicies are shifted for a subset
+*       unique              true then retrieve each vertex in order, else use the index buffer and return vertex list with duplicates as referenced in the index buffer
+******************************************************************************/
+void King::ModelScaffold::SetDataAttribute(vector<vector<float>>& dataIn, VertexAttrib::enumDesc attributeEnum, uint32_t vbStartIn, uint32_t ibStartIn, bool unique)
+{
+    assert(_vertexFormat.Has(attributeEnum));
+
+    vector<vector<float>> v;
+    auto& vb = GetVertexBufferMaster(); // uint8_t but with stride indexing
+    uint8_t* vbAddr = &vb.GetData();
+    auto vbStride = vb.GetStride();
+    const auto& ib = GetIndexBufferMaster(); // uint32_t
+    const auto attribIndex = _vertexFormat.GetAttributeIndexFromDescription(attributeEnum);
+    const auto atrribute = _vertexFormat.GetAttribute(attribIndex);
+    const auto attribOffset = atrribute.GetOffset();
+    const auto atrribFormat = atrribute.GetFormat();
+
+    auto lamda = [&](const uint32_t& i)
+    {
+        if (atrribFormat == VertexAttrib::enumFormat::format_float32x4)
+        {
+            float* v_data = reinterpret_cast<float*>(GetVertexAddr(i, vbStartIn, ibStartIn) + attribOffset);
+            *v_data = dataIn[i][0];
+            *(v_data + 1) = dataIn[i][1];
+            *(v_data + 2) = dataIn[i][2];
+            *(v_data + 3) = dataIn[i][3];
+        }
+        else if (atrribFormat == VertexAttrib::enumFormat::format_float32x3)
+        {
+            float* v_data = reinterpret_cast<float*>(GetVertexAddr(i, vbStartIn, ibStartIn) + attribOffset);
+            *v_data = dataIn[i][0];
+            *(v_data + 1) = dataIn[i][1];
+            *(v_data + 2) = dataIn[i][2];
+        }
+        else if (atrribFormat == VertexAttrib::enumFormat::format_float32x2)
+        {
+            float* v_data = reinterpret_cast<float*>(GetVertexAddr(i, vbStartIn, ibStartIn) + attribOffset);
+            *v_data = dataIn[i][0];
+            *(v_data + 1) = dataIn[i][1];
+        }
+        else if (atrribFormat == VertexAttrib::enumFormat::format_float32)
+        {
+            float* v_data = reinterpret_cast<float*>(GetVertexAddr(i, vbStartIn, ibStartIn) + attribOffset);
+            *v_data = dataIn[i][0];
+        }
+    };
+
+    // cycle through indicies and store vertex info    
+    const auto indexCount = GetIndexCount();
+    const auto vertexCount = GetVertexCount();
+
+    if (unique)
+        for (uint32_t i = 0; i < vertexCount; ++i)
+            lamda(i);
+    else
+        for (uint32_t i = 0; i < indexCount; ++i)
+            lamda(_indexBufferMaster[i]);
 }
 
 
@@ -5305,7 +5517,7 @@ King::Frustum& King::Frustum::operator*=(const DirectX::XMMATRIX& m)
 // methods
 bool King::Contact::GetHasPenetration() const
 {
-    auto& mag = _directionContactObj1_to_ContactObj2.Get_magnitude();
+    auto& mag = _directionContactObj2_to_ContactObj1.Get_magnitude();
     const float epsilon = 5.e-5f;
 
     return (mag > epsilon);
@@ -5636,7 +5848,7 @@ bool King::Contact::SetContactPointsFromOBBonOBBIntersection(const Box& A, const
     if (contactVertsB.size() < contactVertsA.size())
     {
         _contactVerts = contactVertsB;
-        _directionContactObj1_to_ContactObj2 = -_directionContactObj1_to_ContactObj2;
+        _directionContactObj2_to_ContactObj1 = -_directionContactObj2_to_ContactObj1;
     }
 
     if (contactVertsA.size() == 2 && contactVertsB.size() == 2)

@@ -148,9 +148,15 @@ namespace King {
         inline AngularAcceleration & operator-= (const AngularAcceleration & in) { *this = *this - in; return *this; }
         inline AngularAcceleration & operator*= (const AngularAcceleration & in) { *this = *this * in; return *this; }
         inline AngularAcceleration & operator/= (const AngularAcceleration & in) { *this = *this / in; return *this; }
-        inline AngularAcceleration operator* (const float & in) const { return AngularAcceleration(_magnitude * in, _unit_direction); }
-        inline AngularAcceleration operator/ (const float& in) const { return AngularAcceleration(_magnitude / in, _unit_direction); }
 
+        inline AngularAcceleration operator+ (const float& in) const { return AngularAcceleration(_magnitude + in, _unit_direction); }
+        inline AngularAcceleration operator- (const float& in) const { return AngularAcceleration(_magnitude - in, _unit_direction); }
+        inline AngularAcceleration operator* (const float& in) const { return AngularAcceleration(_magnitude * in, _unit_direction); }
+        inline AngularAcceleration operator/ (const float& in) const { return AngularAcceleration(_magnitude / in, _unit_direction); }
+        inline AngularAcceleration& operator+= (const float& in) { *this = *this + in; return *this; }
+        inline AngularAcceleration& operator-= (const float& in) { *this = *this - in; return *this; }
+        inline AngularAcceleration& operator*= (const float& in) { *this = *this * in; return *this; }
+        inline AngularAcceleration& operator/= (const float& in) { *this = *this / in; return *this; }
         // Init/Start/Stop/Destroy
         // Functionality
         bool                                IsZero() const { return _magnitude == 0.f; }

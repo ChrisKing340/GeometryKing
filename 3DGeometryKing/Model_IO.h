@@ -142,7 +142,6 @@ namespace King {
 	{
 		/* variables */
 	public:
-		bool flagGroupsAsObjects = false; // make mesh groups separate object models
 	private:
 		struct OBJTokens {
 			// tokens key words
@@ -243,7 +242,7 @@ namespace King {
         // wavefront format supported by every popular modeling software for exporting data.  Lacks skeleton animation and inconsistentcies on modeling exports implementations (winding order, encoding of quads and larger polygons).
         //  our format is tested with with modeling software Blender.
 		std::vector<shared_ptr<King::Model>>				Load_OBJ(const std::string fileNameIN, const VertexFormat *vertexFormatIn = nullptr);
-		bool												Save_OBJ(const std::string fileNameIN, const std::vector<shared_ptr<King::Model>> &modelsIN);
+		bool												Save_OBJ(const std::string fileNameIN, const std::vector<shared_ptr<King::ModelScaffold>> &modelsIN);
         // our native format in binary
         std::vector<shared_ptr<King::ModelScaffold>>		Load_KNG(const std::string fileNameIN);
         bool												Save_KNG(const std::string fileNameIN, const std::vector<shared_ptr<King::ModelScaffold>>& modelsIN);
@@ -252,7 +251,7 @@ namespace King {
 		//bool												Save_M3D(const std::string fileNameIN, shared_ptr<King::SkinnedModel>& modelIn, std::map<std::string, std::shared_ptr<Material>>& materialsIN);
         // material format used with wavefront files and our native format as accompany file
 		std::map<std::string, std::shared_ptr<Material>>	Load_MTL(const std::string fileNameIN);
-		bool												Save_MTL(const std::string fileNameIN, const std::vector<shared_ptr<King::Model>> &modelsIN);
+		bool												Save_MTL(const std::string fileNameIN, const std::vector<shared_ptr<King::ModelScaffold>> &modelsIN);
 		bool 												Save_MTL(const std::string fileNameIN, std::map<std::string, std::shared_ptr<Material>> &materialsIN);
 		bool												Save_MTL(std::ofstream & of, std::map<std::string, std::shared_ptr<Material>>& materialsIN);
 		// Accessors

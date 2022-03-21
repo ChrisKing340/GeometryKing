@@ -104,6 +104,14 @@ namespace King {
         virtual void Update(const UnitOfMeasure::Time& dt) { _positionWorldSpace += _linearVelocity * dt; }
         // Accessors
         float3 GetAxisOfRotation() const { return _rotation.GetQuaternion().GetAxis(); }
+        auto& Get_linearAcceleration() { return _linearAcceleration; }
+        auto& Get_angularAcceleration() { return _angularAcceleration; }
+        auto& Get_linearVelocity() { return _linearVelocity; }
+        auto& Get_angularVelocity() { return _angularVelocity; }
+        auto& Get_positionWorldSpace() { return _positionWorldSpace; }
+        auto& Get_rotation() { return _rotation; }
+        auto& Get_principalMomentsOfInertia() { return _principalMomentsOfInertia; }
+        auto& Get_productsOfInertia() { return _productsOfInertia; }
         // Assignments
         void Set_angularVelocity(const AngularVelocity& angularVelocity) { _angularVelocity = angularVelocity; }
         //void Set_angularMomentum(const AngularVelocity& angularMomentum) { _angularMomentum = angularMomentum; }

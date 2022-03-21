@@ -91,8 +91,9 @@ SOFTWARE.
         CreateMeshFrom(const Quad& quad);
         Added additional initializer lists to class constructors for Point, Line, Ray, Triangle, Quad and Path
     12/13/2021 - Version 2.2.1 - Corrections/edits to 2.2
-    12/20/2021 - Version 2.3 - Class Path gain method to convert the 3D Path to a 2D Polygon2DF (in XY plane). Works best
+    12/20/2021 - Version 2.3 - Class Path gained method to convert the 3D Path to a 2D Polygon2DF (in XY plane). Works best
         for a planar Path and this conversion rotates it into the XY plane.
+    03/05/2022 - Version 2.4 - Class Sphere gained methods for inertia, surface area and volume
 
     Version 3.0 Planned release - oriented box on oriented box and sphere collision tests. Previously extended our axis 
         aligned bounding box in version 1 to oriented by passing in a orientation quaterion. WIP code to implement
@@ -106,7 +107,7 @@ SOFTWARE.
 */
 
 constexpr auto KING_3DGEOMETRY_VERSION_MAJOR = 2;
-constexpr auto KING_3DGEOMETRY_VERSION_MINOR = 3;
+constexpr auto KING_3DGEOMETRY_VERSION_MINOR = 4;
 constexpr auto KING_3DGEOMETRY_VERSION_PATCH = 1;
 
 #include <DirectXCollision.h>
@@ -1007,6 +1008,8 @@ namespace King {
         inline bool operator==  (const Sphere &rhs) { return DirectX::XMVector4Equal(v, rhs.v); }
         inline bool operator!=  (const Sphere &rhs) { return DirectX::XMVector4NotEqual(v, rhs.v); }
         // Functionality
+        DirectX::XMMATRIX                   MomentsOfInertia(const float& densityIn); // same as if rotated due to symetry in x, y, and z axis
+
         bool                                Contains(const Point& ptIn) const;
         bool                                Intersects(const Ray& rhs, float3 *ptOut) const;
         bool                                Intersects(const Line& rhs) const;
@@ -1028,7 +1031,9 @@ namespace King {
         // Accessors
         FloatPoint3                         GetCenter() const { return FloatPoint3(v); }
         float                               GetRadius() const { return abs(GetW()); } // since it can be set directly, the only guarantee (+) is to abs each call
-        // Assignments
+        inline float                        GetSurfaceArea() const { auto r = GetRadius(); return 4.0f * UnitOfMeasure::PI * r * r; }
+        inline float                        GetVolume() const { auto r = GetRadius(); return 4.0f / 3.0f * UnitOfMeasure::PI * r * r * r; }
+                                                                                      // Assignments
         void __vectorcall                   SetCenter(const FloatPoint3 centerIn) { float r = GetRadius(); v = FloatPoint4(centerIn, r); }
         void                                SetCenter(const float x, const float y, const float z) { float r = GetRadius(); v = DirectX::XMVectorSet(x, y, z, r); }
         void                                SetRadius(const float radiusIn) { SetW(abs(radiusIn)); }
@@ -1161,9 +1166,12 @@ namespace King {
         Box & operator= (Box &&in) = default; // move assignment
         inline Box & operator*= (const DirectX::XMMATRIX &m) { pt_min = DirectX::XMVector4Transform(FloatPoint4(pt_min, 1.0f), m); pt_max = DirectX::XMVector4Transform(FloatPoint4(pt_max, 1.0f), m); return *this; } // does not support scaling since non-uniformed
         friend Box operator* (Box lhs, const DirectX::XMMATRIX &m) { lhs *= m; return lhs; } // invokes std::move(lhs)
-        inline Box& operator+= (const float3& d) { MoveBy(d); return *this; }
-        inline Box& operator-= (const float3& d) { MoveBy(-d); return *this; }
-        inline Box& operator*= (const float3& s) { Grow(s); return *this; }
+        inline Box& operator+= (const float3 d) { MoveBy(d); return *this; }
+        inline Box& operator-= (const float3 d) { MoveBy(-d); return *this; }
+        inline Box& operator*= (const float3 s) { Grow(s); return *this; }
+        inline Box operator+ (const float3 d) const { Box rtn(*this); rtn.MoveBy(d); return rtn; }
+        inline Box operator- (const float3 d) const { Box rtn(*this); rtn.MoveBy(-d); return rtn; }
+        inline Box operator* (const float3 s) const { Box rtn(*this); rtn.Grow(s); return rtn; }
         // Functionality
         bool                                Intersects(const Ray &rayIn, float &distOut) const;
         bool                                Intersects(const Line &lineIn) const;
@@ -1217,8 +1225,8 @@ namespace King {
         inline float                        GetHeight() const { return std::abs(pt_max.GetY() - pt_min.GetY()); }
         inline float                        GetDepth() const { return std::abs(pt_max.GetZ() - pt_min.GetZ()); }
         inline float3                       GetDiagonal() const { return pt_max - pt_min; }
-        inline float3                       GetSurfaceArea() const { auto d = GetDiagonal(); return 2.f * (d.f[0] * d.f[1] + d.f[0] * d.f[2] + d.f[1] * d.f[2]); }
-        inline float3                       GetVolume() const { auto d = GetDiagonal(); return 2.f * (d.f[0] * d.f[1] * d.f[2]); }
+        inline float                        GetSurfaceArea() const { auto d = GetDiagonal(); return 2.f * (d.f[0] * d.f[1] + d.f[0] * d.f[2] + d.f[1] * d.f[2]); }
+        inline float                        GetVolume() const { auto d = GetDiagonal(); return 2.f * (d.f[0] * d.f[1] * d.f[2]); }
 
         vector<pair<FloatPoint3, CornerDescription>> IdentifyCorners(const vector<FloatPoint3>& pointsIn, const Quaternion* quaternionIn = nullptr) const;
         std::vector<FloatPoint3>            GetCorners8Transformed(const DirectX::FXMMATRIX& M); // scaled, rotate and translate a "unit" Box to a model bounding box
@@ -1338,7 +1346,7 @@ namespace King {
         float3                              _Obj2Position;
     protected:
         bool                                _staticContact = false; // has not changed since last update *** TO DO ***
-        Distance                            _directionContactObj1_to_ContactObj2; // normal & mag in world space
+        Distance                            _directionContactObj2_to_ContactObj1; // normal & mag in world space
         float                               _momentumChangeFromPenetration = 0.0f; // *** TO DO ***
 
     private:
@@ -1366,11 +1374,11 @@ namespace King {
         // Accessors
         const size_t                        GetHasContact() const { return _contactVerts.size(); }
         bool                                GetHasPenetration() const;
-        auto&                               GetPenetration() const { return _directionContactObj1_to_ContactObj2; }
-        bool                                GetPenetrationDepth() const { return _directionContactObj1_to_ContactObj2.Get_magnitude(); }
-        float3                              GetPenetrationDirection() const { return _directionContactObj1_to_ContactObj2.Get_unit_direction(); }
+        auto&                               GetPenetration() const { return _directionContactObj2_to_ContactObj1; }
+        bool                                GetPenetrationDepth() const { return _directionContactObj2_to_ContactObj1.Get_magnitude(); }
+        float3                              GetPenetrationDirection() const { return _directionContactObj2_to_ContactObj1.Get_unit_direction(); }
         // Assignments
-        void                                SetContactPenetration(const Distance& Obj1_to_Obj2) { _directionContactObj1_to_ContactObj2 = Obj1_to_Obj2; _staticContact = false; }
+        void                                SetContactPenetration(const Distance& Obj2_to_Obj1) { _directionContactObj2_to_ContactObj1 = Obj2_to_Obj1; _staticContact = false; }
         void                                SetObjects(const float3& obj1Pt, const float3& obj2Pt) { _Obj1Position = obj1Pt; _Obj2Position = obj2Pt; }
         inline void                         SetNoContact() { _contactVerts.clear(); }
 
@@ -1514,7 +1522,10 @@ namespace King {
 
         TriangleIndexed                     GetTriangleIndexed(const uint32_t &triangleIndexIn) const { auto o = (GetIB() + (uint32_t)triangleIndexIn * 3); return TriangleIndexed(GetVB(), _vertexFormat, *o, *(o + 1), *(o + 2)); }
         
-        auto                                GetVertexAddr(const uint32_t indexIn) const { assert(indexIn < GetNumIndicies()); return GetVB() + *(GetIB() + indexIn) * (uint32_t)_vertexFormat.GetByteSize(); } // byte pointer to start of vertex data
+        auto                                GetVertexAddr(const uint32_t indexIn) const 
+        { 
+            auto c = GetNumIndicies();
+            assert(indexIn < c); return GetVB() + *(GetIB() + indexIn) * (uint32_t)_vertexFormat.GetByteSize(); } // byte pointer to start of vertex data
         FloatPoint3                         GetVertexPosition(const uint32_t indexIn) const;
         // Assignments
         void                                Set_name(const string _name_IN) { _name = _name_IN; }
@@ -1710,7 +1721,9 @@ namespace King {
         Ray                                 ConvertWorldRayToObjectSpace(const Ray& worldRayIn, const DirectX::XMMATRIX worldMatrixIn);
 
         virtual void                        Transform(const DirectX::XMMATRIX transform); // modifies the underlying data
-        virtual void _vectorcall            Translate(const float3 In); // modifies the underlying data
+        virtual void _vectorcall            Translate(const float3 In); 
+        virtual void _vectorcall            Scale(const float3 scaleIn);
+        virtual void _vectorcall            Rotate(const float3 orignIn, const quat rIn);
         
         virtual Box                         CalculateBoundingBox() { Box rtn; rtn.SetZero(); return rtn; } // define in derived class
         // Confirmations
@@ -1734,18 +1747,21 @@ namespace King {
         auto                                GetVertexStride() const { return _vertexFormat.GetByteSize(); }
         auto &                              GetVertexBufferMaster() { return _vertexBufferMaster; }
 
-        auto &                              GetIndexCount() const { return _indexBufferMaster.GetLength(); }
+        virtual const size_t                GetNumMeshes() { return 0; } // just our master data as one mesh
+
+        auto                                GetIndexCount() const { return _indexBufferMaster.GetElements(); }
         uint32_t                            GetIndexStride() const { return IndexFormat::uint32 ? 4 : 2;} // in bytes
         auto &                              GetIndexBufferMaster() { return _indexBufferMaster; }
 
-        vector<vector<float>>               GetPositions() { return GetDataAttribute(VertexAttrib::enumDesc::position); }
-        vector<vector<float>>               GetColors() { return GetDataAttribute(VertexAttrib::enumDesc::color); }
-        vector<vector<float>>               GetTextureCoordinates() { return GetDataAttribute(VertexAttrib::enumDesc::textureCoord); }
-        vector<vector<float>>               GetNormals() { return GetDataAttribute(VertexAttrib::enumDesc::normal); }
-        vector<vector<float>>               GetTangents() { return GetDataAttribute(VertexAttrib::enumDesc::tangent); }
-        vector<vector<float>>               GetBiTangents() { return GetDataAttribute(VertexAttrib::enumDesc::bitangent); }
-        vector<vector<float>>               GetBoneIndicies() { return GetDataAttribute(VertexAttrib::enumDesc::boneIndicies); }
-        vector<vector<float>>               GetBoneWeights() { return GetDataAttribute(VertexAttrib::enumDesc::boneWeights); }
+        // unique will return vertex in order (eg. 0, 1, 2, 3) and unique = false will return in index buffer order with duplicates (eg. indicies = {0,1,2, 1,3,2} return is 0, 1, 2, 1, 3, 2 and not 0, 1, 2, 3
+        vector<vector<float>>               GetPositions(bool unique = true) { return GetDataAttribute(VertexAttrib::enumDesc::position, unique); }
+        vector<vector<float>>               GetColors(bool unique = true) { return GetDataAttribute(VertexAttrib::enumDesc::color, unique); }
+        vector<vector<float>>               GetTextureCoordinates(bool unique = true) { return GetDataAttribute(VertexAttrib::enumDesc::textureCoord, unique); }
+        vector<vector<float>>               GetNormals(bool unique = true) { return GetDataAttribute(VertexAttrib::enumDesc::normal, unique); }
+        vector<vector<float>>               GetTangents(bool unique = true) { return GetDataAttribute(VertexAttrib::enumDesc::tangent, unique); }
+        vector<vector<float>>               GetBiTangents(bool unique = true) { return GetDataAttribute(VertexAttrib::enumDesc::bitangent, unique); }
+        vector<vector<float>>               GetBoneIndicies(bool unique = true) { return GetDataAttribute(VertexAttrib::enumDesc::boneIndicies, unique); }
+        vector<vector<float>>               GetBoneWeights(bool unique = true) { return GetDataAttribute(VertexAttrib::enumDesc::boneWeights, unique); }
         // Assignments
         virtual void                        AddMasterVertexData(const MemoryBlock<uint8_t>& vdIn) { _vertexBufferMaster.Append(vdIn); }
         virtual void                        AddMasterIndexData(const MemoryBlock<uint32_t> &idIn) { _indexBufferMaster.Append(idIn); }
@@ -1759,8 +1775,10 @@ namespace King {
         void                                SetIndexStream(const size_t& startIndexIn, uint32_t* dataIn, size_t numIndicies);
         void                                SetVertexElement(const size_t & vertexIndexIn, const VertexAttrib::enumDesc & propertyIn, uint8_t * dataIn);
         void                                SetVertexFormat(const VertexFormat & vfIn) { _vertexFormat = vfIn; _vertexBufferMaster.SetStride(_vertexFormat.GetByteSize()); }
-    private:
-        vector<vector<float>>               GetDataAttribute(VertexAttrib::enumDesc attributeEnum, uint32_t vbStartIn = 0, uint32_t ibStartIn = 0);
+    protected:
+        vector<vector<float>>               GetDataAttribute(VertexAttrib::enumDesc attributeEnum, uint32_t vbStartIn = 0, uint32_t ibStartIn = 0, bool unique = true);
+        
+        void                                SetDataAttribute(vector<vector<float>>& dataIn, VertexAttrib::enumDesc attributeEnum, uint32_t vbStartIn = 0, uint32_t ibStartIn = 0, bool unique = true);
     };
     /******************************************************************************
     *    LineModel
@@ -1802,7 +1820,7 @@ namespace King {
 
         void                                MergeMeshes(const size_t meshIndex1, const size_t meshIndex2);
         // Accessors
-        const size_t                        GetNumMeshes() const { return _meshes.size(); }
+        virtual const size_t                GetNumMeshes() override { return _meshes.size(); }
         std::shared_ptr<LineMesh>           GetMesh(size_t index) { assert(index < _meshes.size()); return _meshes[index]; }
         // Assignments
         auto                                AddMesh(std::shared_ptr<LineMesh> meshIn) { _meshes.push_back(meshIn); return _meshes.size()-1; }
@@ -1869,13 +1887,15 @@ namespace King {
 
         size_t                              RemoveUnusedVerticies();
         size_t                              RemoveDuplicateVerticies();
+
         void                                OptimizeVertexBuffer() { for (auto & m : _meshes) { OptimizeMeshVertexBuffer(*m.get()); } }
         void                                OptimizeMeshVertexBuffer(const TriangleMesh & forMeshIn); // re-order to match index buffer ordering
+
         void                                MergeMeshes(const size_t meshIndex1, const size_t meshIndex2);
 
         void                                LogReport(const std::wstring fileNameIn);
         // Accessors
-        const auto                          GetNumMeshes() const { return _meshes.size(); }
+        virtual const size_t                GetNumMeshes() override { return _meshes.size(); }
         std::shared_ptr<TriangleMesh>       GetMesh(size_t index) { assert(index < _meshes.size()); return _meshes[index]; }
         const std::vector< std::shared_ptr<TriangleMesh>> & GetMeshes() const { return _meshes; }
 
@@ -1904,8 +1924,9 @@ namespace King {
         int                                 CreateMeshFrom(const Path& path, Distance d); // extrude d away from p as a series of perpendicular quads
         int                                 CreateMeshFrom(const Path& pFrom, const Path& pTo); // extrude pFrom to pTo as a series of connected quads
     protected:
-        std::vector<King::float2>           HelperCreateTextureCoordinatesFor(const std::vector<King::float3>& pt);
         int                                 HelperCreateMeshFrom(const vector<float3>& positionsIn, const vector<uint32_t>& indiciesIn, const vector<float2>& uvIn, const vector<float3>& normalsIn);
+        std::vector<King::float2>           HelperCreateTextureCoordinatesForTriOrQuad(const std::vector<King::float3>& pt);
+        void                                HelperCreateTextureCoordinatesForSphere();
     };                                                     
     
     /******************************************************************************

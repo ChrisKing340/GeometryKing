@@ -12,7 +12,7 @@ References:
 
 MIT License
 
-Copyright (c) 2021 Christopher H. King
+Copyright (c) 2021-2022 Christopher H. King
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -34,7 +34,7 @@ SOFTWARE.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
 
 #pragma once 
-// needed for C++17 which had breaking change for std::make_shared
+// needed for VS17 which had breaking change for std::make_shared
 #ifndef _ENABLE_EXTENDED_ALIGNED_STORAGE
 #define _ENABLE_EXTENDED_ALIGNED_STORAGE
 #endif
@@ -69,22 +69,26 @@ namespace King {
         std::vector<std::pair<Force, Distance>> _forcesActingOnBody; // after update and moved into velocity, this vector is cleared
     protected:
         float _TBD = 0.0f; 
-        // properties
+        // Properties
         std::shared_ptr<PhysicsMaterial>        _sp_material;
         UnitOfMeasure::Mass                     _mass;
-        UnitOfMeasure::Inertia                  _momentOfInteria;
+        UnitOfMeasure::Inertia                  _momentOfInteria; // scalar, but needs to be a matrix & when world matrix updates, update as well *** TODO ***
         float                                   _coefficientOfDrag = 0.5f; // sphere
-        float                                   _crossSectionalArea = 1.f;
+        float                                   _crossSectionalArea = 1.f; // used by drag
         Pose                                    _pose;
         bool                                    _hasGravity = true;
-        // calculated outputs
+        
+        // Calculated outputs
         bool                                    _sleep = false;
         std::pair<bool, DirectX::XMMATRIX>      _worldMatrix; // first bool is world matrix good (false = needs updating)
         Box                                     _boundingBox;
+
         Acceleration                            _linearAcceleration;
         AngularAcceleration                     _angularAcceleration;
+
         Velocity                                _linearVelocityCofM;
         AngularVelocity                         _angularVelocityCofM;
+
         AngularVelocity                         _angularVelocityCofExt;
     private:
         /* methods */
@@ -107,21 +111,20 @@ namespace King {
         // Math Operators
         // Init/Start/Stop/Destroy
         // Functionality
-        void Update(const UnitOfMeasure::Time& dt);
+        void                                    Update(const UnitOfMeasure::Time& dt);
         // Accessors
-        const auto& Get_TBD() const { return 0; }
-        const auto& Get_linearVelocityCofM() const { return _linearVelocityCofM; }
-        const auto& Get_angularVelocityCofM() const { return _angularVelocityCofM; }
-
+        const auto&                             Get_TBD() const { return 0; }
+        const auto&                             Get_linearVelocityCofM() const { return _linearVelocityCofM; }
+        const auto&                             Get_angularVelocityCofM() const { return _angularVelocityCofM; }
+        DirectX::XMMATRIX                       Get_worldMatrix() { if (!_worldMatrix.first) { _worldMatrix.second = _pose; _worldMatrix.first = true; } return _worldMatrix.second; }
         // Assignments
-        void Set_TBD(const float& TBDIn) { _TBD = TBDIn; }
-        void Set_linearVelocityCofM(const Velocity& linearVelocityCofMIn) { _linearVelocityCofM = linearVelocityCofMIn; _sleep = false; }
-        void Set_angularVelocityCofM(const AngularVelocity& angularVelocityCofMIn) { _angularVelocityCofM = angularVelocityCofMIn; _sleep = false; }
-        void SetWorldMatrixAsUpdateRequired() { _worldMatrix.first = false; }
-
+        void                                    Set_TBD(const float& TBDIn) { _TBD = TBDIn; }
+        void                                    Set_linearVelocityCofM(const Velocity& linearVelocityCofMIn) { _linearVelocityCofM = linearVelocityCofMIn; _sleep = false; }
+        void                                    Set_angularVelocityCofM(const AngularVelocity& angularVelocityCofMIn) { _angularVelocityCofM = angularVelocityCofMIn; _sleep = false; }
+        void                                    SetWorldMatrixUpdateRequired() { _worldMatrix.first = false; }
         // Friends
-        friend void to_json(json& j, const PhysicsObject& from);
-        friend void from_json(const json& j, PhysicsObject& to);
+        friend void                             to_json(json& j, const PhysicsObject& from);
+        friend void                             from_json(const json& j, PhysicsObject& to);
     protected:
         // Internal Helpers
     };
@@ -231,7 +234,10 @@ inline void King::PhysicsObject::Update(const UnitOfMeasure::Time& dtIn)
     // X = X0 + v0 * t + 1/2 * a0 * t^2
     // Xn = Xn-1 + (vn * tn - vn-1 * tn-1) + 1/2 * (an * tn^2 - an-1 * tn-1^2)
     // our time step will be constant between simulation frames, so...
-    // Xn = Xn-1 + (vn-1 + vn) / 2 * dt // use the midpoint of velocity as a good integration approximation; vn accounts for current acceleration
+    // update vn with acceleration (just as vn-1 was) and use the midpoint of 
+    // velocity between time steps as a good integration approximation
+    // Xn = Xn-1 + (vn-1 + vn) / 2 * dt 
+    // Xn = Xn-1 + (vn-1 * dt + vn * dt ) / 2 
     Distance disVnLess1(_linearVelocityCofM, dtIn);
     // vn = vn-1 + an * dt
     _linearVelocityCofM += _linearAcceleration * dtIn;
@@ -246,9 +252,9 @@ inline void King::PhysicsObject::Update(const UnitOfMeasure::Time& dtIn)
     Rotation rot = rotVn * rotVnLess1 * _pose.GetRotation();
     _pose.SetRotation(rot);
 
-    SetWorldMatrixAsUpdateRequired();
+    SetWorldMatrixUpdateRequired();
 
-    if (_angularAcceleration.Get_magnitude() == 0.f && _linearVelocityCofM.Get_magnitude() == 0.f)
+    if (_angularVelocityCofM.Get_magnitude() == 0.f && _linearVelocityCofM.Get_magnitude() == 0.f && _angularVelocityCofExt == 0.f)
     {
         // go to sleep
         _sleep = true;

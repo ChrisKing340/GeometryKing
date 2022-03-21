@@ -11,7 +11,7 @@
 
 	Basically, you pass in two OBB cubes, and the code will determine the
 	collision points and the penetration depth and the direction of the
-	collision to push the cubes appart.
+	collision to push the cubes apart.
 
 	Its probably more complicated than it should be, and definetly needs a
 	rewrite at some later date.

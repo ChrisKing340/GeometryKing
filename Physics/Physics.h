@@ -23,6 +23,10 @@ using json = nlohmann::json; // for convenience
 //#include "PhysicsObject.h"
 #include "PhysicsRigidBody.h"
 
+// below defines a few functions to solve specific physics cases to show use of
+// the library. Commented some examples of the classes use and the equations
+// that govern.
+
 // Symbols: 𝛼𝛽𝛾𝜃𝛷𝜏𝜔𝜌𝜋𝜎𝜇𝜆𝜀𝛥ζ 𝑖𝑗𝑘 𝑚𝑛𝑟𝑠𝑡 𝒾𝒿𝓀𝓁𝓂𝓃𝒹𝒶𝒷𝒸 ±° ⊙⊚ ∫∬∭∮∯∰∝∞∟∠∡∑√∛∜∴≈⨯• ͢   ͢𝑖  ͢𝑗  ͢𝑘
 
 /******************************************************************************
@@ -50,7 +54,7 @@ using json = nlohmann::json; // for convenience
 *		With the 2nd Law:
 *			m • ͢a = (i = 0...n) ∑ Fi
 *	Impulse:
-*		The product of force (F) and time (t) over which the force is applied.
+*		The product of force (F) and time (t) applied.
 *		Number for forces (n) acting during the time interval (∆t).
 *			Impulse = ᶴF dt
 *			Impulse = ∑F/n • ∆t = Fave • ∆t ; slug * ft / s = lbf * s
@@ -75,75 +79,69 @@ using json = nlohmann::json; // for convenience
 
 // note https://www.euclideanspace.com/physics/dynamics/inertia/rotation/rotationfor/index.htm#angularacceleration goes into interesting thoughts about frames of reference for physics engines
 
-// Mechanics
-//    Kinematics
-//        Trajectory
-
 namespace King {
 
-    float3 __vectorcall UnitTangentVector(Velocity velIn); // The analogue to the slope of the tangent line is the direction of the tangent line. Since velocity is the derivative of position, it is a tangent function to position.
-    float3 __vectorcall UnitNormalPrincipleVector(Acceleration accIn); // principle unit vector. Geometrically, for a curve, this vector is the unique vector that point into the curve.
-    Acceleration __vectorcall AccelerationTangentialComponent(Acceleration accIn, Velocity velIn);
-    Acceleration __vectorcall AccelerationNormalComponent(Acceleration accIn, Velocity velIn);
+    float3 __vectorcall         UnitTangentVector(Velocity velIn); // The analogue to the slope of the tangent line is the direction of the tangent line. Since velocity is the derivative of position, it is a tangent function to position.
+    float3 __vectorcall         UnitNormalPrincipleVector(Acceleration accIn); // principle unit vector. Geometrically, for a curve, this vector is the unique vector that point into the curve.
+    Acceleration __vectorcall   AccelerationTangentialComponent(Acceleration accIn, Velocity velIn);
+    Acceleration __vectorcall   AccelerationNormalComponent(Acceleration accIn, Velocity velIn);
 
 namespace Physics {
-    // Templates
-    //class alignas(16) class Sphere : public PhysicsRigidBody {};
-    //PhysicsRigidBody cube(const float xDim, const float yDim, const float zDim);
-
     //*** MECHANICS ***
     // all of the below are a subset topics belonging to mechanics
 
     //*** Trajectory *** 
-    // Kinematics is most useful with the force on an object is constant, and therefore acceleration is constant (such as the force of gravity).
+    // Ease math is when the force on an object is constant, and therefore acceleration is constant (such as the force of gravity).
     // p = p0 + v0 t + 1/2 a t^2
-    Position Mechanics_Trajectory(const Position& initialPosIn, const Velocity& initialVelIn, const Acceleration& constAccelIn, const UnitOfMeasure::Time& tIn);
+    King::Position              Mechanics_Trajectory(const Position& initialPosIn, const Velocity& initialVelIn, const Acceleration& constAccelIn, const UnitOfMeasure::Time& tIn);
     // p = p0 + v0 t + 1/2 g t^2
-    Position Mechanics_TrajectoryPositionAtTimeWithNegativeYGravity(const Position& initialPosIn, const Velocity& initialVelIn, const UnitOfMeasure::Time& tIn);
+    King::Position              Mechanics_TrajectoryNegativeYGravity(const Position& initialPosIn, const Velocity& initialVelIn, const UnitOfMeasure::Time& tIn);
     // t1 = v0Y / g
-    UnitOfMeasure::Time Mechanics_TrajectoryTimeAtMaximumHeightWithNegativeYGravity(const Velocity& initialVelIn);
+    UnitOfMeasure::Time         Mechanics_TrajectoryTimeAtMaximumHeightWithNegativeYGravity(const Velocity& initialVelIn);
     // h = v0Y^2 / 2g
-    UnitOfMeasure::Length Mechanics_TrajectoryHeightAtMaximumHeightWithNegativeYGravity(const Velocity& initialVelIn);
+    UnitOfMeasure::Length       Mechanics_TrajectoryMaximumHeightWithNegativeYGravity(const Velocity& initialVelIn);
     
     // *** Dynamics ***  
     // Acceleration of motion has two components, one normal to the direction of motion (velocity) and one tangential
     // accIn = (an * ͢N) + (at * ͢T);  ͢N and ͢T are relative to the velocity vector
     // ͢aN = (an * ͢N) ; magnitude and direction
-    Acceleration a0;
-    Acceleration an = AccelerationNormalComponent(a0, v);
+    //Acceleration a;
+    //Velocity v0;
+    //Acceleration an = AccelerationNormalComponent(a, v0);
     // ͢aT = (at * ͢T) ; magnitude and direction
-    Acceleration at = AccelerationTangentialComponent(a0, v);
+    //Acceleration at = AccelerationTangentialComponent(a, v0);
 
     // *** Dynamics of Rotations ***   
-    Length l(10._m);
-    AngularAccel aa(1._radPerSecSq);
-    AngularSpeed as(1._radPerSec);
+    //using namespace UnitOfMeasure; // for string literals
+    //UnitOfMeasure::Length l(10.0_m);
+    //UnitOfMeasure::AngularAccel aa(1.0_radPerSecSq);
+    //UnitOfMeasure::AngularSpeed as(1.0_radPerSec);
 
-    Distance r(l, float3(0.f, 1.f, 0.f));
-    float3 axis(1.f, 0.f, 0.f);
-    AngularAcceleration 𝛼(aa, axis);
-    AngularVelocity 𝜔(as, axis);
+    //Distance r(l, float3(0.f, 1.f, 0.f));
+    //float3 axis(1.f, 0.f, 0.f);
+    //AngularAcceleration 𝛼(aa, axis);
+    //AngularVelocity 𝜔(as, axis);
 
     // AngularVelocity class has methods to calculate linear accelerations of the rotational motion
     // ͢a = ͢a0 + 𝛼 x ͢r + ͢𝜔 x ( ͢𝜔 x ͢r )
-    Acceleration a = 𝜔.CalculateLinearAccelerationFrom(a0, 𝛼, r);
+    //auto a1 = 𝜔.CalculateLinearAccelerationFrom(a, 𝛼, r);
 
     // ͢an = r • | ͢𝜔|^2 ; with direction along radius (and opposite) to maintain curviture
-    Acceleration an = 𝜔.CalculateNormalAccelerationAlong_radius(r);
+    //auto an1 = 𝜔.CalculateNormalAccelerationAlong_radius(r);
     // since ͢a = ͢at + ͢an,
     // ͢at = ͢a - ͢an
-    Acceleration at = a - an;
+    //auto at1 = a - an;
 
     // ͢v = ͢𝜔 x ͢r ; 
-    Velocity v = 𝜔.CalculateTangentialVelocityAtEndOf_radius(r);
+    //Velocity v = 𝜔.CalculateTangentialVelocityAtEndOf_radius(r);
 
     //*** Work ***
     // Work links the concept of force and energy and is most useful when force varies with time, and therefore acceleration is not constant
     // Use operators defined in class Distance for Energy = Force * Distance
     // Springs
-    UnitOfMeasure::Energy MechanicsWork_SpringWorkFromDistance(const float& kSpringConstantIn, const float3& unitVectorSpringLineOfMotion, const Distance&);
-    UnitOfMeasure::Energy MechanicsWork_SpringWorkFromTwoPositions(const float& kSpringConstantIn, const float3& unitVectorSpringLineOfMotion, const Position& spring_p0In, const Position& p1In, const Position& p2In);
-    Distance MechanicsWork_SpringDistanceFromForce(const float& kSpringConstantIn, const float3& unitVectorSpringLineOfMotion, const Force&);
+    UnitOfMeasure::Energy       MechanicsWork_SpringWorkFromDistance(const float& kSpringConstantIn, const float3& unitVectorSpringLineOfMotion, const Distance&);
+    UnitOfMeasure::Energy       MechanicsWork_SpringWorkFromTwoPositions(const float& kSpringConstantIn, const float3& unitVectorSpringLineOfMotion, const Position& spring_p0In, const Position& p1In, const Position& p2In);
+    Distance                    MechanicsWork_SpringDistanceFromForce(const float& kSpringConstantIn, const float3& unitVectorSpringLineOfMotion, const Force&);
 
     //*** Thermodynamics ***
     // Since UnitOfMeasure::Energy is a scalar, math in conserving it is straight forward. For completion of mechanics discussion, some basics here:

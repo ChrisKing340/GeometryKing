@@ -32,7 +32,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
 
-#pragma once // needed for C++17 which had breaking change for std::make_shared
+#pragma once // needed for VS17 which had breaking change for std::make_shared
 #ifndef _ENABLE_EXTENDED_ALIGNED_STORAGE
 #define _ENABLE_EXTENDED_ALIGNED_STORAGE
 #endif
@@ -85,10 +85,10 @@ namespace King {
         // Creation/Life cycle
         static std::shared_ptr<Distance> Create() { return std::make_shared<Distance>(); }
         Distance() = default;
-        explicit Distance(const float &magIn, const float3 &dirIn) { _magnitude = abs(magIn); _unit_direction = float3::Normal(dirIn); if (_magnitude != magIn) { _unit_direction = -_unit_direction; }; }
-        explicit Distance(const UnitOfMeasure::Length &l, const float3 &dirIn) { _magnitude = abs(l); _unit_direction = float3::Normal(dirIn); if (_magnitude != l) { _unit_direction = -_unit_direction; }; }
-        Distance(const float3 &vectorIn) { _magnitude = float3::Magnitude(vectorIn); _unit_direction = float3::Normal(vectorIn); }
-        Distance(const float3& pt1In, const float3& pt2In) { auto AB=pt2In-pt1In; _magnitude = float3::Magnitude(AB); _unit_direction = float3::Normal(AB); }
+        explicit Distance(const float &magIn, const float3 dirIn) { _magnitude = abs(magIn); _unit_direction = float3::Normal(dirIn); if (_magnitude != magIn) { _unit_direction = -_unit_direction; }; }
+        explicit Distance(const UnitOfMeasure::Length &l, const float3 dirIn) { _magnitude = abs(l); _unit_direction = float3::Normal(dirIn); if (_magnitude != l) { _unit_direction = -_unit_direction; }; }
+        Distance(const float3 vectorIn) { _magnitude = float3::Magnitude(vectorIn); _unit_direction = float3::Normal(vectorIn); }
+        Distance(const float3 pt1In, const float3 pt2In) { auto AB=pt2In-pt1In; _magnitude = float3::Magnitude(AB); _unit_direction = float3::Normal(AB); }
         explicit Distance(const Acceleration & accIn, const UnitOfMeasure::TimeSq &dtSq) { _magnitude = UnitOfMeasure::Length(static_cast<float>(accIn.Get_magnitude()) * 0.5f * (float)dtSq); _unit_direction = accIn.Get_unit_direction(); }
         explicit Distance(const Velocity & velIn, const UnitOfMeasure::Time &dt) { _magnitude = UnitOfMeasure::Length(static_cast<float>(velIn.Get_magnitude()) * dt); _unit_direction = velIn.Get_unit_direction(); }
         Distance(const Distance &in) { *this = in; } // forward to copy assignment
@@ -133,7 +133,14 @@ namespace King {
         inline Distance & operator-= (const Distance & in) { *this = *this - in; return *this; }
         inline Distance & operator*= (const Distance & in) { *this = *this * in; return *this; } // Distance squared; we added an operator 4/18 to return Area, so delete the * operator here?
         inline Distance & operator/= (const Distance & in) { *this = *this / in; return *this; }
-        inline Distance operator* (const float & in) const { return Distance(_magnitude * in, _unit_direction); }
+        inline Distance operator+ (const float& in) const { return Distance(_magnitude + in, _unit_direction); }
+        inline Distance operator- (const float& in) const { return Distance(_magnitude - in, _unit_direction); }
+        inline Distance operator* (const float& in) const { return Distance(_magnitude * in, _unit_direction); }
+        inline Distance operator/ (const float& in) const { return Distance(_magnitude / in, _unit_direction); }
+        inline Distance& operator+= (const float& in) { *this = *this + in; return *this; }
+        inline Distance& operator-= (const float& in) { *this = *this - in; return *this; }
+        inline Distance& operator*= (const float& in) { *this = *this * in; return *this; }
+        inline Distance& operator/= (const float& in) { *this = *this / in; return *this; }
         // Init/Start/Stop/Destroy
         // Functionality
         bool                                IsZero() const { return _magnitude == 0.f; }

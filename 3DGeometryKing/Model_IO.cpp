@@ -129,18 +129,11 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
     if (!f.Load(fileNameIN)) return models;
 
     // get number of models in file
-    int numModels = 1;
     bool modelNameDefined = false;
-    if (!flagGroupsAsObjects)
-    {
-        numModels = f.CountString(obj.prop_modelName);
-        if(numModels) modelNameDefined = f.FindFirst(obj.prop_modelName);
-    }
-    else
-    {
-        numModels = f.CountString(obj.prop_meshName);
-        if (numModels) modelNameDefined = f.FindFirst(obj.prop_meshName);
-    }
+    auto numModels = f.CountString(obj.prop_modelName);
+    if(numModels) 
+        modelNameDefined = f.FindFirst(obj.prop_modelName);
+
     // no identifiers found
     if (!numModels)
     {
@@ -192,10 +185,10 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
     // vertex data is zero based for each model, so read each type from "o " to "o "
     // or end of file
     //..............................................................................
+
+    auto wpos_models = f.WordIndex() + 1; // word position after find then skip the found word
     for(int modelCount=0; modelCount < numModels; ++modelCount)
     {
-        auto wpos_models = f.WordIndex() + 1; // word position after find then skip the found word
-        
         models.push_back(Model::Create());
         auto model = models.back();
 
@@ -220,8 +213,74 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
             attr[1].GetDescription() == VertexAttrib::enumDesc::textureCoord &&
             attr[2].GetDescription() == VertexAttrib::enumDesc::normal);
 
-        // Load the Master Object data
+        //..............................................................................
+        // Mesh creation (several per object separated by "g meshname" or "usemtl mtlname"
+        //..............................................................................
+        // Get number of meshes for model
+        int numMeshes;
+        int currentMesh = 0;
+        int previousIndicies = 0;
 
+        // two cases, one when g is used in file, the other when it is not. Not supported is when it is used sometimes, but not all the time
+        f.WordIndex(wpos_models);
+        if ((numMeshes = f.CountStringAndStopAtMarker(obj.prop_meshName, obj.prop_modelName)))
+        {
+            f.FindFirst(obj.prop_meshName);
+        }
+        else if((numMeshes = f.CountStringAndStopAtMarker(obj.prop_useMaterial, obj.prop_modelName)))
+        {
+            f.FindFirst(obj.prop_useMaterial);
+        }
+        else
+        {
+            numMeshes = 1;
+            if (modelNameDefined)
+            {
+                // none, so start at top of file, mesh will be named after model
+                f.FindFirst(obj.prop_modelName); // models are used to delimit (each is unique) data in the file
+            }
+        }
+        
+        cout << "  numMeshes " << numMeshes << "\n";
+
+        for (int meshCount = 0; meshCount < numMeshes; ++meshCount)
+        {
+            auto wpos_meshes = f.WordIndex() + 1; // word position after find then skip the found word
+            string meshName;
+
+            meshName = f.NextWord();
+
+            // create the material
+            string mtlName;
+            f.WordIndex(wpos_meshes - 1);
+            if (f.Word() == obj.prop_useMaterial)
+            {
+                mtlName = f.NextWord();
+                models.back()->AddMaterial(std::make_shared<King::Material>(mtlName));
+            }
+            else if (f.CountStringAndStopAtMarker(obj.prop_useMaterial, obj.prop_modelName))
+            {
+                f.FindNextFrom(obj.prop_useMaterial, wpos_meshes);
+                mtlName = f.NextWord();
+                models.back()->AddMaterial(std::make_shared<King::Material>(mtlName));
+            }
+
+            // create the mesh
+            // we don't know all of this yet, but that is ok as we will change it later
+            TriangleMesh triMesh(0, model->GetVertexFormat(), 0, 0, &model->GetVertexBufferMaster().GetData(), &model->GetIndexBufferMaster().GetData());
+            triMesh.Set_name(meshName);
+            triMesh.Set_materialName(mtlName);
+            model->AddMesh(triMesh);
+
+            f.FindNextFrom(obj.prop_meshName, wpos_meshes);
+        } // next mesh
+        // we should have atleast one
+        assert(numMeshes);
+        auto nMesh = model->GetMesh(currentMesh);
+
+        //..............................................................................
+        // Load the Master Object data
+        //..............................................................................
         // Get verticies
         auto positions = vector<vector<float>>();
         int numVertex;
@@ -313,260 +372,270 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
         else
             hasModelNormals = false; // this will flag the composite vertex assembler code later on to generate normals for each vertex
 
-        // Get Faces
-        vector<uint32_t> indicies;
-        vector<vertexComposite> verticiesComposite;
+        //*** Get Faces ***
+        vector<vertexComposite> verticiesComposite; 
+        vector<uint32_t> indicies; // index into verticiesComposite
+        map<string, uint32_t> indexMappingToVerticiesCompositeNoDuplicates; // search look up to not read duplicates
 
         size_t numFaces;
         f.WordIndex(wpos_models); // reset position back to start of model
         if (numFaces = f.CountStringAndStopAtMarker(obj.prop_face, obj.prop_modelName))
         {
-            cout << "  numFaces " << numFaces << "\n";
+            cout << "  number of face definitions in model " << numFaces << "\n";
             bool search = f.FindNext(obj.prop_face);
             while (!f.IsLast() && search)
             {
+                //f.WordIndex(wpos_models); 
                 if (f.Word() == obj.prop_face)
                 {
+                    // f ...
                     --numFaces; // represent what is left after this read
-                    vector<pair<uint32_t, vertexComposite>> loadedVertex;
+                    vector<uint32_t> loadedVertex;
                     uint32_t numVertexThisFace = 0;
                     bool stopFlag = false;
                     bool badFaceRead = false;
                     std::string w;
 
+                    // read all the face definition one vertex at a time
                     do
                     {
                         w = f.NextWord();
+                        if (w == "s")
+                        {
+                            // smoothing group change during face read is not supported
+                            w = f.NextWord();
+                            w = f.NextWord();
+                        }
+                        if (w == "l")
+                        {
+                            // line read is not supported
+                            w = f.NextWord(); // index 1 vertex
+                            w = f.NextWord(); // index 2 vertex
+                            w = f.NextWord();
+                        }
+                        //cout << w << '\n';
 
+                        // one vertex read
                         if (w != obj.prop_face && w != obj.prop_meshName && w != obj.prop_modelName && w != obj.prop_useMaterial && w != obj.prop_vertexPosition && w != obj.prop_vertexNormal && w != obj.prop_vertexTextureCoord)
                         {
 
                             ++numVertexThisFace;
-                            // f xyz/vn/uv
-                            auto tokens = Tokenize(w, "/");
-                            auto numTokens = tokens.size();
 
-                            // uses the model definition.  We could improve and search the mesh first and use that as a condition as well.  Works fine so far, so skipping
-                            bool loadUV = hasModelUV && (numTokens > 2);
-                            bool loadNormals = hasModelNormals && (numTokens > 1);
-                            if (!hasModelNormals && hasModelUV && numTokens == 2)
-                                loadUV = true;
-
-                            vertexCompositePadTo56 vert; // build xyz/uv/vn composite from indicies
-                            // POTIONS 
-                            // always have positions
-                            auto index = (uint32_t)atoi(tokens[0].c_str()) - 1;
+                            // check if this sequence has been read in already
+                            auto result = indexMappingToVerticiesCompositeNoDuplicates.find(w);
+                            if (result != indexMappingToVerticiesCompositeNoDuplicates.end())
                             {
-                                if (index < positions.size())
-                                {
-                                    vert.xyz[0] = positions[index][0];
-                                    vert.xyz[1] = positions[index][1];
-                                    vert.xyz[2] = positions[index][2];
-                                }
-                                else
-                                {
-                                    cout << "  BAD vertex position read from file, index is " << index << '\n';
-                                    badFaceRead = true;
-                                }
-                            }
-                            // TEXTURE 
-                            if (loadUV)
-                            {
-                                index = (uint32_t)atoi(tokens[1].c_str()) - 1;
-                                if (index < textureUV.size())
-                                {
-                                    vert.uv[0] = textureUV[index][0];
-                                    vert.uv[1] = textureUV[index][1];
-                                }
-                                else
-                                {
-                                    cout << "  BAD vertex texture coordinate read from file, index is " << index << '\n';
-                                    badFaceRead = true;
-                                }
+                                // it has, just use the previous master index into composite array
+                                // insert a bogus vertex, it will not be used, and place the index as the one found
+                                loadedVertex.push_back(result->second);
                             }
                             else
                             {
-                                vert.uv[0] = 0.0f;
-                                vert.uv[1] = 0.0f;
-                            }
-                            // NORMALS 
-                            if (loadNormals)
-                            {
-                                if (numTokens == 3) index = (uint32_t)atoi(tokens[2].c_str()) - 1;
-                                else index = (uint32_t)atoi(tokens[1].c_str()) - 1;
-                                if (index < normals.size())
+                                // we need to read it in
+                                // xyz/vn/uv
+                                auto tokens = Tokenize(w, "/");
+                                auto numTokens = tokens.size();
+
+                                // uses the model definition.  We could improve and search the mesh first and use that as a condition as well.  Works fine so far, so skipping
+                                bool loadUV = hasModelUV && (numTokens > 2);
+                                bool loadNormals = hasModelNormals && (numTokens > 1);
+                                if (!hasModelNormals && hasModelUV && numTokens == 2)
+                                    loadUV = true;
+
+                                vertexCompositePadTo56 vert; // build xyz/uv/vn composite from indicies
+                                // POTIONS 
+                                // always have positions
+                                auto index = (uint32_t)atoi(tokens[0].c_str()) - 1;
                                 {
-                                    vert.norm[0] = normals[index][0];
-                                    vert.norm[1] = normals[index][1];
-                                    vert.norm[2] = normals[index][2];
+                                    if (index < positions.size())
+                                    {
+                                        vert.xyz[0] = positions[index][0];
+                                        vert.xyz[1] = positions[index][1];
+                                        vert.xyz[2] = positions[index][2];
+                                    }
+                                    else
+                                    {
+                                        cout << "  BAD vertex position read from file, index is " << index << '\n';
+                                        badFaceRead = true;
+                                    }
+                                }
+                                // TEXTURE 
+                                if (loadUV)
+                                {
+                                    index = (uint32_t)atoi(tokens[1].c_str()) - 1;
+                                    if (index < textureUV.size())
+                                    {
+                                        vert.uv[0] = textureUV[index][0];
+                                        vert.uv[1] = textureUV[index][1];
+                                    }
+                                    else
+                                    {
+                                        cout << "  BAD vertex texture coordinate read from file, index is " << index << '\n';
+                                        badFaceRead = true;
+                                    }
                                 }
                                 else
                                 {
-                                    cout << "  BAD vertex normal read from file, index is " << index << '\n';
-                                    badFaceRead = true;
+                                    vert.uv[0] = 0.0f;
+                                    vert.uv[1] = 0.0f;
                                 }
-                            }
-                            else
-                            {
-                                vert.norm[0] = 0.0f;
-                                vert.norm[1] = 1.0f;
-                                vert.norm[2] = 0.0f;
-                            }
-
-                            uint32_t vi = (uint32_t)verticiesComposite.size();
-                            if (badFaceRead)
-                            {
-                                loadedVertex.push_back(pair<uint32_t, vertexComposite>(vi, vertexComposite(0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f)));
-                            }
-                            else
-                            {
-                                loadedVertex.push_back(pair<uint32_t, vertexComposite>(vi, vert));
+                                // NORMALS 
+                                if (loadNormals)
+                                {
+                                    if (numTokens == 3) index = (uint32_t)atoi(tokens[2].c_str()) - 1;
+                                    else index = (uint32_t)atoi(tokens[1].c_str()) - 1;
+                                    if (index < normals.size())
+                                    {
+                                        vert.norm[0] = normals[index][0];
+                                        vert.norm[1] = normals[index][1];
+                                        vert.norm[2] = normals[index][2];
+                                    }
+                                    else
+                                    {
+                                        cout << "  BAD vertex normal read from file, index is " << index << '\n';
+                                        badFaceRead = true;
+                                    }
+                                }
+                                else
+                                {
+                                    vert.norm[0] = 0.0f;
+                                    vert.norm[1] = 1.0f;
+                                    vert.norm[2] = 0.0f;
+                                }
+                                // our new index
+                                uint32_t vi = (uint32_t)verticiesComposite.size();
+                                // store so we can compare for duplicates
+                                indexMappingToVerticiesCompositeNoDuplicates[w] = vi; // adding to
+                                // insert the face into loadedVertex which will be later added to verticiesComposite (below)
+                                if (badFaceRead)
+                                {
+                                    loadedVertex.push_back(vi);
+                                    // we won't add another master vertex, just use the one we previously read in as a place holder
+                                    // hopefully, this reasonably patches up the mesh from a bad file
+                                }
+                                else
+                                {
+                                    loadedVertex.push_back(vi);
+                                    verticiesComposite.push_back(vert);
+                                }
                             }
                         }
                         else
                             stopFlag = true;
-                    } while (!f.IsLast() && w != "" && !stopFlag);
+                        // now loop back to read another vertex
+                    } while (!f.IsLast() && w != "" && !stopFlag); // reads in one vertex
 
 
                     //*****
-                    //  Add vertex to verticiesComposite
+                    //  Construct the index buffer for this face read
                     //*****
                     if (!badFaceRead)
                     {
-                        // interpret face into triagles for mesh
+                        // interpret face into triangles for mesh
                         // empty
                         if (numVertexThisFace == 0ul)
                         {
                         }
                         // point
                         else if (numVertexThisFace == 1ul)
-                            ;//verticiesComposite.pop_back();
+                        {
+                        }
                         // line
                         else if (numVertexThisFace == 2ul)
                         {
-                            //verticiesComposite.pop_back();
-                            //verticiesComposite.pop_back();
+                        }
+                        else if (numVertexThisFace == 3ul)
+                        {
+                            /*
+                            *   
+                                o Plane
+                                v 10.000000 0.000000 -10.000000
+                                v -10.000000 0.000000 -10.000000
+                                v 10.000000 0.000000 10.000000
+                                v -10.000000 0.000000 10.000000
+                                v 30.000000 0.000000 -10.000000
+                                v 30.000000 0.000000 10.000000
+                                if we triangulate export:
+                                f 3/1/1 2/2/1 4/3/1 0,1,2
+                                f 3/1/1 5/4/1 1/5/1 3,4,5
+                                f 3/1/1 1/5/1 2/2/1 6,7,8
+                                f 3/1/1 6/6/1 5/4/1 9,10,11
+
+                                2   1   5    1   4   3
+                                ---------    ---------
+                                |\T3|T2/|    |\  |  /|
+                                | \ | / | => | \ | / |
+                                |T1\|/T4|    |  \|/  |
+                                ---------    ---------
+                                4   3   6    2   0   5
+                            */
+                            indicies.push_back(loadedVertex[0]); // always in CCW order
+                            indicies.push_back(loadedVertex[1]);
+                            indicies.push_back(loadedVertex[2]);
+                        }
+                        else if (numVertexThisFace == 4ul)
+                        {
+                            /*
+                                Position Data:
+                                v 10.000000 0.000000 -10.000000
+                                v -10.000000 0.000000 -10.000000
+                                v 10.000000 0.000000 10.000000
+                                v -10.000000 0.000000 10.000000
+                                v 30.000000 0.000000 -10.000000
+                                v 30.000000 0.000000 10.000000
+                                LEFT: blender order RIGHT TRANSFORM: Read order of vertex
+                                2   1    3   2          2   1   5    3   2   5
+                                -----    -----          ---------    ---------
+                                |\T2|    |\T2|          |\T2|T3/|    |\T2|T3/|
+                                | \ | = >| \ |     :    | \ | / | => | \ | / |  
+                                |T1\|    |T1\|          |T1\|/T4|    |T1\|/T4|
+                                -----    -----          ---------    ---------
+                                4   3    0   1          4   3   6    0   1   4
+                            U-Shape lower to top ordering
+                            1 quad:
+                            f 4 3 1 2 = f 3 2 4 + f 3 1 2 => f 0 1 2 3 = f 1 3 0 + f 1 2 3 (confirmed!) 0,1,2,3
+                            2 quads in a row:
+                            f 4 3 1 2 = f 3 2 4 + f 3 1 2 => f 0 1 2 3 = f 1 3 0 + f 1 2 3 (confirmed!) 0,1,2,3
+                            f 1 3 6 5 = f 3 5 1 + f 3 6 5 => f 2 1 4 5 = f 1 5 2 + f 1 4 5 (confirmed!) 4,5,6,7
+                            */
+                            indicies.push_back(loadedVertex[0]); // 2 
+                            indicies.push_back(loadedVertex[1]); // 1
+                            indicies.push_back(loadedVertex[3]); // 5
+
+                            indicies.push_back(loadedVertex[1]); // 1
+                            indicies.push_back(loadedVertex[2]); // 4
+                            indicies.push_back(loadedVertex[3]); // 5
                         }
                         // triangle strip
-                        else if (numVertexThisFace > 2ul)
+                        else if (numVertexThisFace > 4ul)
                         {
-                            // Add our new verticies
-                            // NOTE: loader reads in 3 or more but several are duplicates
-                            uint32_t vi = (uint32_t)verticiesComposite.size();
-                            for (auto& v1 : loadedVertex)
-                            {
-                                // remove duplicates (near search)
-                                //if (vi > 4)
-                                //{
-                                //    // search previous 5 vertex
-                                //    if (!CompareVertex(v1.second, verticiesComposite[vi - 1]) &&
-                                //        !CompareVertex(v1.second, verticiesComposite[vi - 2]) &&
-                                //        !CompareVertex(v1.second, verticiesComposite[vi - 3]) &&
-                                //        !CompareVertex(v1.second, verticiesComposite[vi - 4]) &&
-                                //        !CompareVertex(v1.second, verticiesComposite[vi - 5]))
-                                //    {
-                                //        // new
-                                //        v1.first = verticiesComposite.size();
-                                //        verticiesComposite.push_back(v1.second);
-                                //    }
-                                //    else
-                                //        v1.first = UINT32_MAX;
-                                //}
-                                //else if (vi > 2) // 3 or 4 loaded, early special case
-                                //{
-                                //    // search previous triangle
-                                //    if (!CompareVertex(v1.second, verticiesComposite[vi - 3]) &&
-                                //        !CompareVertex(v1.second, verticiesComposite[vi - 2]) &&
-                                //        !CompareVertex(v1.second, verticiesComposite[vi - 1]))
-                                //    {
-                                //        // new
-                                //        v1.first = verticiesComposite.size();
-                                //        verticiesComposite.push_back(v1.second);
-                                //    }
-                                //    else
-                                //        v1.first = UINT32_MAX;
-                                //}
-                                 // only 1 or 2 loaded so add this vertex
-                                {
-                                    // new
-                                    v1.first = (uint32_t)verticiesComposite.size();
-                                    verticiesComposite.push_back(v1.second);
-                                }
-                            }
-
-                            for (auto& v1 : loadedVertex)
-                            {
-                                // replace the index of the duplicates
-                                if (v1.first == UINT32_MAX)
-                                {
-                                    if (CompareVertex(v1.second, verticiesComposite[vi - 1]))
-                                        v1.first = vi - 1;
-                                    else if (CompareVertex(v1.second, verticiesComposite[vi - 2]))
-                                        v1.first = vi - 2;
-                                    else if (CompareVertex(v1.second, verticiesComposite[vi - 3]))
-                                        v1.first = vi - 3;
-                                    else if (CompareVertex(v1.second, verticiesComposite[vi - 4]))
-                                        v1.first = vi - 4;
-                                    else if (CompareVertex(v1.second, verticiesComposite[vi - 5]))
-                                        v1.first = vi - 5;
-                                    else
-                                        cout << "  vertex replace duplicate failed!" << '\n';
-                                }
-                            }
-
                             // CCW winding order for right hand system
-                            // blender orders them 0, 1, 3,2, and as extended (lower row) 0, 1, 2, 3, ... (upper row) 7, 6, 5, 4
-                            // Blender -> Reordered
-                            // 3    4   3    2
-                            //  -----    -----
-                            //  |  /|    |  /|
-                            //  | / |  ->| / |
-                            //  |/  |    |/  |
-                            //  -----    -----
-                            // 1    2   0    1
-                            //          5    4   3
-                            //           ---------
-                            //           |  /|  /|
-                            //           | / | / |
-                            //           |/  |/  |
-                            //           ---------
-                            //          0    1   2
-
                             // note only verticies that are unique were added to verticiesComposite; numVertexThisFace is still correct and unadjusted
-
-                            //uint32_t vertNum = (uint32_t)(verticiesComposite.size() - numVertexThisFace);
-                            uint32_t numTri = (numVertexThisFace - 2);
-                            uint32_t upperRow = numVertexThisFace - 1; // offset since blender order faces 1 2 3 6 5 4
-                            bool even = !(bool)(numTri % 2);
-
+                            uint32_t numTri = (numVertexThisFace - 2); // 3 => 1, 6 => 4, etc
+                            uint32_t upperRow = numVertexThisFace - 1; // zero based
                             auto quads = (numTri + 1) / 2; // last quad maybe just a triangle
                             uint32_t trianglesAdded = 0;
 
-                            if (numTri == 1)
+                            for (uint32_t i = 0; i < quads; ++i)
                             {
-                                // first tri
-                                indicies.push_back(loadedVertex[0].first); // 0
-                                indicies.push_back(loadedVertex[1].first); // 1
-                                indicies.push_back(loadedVertex[2].first); // 2
-                            }
-                            else
-                                for (uint32_t i = 0; i < quads; ++i)
+                                /*
+                                    f 0 1 2 3 4 5 as a u shape fan of verticies CCW ordering
+                                    TRIANGLES: Experimental, not confirmed
+                                */
+                                ++trianglesAdded;
+                                indicies.push_back(loadedVertex[i]); 
+                                indicies.push_back(loadedVertex[i + 1]); 
+                                indicies.push_back(loadedVertex[upperRow - i - 1]); 
+
+                                if (trianglesAdded < numTri)
                                 {
-
-                                    // first tri in quad
                                     ++trianglesAdded;
-                                    indicies.push_back(loadedVertex[i].first); // 0
-                                    indicies.push_back(loadedVertex[i + 1].first); // 1
-                                    indicies.push_back(loadedVertex[upperRow - i].first); // if a 2 then a triangle, 3 for quad, 4 for 3 triangles, etc                                 
-
-                                    if (trianglesAdded < numTri)
-                                    {
-                                        ++trianglesAdded;
-                                        indicies.push_back(loadedVertex[i + 1].first); // 1
-                                        indicies.push_back(loadedVertex[upperRow - i - 1].first); // 2
-                                        indicies.push_back(loadedVertex[upperRow - i].first); // 3   
-                                    }
+                                    indicies.push_back(loadedVertex[i]); 
+                                    indicies.push_back(loadedVertex[upperRow - i - 1]);
+                                    indicies.push_back(loadedVertex[upperRow - i]); 
+                                        
                                 }
+                            }
                         }
                     }
                     else
@@ -580,84 +649,40 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
                         }
                     }
                 }
+                else if (f.Word() == obj.prop_meshName || f.Word() == obj.prop_useMaterial)
+                {
+                    // end the current mesh definition
+                    nMesh->SetNumIndicies(indicies.size() - previousIndicies);
+                    previousIndicies = indicies.size();
+                    // start the next mesh
+                    string meshName;
+                    meshName = f.NextWord();
+
+                    if (++currentMesh < model->GetNumMeshes())
+                        nMesh = model->GetMesh(currentMesh);
+                    else
+                        assert(false, "Number of meshes established in preprocessor does not match number in file");
+
+                    if (numFaces > 0)
+                        search = f.FindNext(obj.prop_face); // this should always be true or the file is missing face data
+                    else assert(false);
+                }
                 else
                 {
-                    // not a face
+                    // are we done with face data?
                     if (numFaces > 0)
-                        // separated face data for object, skip until it if found again
                         search = f.FindNext(obj.prop_face);
                     else
                         search = false;
                 }
-            } // end faces search for this model
-
-  //          //if(loadNormals)
-  //          //auto normals = vector<vector<float>>();
-  //          //int numNormals;
-
-  //          // smooth normals
-  //          if (f.FindNextFrom(obj.postprocess_smoothNormals, wpos_meshes))
-  //              if ((f.NextWord() == "on" || f.Word() == "1") && hasModelNormals)
-  //              {
-  //                  // *** TO DO *** average verticiesComposite[i].norm[0] not normals[i]
-  //                  //// post process to smooth all normals of faces
-  //                  //// assumes normals are unit normals
-  //                  //uint32_t triangles = (uint32_t)indicies.size() / 3;
-  ////                  vector<vector<float>> smoothNormals(indicies.size());
-  ////                  std::fill(smoothNormals.begin(), smoothNormals.end(), 0.0f);
-  //                  //// pass 1 sum
-  //                  //for (uint32_t i = 0; i < triangles; ++i)
-  //                  //{
-  ////                      // *** TO DO *** this is not correct, numNormals == normals.size() which are the ones load in and indexed by the face, not each vertex
-  ////                      // average the 3 vertex loaded in for the triangle
-  ////                      smoothNormals[i][0] += normals[i][0];
-  ////                      smoothNormals[i][1] += normals[i][1];
-  ////                      smoothNormals[i][2] += normals[i][2];
-  //                  //}
-  //                  //// pass 2 average (normailize again to complete the average)
-  //                  //for (uint32_t i = 0; i < verticiesComposite.size(); ++i)
-  //                  //{
-  ////                      float3 n(smoothNormals[i].data());
-  //                  //    n.MakeNormalize();
-  //                  //    verticiesComposite[i].norm[0] = n.f[0];
-  //                  //    verticiesComposite[i].norm[1] = n.f[1];
-  //                  //    verticiesComposite[i].norm[2] = n.f[2];
-  //                  //}
-  //              }
-        }
-        // Check face winding matches face normals
-        if (true)
-        {
-            // NOTE: this was added to void King::ModelScaffold::ReverseWindingsToMatchNormals()
-            auto fnFaceNormal = [](float3 a, float3 b, float3 c) {return Cross((b - a), (c - a)); };
-            auto fnAveNormals = [](float3 a, float3 b, float3 c) {return Normalize(a + b + c); };
-            const uint32_t num = (uint32_t)indicies.size();
-            uint32_t offset(0), index(0);
-            uint32_t numReversed = 0;
-            for (uint32_t i = 0; i < num; i += 3)
+            } 
+            
+            if (nMesh->GetNumIndicies() == 0)
             {
-                float3 v0 = verticiesComposite[indicies[i]].xyz;
-                float3 v1 = verticiesComposite[indicies[i + 1]].xyz;
-                float3 v2 = verticiesComposite[indicies[i + 2]].xyz;
-                auto faceNormal = fnFaceNormal(v0, v1, v2);
-
-                float3 n0 = verticiesComposite[indicies[i]].norm;
-                float3 n1 = verticiesComposite[indicies[i + 1]].norm;
-                float3 n2 = verticiesComposite[indicies[i + 2]].norm;
-                auto aveNormal = fnAveNormals(n0, n1, n2);
-
-                float mustBePositive = Dot(faceNormal, aveNormal);
-                if (abs(mustBePositive) != mustBePositive)
-                {
-                    ++numReversed;
-                    auto temp = indicies[i + 1];
-                    indicies[i + 1] = indicies[i + 2];
-                    indicies[i + 2] = temp;
-                }
+                // if we started after our name or only one mesh and none was given
+                nMesh->SetNumIndicies(indicies.size() - previousIndicies);
             }
-            cout << "  Reversed winding to match average face normal: " << numReversed << '\n';
         }
-
         //..............................................................................
         // Place composites into the model master data
         //..............................................................................
@@ -691,88 +716,22 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
                 }
             }
         }
+
         // append
-        model->GetVertexBufferMaster() += vertexBufferRaw;
-        model->GetIndexBufferMaster() += indexBufferRaw;
-        // all the model data is loaded, so this is done only once, so the pointer does not
-        // change and mesh loading is done next.
-
-        //..............................................................................
-        // Mesh loading (several per object separated by "g meshname" or "usemtl mtlname"
-        //..............................................................................
-        // Get number of meshes for model
-        bool meshNameDefined;
-        int numMeshes;
-
-        f.WordIndex(wpos_models);
-        if (!(numMeshes = f.CountStringAndStopAtMarker(obj.prop_meshName, obj.prop_modelName)))
-        {
-            numMeshes = 1;
-            meshNameDefined = false;
-            if (modelNameDefined)
-            {
-                f.FindFirst(obj.prop_modelName); // models are used to delimit (each is unique) data in the file
-            }
-        }
-        else
-        {
-            meshNameDefined = f.FindFirst(obj.prop_meshName);
-        }
-        cout << "  numMeshes " << numMeshes << " with " << indicies.size() << " indicies\n";
-
-        for (int meshCount = 0; meshCount < numMeshes; ++meshCount)
-        {
-            auto wpos_meshes = f.WordIndex() + 1; // word position after find then skip the found word
-            string meshName;
-
-            if (meshNameDefined)
-            {
-                meshName = f.NextWord();
-            }
-            else
-            {
-                f.FindNext(obj.prop_useMaterial);
-                meshName = f.NextWord();
-                //meshName = "mesh" + std::to_string(meshCount);
-            }
-
-            // material to use
-            string mtlName;
-            f.WordIndex(wpos_meshes);
-            if (f.CountString(obj.prop_useMaterial))
-            {
-                f.FindNextFrom(obj.prop_useMaterial, wpos_meshes);
-                mtlName = f.NextWord();
-                models.back()->AddMaterial(std::make_shared<King::Material>(mtlName));
-            }
-
-            f.WordIndex(wpos_meshes);
-
-            if (meshNameDefined)
-            {
-                // jump in file to the mesh name, otherwise take the next set of face definitions
-                f.FindNext(meshName);
-                cout << "  meshName " << meshName << '\n';
-            }
-
-            // create the mesh
-            if(indicies.size()>=3)
-            {
-                TriangleMesh triMesh((uint32_t)indicies.size()/3, model->GetVertexFormat(), 0, 0, &model->GetVertexBufferMaster().GetData(), &model->GetIndexBufferMaster().GetData());
-                triMesh.Set_name(meshName);
-                triMesh.Set_materialName(mtlName);
-                model->AddMesh(triMesh);
-            }
-
-            f.FindNextFrom(obj.prop_meshName, wpos_meshes);
-        } // next mesh
+        model->AddMasterVertexData(vertexBufferRaw);
+        model->AddMasterIndexData(indexBufferRaw);
 
         //model->_indexBufferMaster.WriteText("IB.txt");
 
         model->CalculateBoundingBox();
 
-        if (!hasModelNormals) model->CalculateNormals();
-        if (hasModelUV) model->CalculateTangentsAndBiTangents();
+        /* Normals */
+        if (!hasModelNormals) 
+            model->CalculateNormals();
+
+        /* Tangets */
+        if (hasModelUV) 
+            model->CalculateTangentsAndBiTangents();
 
         f.FindNextFrom(obj.prop_modelName, wpos_models);
 
@@ -786,37 +745,48 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
         return models;
 
     std::map<std::string, shared_ptr<King::Material>> materials;
-    TextFileParse mtlFile;
     if (f.FindFirst(obj.prop_materialDefinitionFile))
     {
+        // material file
         auto name = f.NextWord();
         materials = Load_MTL(name);
     }
+    // embedded materials
+    f.GoBegin();
+    auto m2 = Load_MTL(fileNameIN);
+    materials.insert(m2.begin(), m2.end());
 
-    // copy each mesh material into the master model material buffer and discard any unused materials
-    for (auto & model : models)
-    {
-        for (auto & mesh : model->_meshes)
+    auto purgeUnusedMtls = false;
+    if (purgeUnusedMtls)
+        for (auto & model : models)
         {
-            for (auto & mtl : materials)
+            for (auto & mesh : model->_meshes)
             {
-                if (mesh->Get_materialName() == mtl.second->Get_name())
+                for (auto & mtl : materials)
                 {
-                    model->AddMaterial(mtl.second); // add the mesh's material to the model master definitions
-                    break;
+                    if (mesh->Get_materialName() == mtl.second->Get_name())
+                    {
+                        model->AddMaterial(mtl.second); // add the mesh's material to the model master definitions
+                        break;
+                    }
                 }
             }
         }
-    }
+    else
+        for (auto& model : models)
+            for (auto& mtl : materials)
+            {
+                model->AddMaterial(mtl.second); // add the mesh's material to the model master definitions
+            }
 
     // 
     for (auto& model : models)
     {
-        cout << "  duplicate verts ";
-        model->RemoveDuplicateVerticies();
-        model->RemoveUnusedVerticies();
+        //cout << "  Removing duplicate verticies ";
+        //model->RemoveDuplicateVerticies();
+        //cout << "  Removing unused verticies ";
+        //model->RemoveUnusedVerticies();
     }
-    
 
     // an advantage of .obj files is by their nature they are vertex order optimized
     bool optimize(false);
@@ -839,9 +809,9 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
 *    Outputs:    writes contents of models to file
 *    Returns:    bool            false if error writing file
 ******************************************************************************/
-bool King::Model_IO::Save_OBJ(const std::string fileNameIN, const std::vector<shared_ptr<King::Model>> &modelsIN)
+bool King::Model_IO::Save_OBJ(const std::string fileNameIN, const std::vector<shared_ptr<King::ModelScaffold>> &modelsIN)
 {
-    bool extendExport = true; // custom file format (for tangents and bi-tangent saves) that extends the .obj file format to .objx.  Set to false for standard export.
+    bool extendExport = false; // custom file format (for tangents and bi-tangent saves) that extends the .obj file format to .objx.  Set to false for standard export.
     float3 epsilon(0.00005f); // difference in which two numbers are considered equal
 
     string ext;
@@ -898,19 +868,26 @@ bool King::Model_IO::Save_OBJ(const std::string fileNameIN, const std::vector<sh
         of << obj.prop_materialDefinitionFile << " " << prefixName << ".mtl" << '\n' << '\n';
 
     // compress per model
-    for (const auto & model : modelsIN)
+    for (const auto modelS : modelsIN)
     {
-        of << obj.prop_modelName << " " << model->GetModelName() << '\n';
+        of << obj.prop_modelName << " " << modelS->GetModelName() << '\n';
+
+        auto model = std::dynamic_pointer_cast<Model>(modelS);
 
         uint32_t numModelVerticies = 0;
-        for (const auto & mesh : model->_meshes)
+        if (model)
+            for (const auto & mesh : model->_meshes)
+            {
+                numModelVerticies += mesh->GetNumVerticies();
+            }
+        else
         {
-            numModelVerticies += mesh->GetNumVerticies();
+            numModelVerticies = modelS->GetVertexCount();
         }
         of << '#' << " Verticies in model (o object) " << numModelVerticies << '\n';
 
-        const auto vertexFormat = model->GetVertexFormat();
-        const auto vertexStride = model->GetVertexStride();
+        const auto& vertexFormat = modelS->GetVertexFormat();
+        const auto& vertexStride = modelS->GetVertexStride();
 
         bool hasPos(false), hasUV(false), hasNorm(false), hasTangent(false), hasBiTangent(false);
 
@@ -924,11 +901,11 @@ bool King::Model_IO::Save_OBJ(const std::string fileNameIN, const std::vector<sh
         vector<vector<float>> bitangents;
 
         if (hasPos = vertexFormat.Has(VertexAttrib::enumDesc::position))
-            locations = model->GetPositions();
+            locations = modelS->GetPositions();
         if (hasNorm = vertexFormat.Has(VertexAttrib::enumDesc::normal))
-            normals = model->GetNormals();
+            normals = modelS->GetNormals();
         if (hasUV = vertexFormat.Has(VertexAttrib::enumDesc::textureCoord))
-            textureUV = model->GetTextureCoordinates();
+            textureUV = modelS->GetTextureCoordinates();
         // reverse y of uv to be consistent with loads
         for (auto & uv : textureUV)
         {
@@ -937,13 +914,11 @@ bool King::Model_IO::Save_OBJ(const std::string fileNameIN, const std::vector<sh
         if (extendExport)
         {
             if (hasTangent = vertexFormat.Has(VertexAttrib::enumDesc::tangent))
-                tangents = model->GetTangents();
+                tangents = modelS->GetTangents();
             if (hasBiTangent = vertexFormat.Has(VertexAttrib::enumDesc::bitangent))
-                bitangents = model->GetBiTangents();
+                bitangents = modelS->GetBiTangents();
         }
 
-        // cycle each mesh
-        //for (const auto & mesh : model->_meshes)
         // master data, not each mesh 8/16/2020
         {
             // NOTE: could retrieve attributes sets by mesh, not sure if I want to or like above, whole model
@@ -1181,28 +1156,68 @@ bool King::Model_IO::Save_OBJ(const std::string fileNameIN, const std::vector<sh
                 // *** TO DO *** tangents and bitangents
                 // vet veb
             }
-            // write grouping (mesh) name
-            //of << obj.prop_meshName << " " << mesh.Get_name() << '\n';
-            //of << '#' << " Verticies in mesh (g group) " << mesh.GetNumVerticies() << '\n';
-            // write material to use
-            //of << obj.prop_useMaterial << " " << mesh.Get_materialName() << '\n';
-            // write smoothing (we don't store, so make default no
-            //of << obj.postprocess_smoothNormals << " " << "off" << '\n';
-            // f
-            of << "#" << " " << "Triangle faces: " << std::to_string(indexLocations.size()/3) << '\n';
-            for (size_t it = 0; it < indexLocations.size(); it += 3)
+
+            // master data has been written out, compressed such that duplicates are removed and the indexLocation references the index to the unique location written
+
+            // if we are a Model, and not just a ModelScaffold, we then have multiple meshes to write potentially
+            if (model)
+                for (auto mesh : model->_meshes)
+                {
+                    of << obj.prop_meshName << " " << mesh->Get_name() << '\n';
+                    of << obj.prop_useMaterial << " " << mesh->Get_materialName() << '\n';
+                    // write smoothing (we don't store, so make default no
+                    of << obj.postprocess_smoothNormals << " " << "off" << '\n';
+
+                    auto numTris = mesh->GetNumTriangles();
+                    of << "#" << " " << "Triangle faces: " << std::to_string(numTris) << '\n';
+                    uint32_t* base = mesh->GetIB();
+                    for (uint32_t i = 0; i < numTris; ++i)
+                    {
+                        uint32_t* o = mesh->GetIB() + i * 3;
+                        // triangles
+                        of << obj.prop_face;
+                        of << " " << to_string(indexLocations[*o] + 1) << "/" << to_string(indexTextureUV[*o] + 1) << "/" << to_string(indexNormals[*o] + 1);
+                        of << " " << to_string(indexLocations[*(o + 1)] + 1) << "/" << to_string(indexTextureUV[*(o + 1)] + 1) << "/" << to_string(indexNormals[*(o + 1)] + 1);
+                        of << " " << to_string(indexLocations[*(o + 2)] + 1) << "/" << to_string(indexTextureUV[*(o + 2)] + 1) << "/" << to_string(indexNormals[*(o + 2)] + 1) << '\n';
+                    }
+                }
+            else
             {
-                // triangles
-                of << obj.prop_face;
-                of << " " << to_string(indexLocations[it] + 1) << "/" << to_string(indexTextureUV[it] + 1) << "/" << to_string(indexNormals[it] + 1);
-                of << " " << to_string(indexLocations[it + 1] + 1) << "/" << to_string(indexTextureUV[it + 1] + 1) << "/" << to_string(indexNormals[it+1] + 1);
-                of << " " << to_string(indexLocations[it + 2] + 1) << "/" << to_string(indexTextureUV[it + 2] + 1) << "/" << to_string(indexNormals[it+2] + 1) << '\n';
+                // no meshes, the master data forms one mesh
+                of << obj.prop_meshName << " " << "default" << '\n';
+                of << obj.prop_useMaterial << " " << "default" << '\n';
+                // write smoothing (we don't store, so make default no
+                of << obj.postprocess_smoothNormals << " " << "off" << '\n';
+
+                auto numTris = modelS->GetIndexCount();
+                of << "#" << " " << "Triangle faces: " << std::to_string(numTris) << '\n';
+                uint32_t* base = &(modelS->GetIndexBufferMaster().GetData());
+                for (uint32_t i = 0; i < numTris; ++i)
+                {
+                    uint32_t* o = base + i * 3;
+                    // triangles
+                    of << obj.prop_face;
+                    of << " " << to_string(indexLocations[*o] + 1) << "/" << to_string(indexTextureUV[*o] + 1) << "/" << to_string(indexNormals[*o] + 1);
+                    of << " " << to_string(indexLocations[*(o + 1)] + 1) << "/" << to_string(indexTextureUV[*(o + 1)] + 1) << "/" << to_string(indexNormals[*(o + 1)] + 1);
+                    of << " " << to_string(indexLocations[*(o + 2)] + 1) << "/" << to_string(indexTextureUV[*(o + 2)] + 1) << "/" << to_string(indexNormals[*(o + 2)] + 1) << '\n';
+                }
+
+                // this is wrong, the below did not use the index buffer, just link each in series v1, v2, v3 = triangle1
+                //of << "#" << " " << "Triangle faces: " << std::to_string(indexLocations.size() / 3) << '\n';
+                //for (size_t it = 0; it < indexLocations.size(); it += 3)
+                //{
+                //    // triangles
+                //    of << obj.prop_face;
+                //    of << " " << to_string(indexLocations[it] + 1) << "/" << to_string(indexTextureUV[it] + 1) << "/" << to_string(indexNormals[it] + 1);
+                //    of << " " << to_string(indexLocations[it + 1] + 1) << "/" << to_string(indexTextureUV[it + 1] + 1) << "/" << to_string(indexNormals[it + 1] + 1);
+                //    of << " " << to_string(indexLocations[it + 2] + 1) << "/" << to_string(indexTextureUV[it + 2] + 1) << "/" << to_string(indexNormals[it + 2] + 1) << '\n';
+                //}
             }
         }
         std::time_t time2 = std::time(nullptr);
         auto dt = (double)(time2 - time); // secs
         dt /= 60.; // min
-        of << '#' << " Time processing export: " << dt << " min" << '\n';
+        of << '#' << " Total time processing export: " << dt << " min" << '\n';
     }
     of.close();
     if (of.fail()) return false;
@@ -1580,13 +1595,31 @@ std::map<std::string, std::shared_ptr<Material>> King::Model_IO::Load_MTL(const 
         if (!loaded)
             loaded = mtlFile.Load("Textures/" + fileNameIN);
         if (!loaded)
+            loaded = mtlFile.Load("Images/" + fileNameIN);
+        if (!loaded)
             loaded = mtlFile.Load("Resources/" + fileNameIN);
         if (!loaded)
             loaded = mtlFile.Load("Resources/Models/" + fileNameIN);
         if (!loaded)
+            loaded = mtlFile.Load("Resources/Textures/" + fileNameIN);
+        if (!loaded)
+            loaded = mtlFile.Load("Resources/Images/" + fileNameIN);
+        if (!loaded)
+            loaded = mtlFile.Load("Resources/Materials/" + fileNameIN);
+        if (!loaded)
         {
-            cout << "Material file could not be located in defined paths: " << fileNameIN << '\n';
-            assert(false);
+            cout << "Material file not found: " << fileNameIN << '\n';
+
+            shared_ptr<King::Material> mtl = nullptr;
+            string mtlName("default");
+
+            mtl = materials[mtlName] = std::make_shared<King::Material>(mtlName);
+            mtl->Set_name(mtlName);
+            Material::FileNames fn;
+            fn.diffuse = mtlName;
+            mtl->Set_fileNames(fn);
+
+            return materials;
         }
     }
     if (!mtlFile.FindFirst(obj.prop_defineMaterial))
@@ -1841,7 +1874,7 @@ bool King::Model_IO::Save_MTL(const std::string fileNameIN, std::map<std::string
 *    Outputs:    writes contents of materials for each model to file
 *    Returns:    bool            false if error writing file
 ******************************************************************************/
-bool King::Model_IO::Save_MTL(const std::string fileNameIN, const std::vector<shared_ptr<King::Model>>& modelsIN)
+bool King::Model_IO::Save_MTL(const std::string fileNameIN, const std::vector<shared_ptr<King::ModelScaffold>>& modelsIN)
 {
     std::string fileName(fileNameIN.begin(), fileNameIN.end()); // truncates and mostly only works for latin alpha
 
@@ -1868,14 +1901,16 @@ bool King::Model_IO::Save_MTL(const std::string fileNameIN, const std::vector<sh
     size_t numMtl = 0;
     for (const auto & model : modelsIN)
     {
-        numMtl += model->_materials.size();
+        if (auto m = std::dynamic_pointer_cast<Model>(model))
+            numMtl += m->_materials.size();
     }
     of << "#" << " " << "Materials: " << std::to_string(modelsIN.size()) << '\n';
     of.precision(6);
 
     for (const auto & model : modelsIN)
     {
-        Save_MTL(of, model->_materials);
+        if (auto m = std::dynamic_pointer_cast<Model>(model))
+            Save_MTL(of, m->_materials);
     }
     of.close();
     if (of.fail()) return false;

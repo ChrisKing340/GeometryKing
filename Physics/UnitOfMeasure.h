@@ -175,6 +175,7 @@ namespace UnitOfMeasure
     const float tonsTokg = tonsTolbm * lbmTokg; // slug
     // ANGLE
     const float PI = 3.141592f; // highest precision for 32 bit floating point value
+    const float 𝜋 = PI;
     const float PI_DIV2 = PI / 2.f; // 90 deg
     const float PI_DIV4 = PI / 4.f; // 45 deg
     const float PI_DIV6 = PI / 6.f; // 30 deg
@@ -454,8 +455,8 @@ namespace UnitOfMeasure
     UnitOfMeasure::Length operator/(const UnitOfMeasure::SpeedSq& num, const UnitOfMeasure::Accel& dem);
     UnitOfMeasure::Length operator/(const UnitOfMeasure::AngularStrength& num, const UnitOfMeasure::Strength& dem);
 
-    UnitOfMeasure::Speed operator*(const UnitOfMeasure::Length& l, const UnitOfMeasure::AngularSpeed& a);
-    UnitOfMeasure::Speed operator*(const UnitOfMeasure::AngularSpeed& a, const UnitOfMeasure::Length& l);
+    //UnitOfMeasure::Speed operator*(const UnitOfMeasure::Length& l, const UnitOfMeasure::AngularSpeed& a);
+    //UnitOfMeasure::Speed operator*(const UnitOfMeasure::AngularSpeed& a, const UnitOfMeasure::Length& l);
 
     UnitOfMeasure::Volume operator*(const UnitOfMeasure::Length &l, const UnitOfMeasure::Area & a); 
     UnitOfMeasure::Volume operator*(const UnitOfMeasure::Area & a, const UnitOfMeasure::Length &l);
@@ -513,8 +514,9 @@ namespace UnitOfMeasure
 
     UnitOfMeasure::Time operator/(const UnitOfMeasure::TimeSq& num, const UnitOfMeasure::Time& dem);
     
+    // let make things easy for the user and build in conversions
     // since c++14
-    // literals ex: Mass m1(10_g), m2(2_lbm); Mass m3 = m1 + m2;
+    // literals ex: Mass m1(10.0_g), m2(2.0_lbm); Mass m3 = m1 + m2;
     constexpr UnitOfMeasure::Mass operator"" _g(long double in) { return UnitOfMeasure::Mass{ in * 1000 }; }
     constexpr UnitOfMeasure::Mass operator"" _kg(long double in) { return UnitOfMeasure::Mass{ in }; }
     constexpr UnitOfMeasure::Mass operator"" _slug(long double in) { return UnitOfMeasure::Mass{ in * slugTokg }; }
@@ -527,7 +529,7 @@ namespace UnitOfMeasure
     constexpr UnitOfMeasure::Angle operator"" _rad(long double in) { return UnitOfMeasure::Angle{ in }; }
     constexpr UnitOfMeasure::Angle operator"" _deg(long double in) { return UnitOfMeasure::Angle{ in * degTorad }; }
 
-    constexpr UnitOfMeasure::Length operator"" _m(long double in) { return UnitOfMeasure::Length{ in }; }
+    constexpr UnitOfMeasure::Length operator"" _m(const long double in) { return UnitOfMeasure::Length{ in }; }
     constexpr UnitOfMeasure::Length operator"" _km(long double in) { return UnitOfMeasure::Length{ in * kmTom }; }
     constexpr UnitOfMeasure::Length operator"" _ft(long double in) { return UnitOfMeasure::Length{ in * ftTom }; }
     constexpr UnitOfMeasure::Length operator"" _mile(long double in) { return UnitOfMeasure::Length{ in * mileTom }; }
@@ -581,8 +583,10 @@ namespace UnitOfMeasure
     constexpr UnitOfMeasure::Temperature operator"" _degC(long double in) { return UnitOfMeasure::Temperature{ in + 273.15 }; }
 
     constexpr UnitOfMeasure::Time operator"" _s(long double in) { return UnitOfMeasure::Time{ in }; }
-    constexpr UnitOfMeasure::Time operator"" _min(long double in) { return UnitOfMeasure::Time{ in * 60 }; }
-    constexpr UnitOfMeasure::Time operator"" _hr(long double in) { return UnitOfMeasure::Time{ in * 360 }; }
+    constexpr UnitOfMeasure::Time operator"" _min(long double in) { return UnitOfMeasure::Time{ in * 60.0 }; }
+    constexpr UnitOfMeasure::Time operator"" _hr(long double in) { return UnitOfMeasure::Time{ in * 360.0 }; }
+    constexpr UnitOfMeasure::Time operator"" _days(long double in) { return UnitOfMeasure::Time{ in * 360.0 * 24.0 }; }
+    constexpr UnitOfMeasure::Time operator"" _wks(long double in) { return UnitOfMeasure::Time{ in * 360.0 * 24.0 * 7.0}; }
 
 }
 }

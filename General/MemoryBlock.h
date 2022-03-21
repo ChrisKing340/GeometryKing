@@ -79,10 +79,10 @@ class alignas(align) MemoryBlock
 {
     /* variables */
 private:
-    size_t          _length = 0; // number of T elements in data allocation
-    size_t          _stride = 1; // number of T elements to skip per operator [] indexing (convenient)
-    T*              _data = nullptr; // pointer is a multiple of alignment and only alligned if T new operator is also aligned
-    std::mutex      _mutex;
+    size_t              _length = 0; // number of T elements in data allocation
+    size_t              _stride = 1; // number of T elements to skip per operator [] indexing (convenient)
+    T*                  _data = nullptr; // pointer is a multiple of alignment and only alligned if T new operator is also aligned
+    mutable std::mutex  _mutex;
     /* methods */
 public:
     // construction/life cycle
@@ -138,7 +138,7 @@ public:
     MemoryBlock & operator=(const T* other)
     {
         assert(_length > 0); // should be pre-initialized
-        std::lock_guard<std::mutex> guard(out->_mutex);
+        std::lock_guard<std::mutex> guard(_mutex);
         // note that the length of other is unknown
         std::copy(other, other + _length, _data);
         return *this;
@@ -173,7 +173,7 @@ public:
             _stride = other._stride;
             // Reset the data pointer from the source object to null so that
             // the destructor does not call free of the memory multiple times.
-            std::lock_guard<std::mutex> guard(other._mutex);
+            std::lock_guard<std::mutex> guardOther(other._mutex);
             other._data = nullptr;
             other._length = 0;
             other._stride = 1;
@@ -233,8 +233,8 @@ inline void MemoryBlock<T, align>::Split(size_t elementIndex, MemoryBlock<T>* ou
     assert(elementIndex * _stride < _length);
     assert(out != nullptr);
 
+    // lock the out object and update
     {
-        // lock the out object
         std::lock_guard<std::mutex> guard(out->_mutex);
 
         out->_stride = _stride;
@@ -243,8 +243,8 @@ inline void MemoryBlock<T, align>::Split(size_t elementIndex, MemoryBlock<T>* ou
         _length -= out->_length;
 
         out->_data = new T[out->_length];
-        out->Copy(0, _data, out->_length);
     }
+    out->Copy(0, _data, out->_length);
 
     // now we need to copy our remaining memory to a newly allocated buffer and then free the larger block
     T* _smallerBuffer = new T[_length];
