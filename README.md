@@ -110,12 +110,17 @@ Modeling of force, acceleration, and velocity of dynamic bodies. Combined with G
 
     #include "Physics\Physics.h"
 
-    class Force ; // keeps a UnitOfMeasure::Strength and a unit direction vector
-    class Acceleration ; // keeps a UnitOfMeasure::Accel and a unit direction vector; operator for Acceleration = Force / Mass
-    class Velocity ; // keeps a UnitOfMeasure::Speed and a unit direction vector; operator for Velocity = Acceleration * Time
-    class Distance ; // keeps a UnitOfMeasure::Length and a unit direction vector (essentially a distance to); operator for Distance = Velocity * Time
+    class Force ; // keeps a UnitOfMeasure::Strength scalar and a unit direction vector
+    class Acceleration ; // keeps a UnitOfMeasure::Accel scalar and a unit direction vector; operator for Acceleration = Force / Mass
+    class Velocity ; // keeps a UnitOfMeasure::Speed scalar and a unit direction vector; operator for Velocity = Acceleration * Time
+    class Distance ; // keeps a UnitOfMeasure::Length scalar and a unit direction vector (essentially a distance to); operator for Distance = Velocity * Time
     class Position ; // keeps 3 floats for x,y,z and operators for arithmetic with Distance
+    
+   class Torque ; // keeps a UnitOfMeasure::AngularStrength scalar and a unit direction vector representing the axis of force is acting about
+   class AngularAcceleration ; // keeps a UnitOfMeasure::AngularAccel scalar and a unit direction vector representing the normalized axis angles, 𝛼, in pitch, yaw, roll 𝛼(𝒾, 𝒿, 𝓀)
+   class AngularVelocity ; // keeps a UnitOfMeasure::AngularSpeed scalar and a unit direction vector representing the normalized axis angles, 𝛼, in pitch, yaw, roll 𝛼(𝒾, 𝒿, 𝓀)
+   class Rotation ; // keeps a UnitOfMeasure::Angle scalar and a unit direction vector representing the normalized axis angles, 𝛼, in pitch, yaw, roll 𝛼(𝒾, 𝒿, 𝓀). Also keeps a Quaternion. Advantage is that rotation can be > 2 PI and the quaternion will be calculated correctly (domain of a quaternion is -2 PI to +2 PI) and also the unit rotation vector is the axis of rotation in x,y,z
 
-## Physics collision resolution
+## Physics collision resolution 
 
 TO DO: working on collision points of contact and solvers for varying geometries. When complete, finishes the features list for a generic render independent geometric game engine.
