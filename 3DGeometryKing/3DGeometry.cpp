@@ -100,6 +100,18 @@ std::wistream & King::operator>> (std::wistream &is, King::Pose &out)
 {
     return is >> out._scale >> out._rotation >> out._translation; // binary in
 }
+
+std::ostream& King::operator<<(std::ostream& os, const King::Path& in) 
+{ 
+    os << "{ "; 
+    for (const auto& pt : in) 
+    { 
+        os << pt << "\n"; 
+    } 
+    os << " }"; 
+    return os; 
+}
+
 // *** TO DO *** when adding new functions, if you are missing a lower level,it throws linker errors.  Not sure what we are missing below for Point.  Ray was missing Point. 
 //std::ostream& King::operator<< (std::ostream& os, const King::Point& in)
 //{
@@ -297,19 +309,191 @@ uint32_t King::TriangleMesh::GetNumVerticies() const
     }
     return ni > 0 ? numVerticies+1 : 0; // indexing is zero based, size is therefore +1
 }
-inline FloatPoint3 King::LineMesh::GetVertexPosition(const uint32_t indexIn) const
+inline FloatPoint3 King::LineMesh::GetVertexPosition(const uint32_t vertNumIn) const
 {
     assert(_vb != nullptr);
     auto attrI = _vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::enumDesc::position);
     auto offset = _vertexFormat.GetAttribute(attrI).GetOffset();
-    return FloatPoint3(reinterpret_cast<float*>(GetVertexAddr(indexIn) + offset));
+    //auto n = GetNumVerticies();
+    //assert(vertNumIn >= n);
+    return FloatPoint3(reinterpret_cast<float*>(GetVertexAddr(vertNumIn) + offset));
 }
-inline FloatPoint3 King::TriangleMesh::GetVertexPosition(const uint32_t indexIn) const
+inline FloatPoint3 King::TriangleMesh::GetVertexPosition(const uint32_t vertexNum) const
 {
     assert(_vb != nullptr);
     auto attrI = _vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::enumDesc::position);
     auto offset = _vertexFormat.GetAttribute(attrI).GetOffset();
-    return FloatPoint3(reinterpret_cast<float*>(GetVertexAddr(indexIn) + offset));
+    return FloatPoint3(reinterpret_cast<float*>(GetVertexAddr(vertexNum) + offset));
+}
+
+void King::TriangleMesh::SetVertexPosition(const uint32_t indexIn, FloatPoint3 posIn)
+{
+    assert(_vb != nullptr);
+    auto attrI = _vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::enumDesc::position);
+    auto offset = _vertexFormat.GetAttribute(attrI).GetOffset();
+    
+    auto addr = (reinterpret_cast<float*>(GetVertexAddr(indexIn) + offset));
+    *addr = posIn.GetX();
+    *(addr + 1) = posIn.GetY();
+    *(addr + 2) = posIn.GetZ();
+}
+/******************************************************************************
+    HelperMoveVertexOnXZGrid
+        Performs two actions on a vertex on a regular grid of wxh verticies:
+        1) Translate the vertex by delta
+        2) Re-arrange the index orders so that the quad seems point to the target vertex
+******************************************************************************/
+void King::TriangleMesh::HelperMoveVertexOnGrid(const float3 delta, const unsigned int targetVertexNum, const unsigned int w, const unsigned int h)
+{
+    auto v = GetVertexPosition(targetVertexNum);
+    v += delta;
+    SetVertexPosition(targetVertexNum, v);
+    /*
+    Q0   Q1
+    0--1--2
+    |\ | /|
+    | \|/ |
+    3--*--4
+    | /|\ |
+    |/ | \|
+    5--6--7
+    Q2   Q3
+
+    Q0 = (targetVertexNum / 4 - 1) * 6; // 6 indicies per quad w/quad0 had vertex#4 and 6 indicies (0-5). So vertex#4 for quad0 is (4/4 - 1) * 6 = 0; for vertex #8 for quad1 is (8/4 - 1) * 6 = 6
+    Q1 = Q0 + 6;
+    Q2 = ((targetVertexNum + w) / 4 - 1) * 6;
+    Q3 = Q2 + 6;
+    */
+    bool q0, q1, q2, q3;
+    // parse in j direction
+    if (targetVertexNum > (h * w - 1) || targetVertexNum < (w + 1))
+    {
+        // out of bounds
+        q0 = q1 = q2 = q3 = false;
+    }
+    else if (targetVertexNum < w)
+    {
+        // top row
+        q0 = q1 = false;
+        q2 = q3 = true;
+    }
+    else if (targetVertexNum > ((h - 1) * w - 1))
+    {
+        // bottom row
+        q0 = q1 = true;
+        q2 = q3 = false;
+    }
+    else
+    {
+        // on the grid from row 1 to h - 1
+        q0 = q1 = q2 = q3 = true;
+    }
+
+    // parse in i direction
+    auto wTest = targetVertexNum % w;
+    if (!wTest)
+    {
+        // left edge
+        q0 = q2 = false;
+    }
+    else if (wTest == w - 1)
+    {
+        // right edge
+        q1 = q3 = false;
+    }
+
+    auto vn1 = targetVertexNum - w;
+    auto vn0 = vn1 - 1;
+    auto vn2 = vn1 + 1;
+    auto vn3 = targetVertexNum - 1;
+    auto vn4 = targetVertexNum + 1;
+    auto vn6 = targetVertexNum + w;
+    auto vn5 = vn6 - 1;
+    auto vn7 = vn6 + 1;
+
+    auto ib = GetIB();
+    if (q0)
+    {
+        /*
+            0--1 Q0
+            |\ |
+            | \|
+            3--*
+        */
+        auto Q0 = ((targetVertexNum - w - 1)) * 6;
+        cout << "  IB[" << Q0 << "] for Q0 = " << ib[Q0 + 0];
+        cout << ", " << ib[Q0 + 1];
+        cout << ", " << ib[Q0 + 2];
+        cout << ", " << ib[Q0 + 3];
+        cout << ", " << ib[Q0 + 4];
+        cout << ", " << ib[Q0 + 5] << '\n';
+        ib[Q0 + 0] = vn0;
+        ib[Q0 + 1] = vn3;
+        ib[Q0 + 2] = targetVertexNum;
+
+        ib[Q0 + 3] = vn0;
+        ib[Q0 + 4] = targetVertexNum;
+        ib[Q0 + 5] = vn1;
+
+        cout << "  IB[" << Q0 << "] for Q0 = " << ib[Q0 + 0];
+        cout << ", " << ib[Q0 + 1];
+        cout << ", " << ib[Q0 + 2];
+        cout << ", " << ib[Q0 + 3];
+        cout << ", " << ib[Q0 + 4];
+        cout << ", " << ib[Q0 + 5] << '\n';
+
+    }
+    if (q1)
+    {
+        /*
+            1--2 Q1
+            | /|
+            |/ |
+            *--4
+        */
+        auto Q1 = ((targetVertexNum - w)) * 6;
+        ib[Q1 + 0] = vn1;
+        ib[Q1 + 1] = targetVertexNum;
+        ib[Q1 + 2] = vn2;
+
+        ib[Q1 + 3] = vn2;
+        ib[Q1 + 4] = targetVertexNum;
+        ib[Q1 + 5] = vn4;
+    }
+    if (q2)
+    {
+        /*
+            3--*
+            | /|
+            |/ |
+            5--6 Q2
+        */
+        auto Q2 = ((targetVertexNum - 2)) * 6;
+        ib[Q2 + 0] = vn3;
+        ib[Q2 + 1] = vn5;
+        ib[Q2 + 2] = targetVertexNum;
+
+        ib[Q2 + 3] = targetVertexNum;
+        ib[Q2 + 4] = vn5;
+        ib[Q2 + 5] = vn6;
+    }
+    if (q3)
+    {
+        /*
+            *--4
+            |\ |
+            | \|
+            6--7 Q3
+        */
+        auto Q3 = ((targetVertexNum - 1)) * 6;
+        ib[Q3 + 0] = targetVertexNum;
+        ib[Q3 + 1] = vn6;
+        ib[Q3 + 2] = vn7;
+
+        ib[Q3 + 3] = vn7;
+        ib[Q3 + 4] = vn4;
+        ib[Q3 + 5] = targetVertexNum;
+    }
 }
 
 inline bool King::Point::Intersects(const FloatPoint3 &pointIn) const
@@ -504,6 +688,20 @@ King::Quad King::Line::operator* (const King::Distance& rhs) const
     return King::Quad(edge4, edge2); 
 }
 
+void King::Line::Offset(const float distIn, Plane offsetPlaneIn)
+{
+    float3 dir;
+
+    auto normalUnitVector = - GetPerpendicular(offsetPlaneIn);
+
+    auto dist = distIn * normalUnitVector;
+
+    SetVertex(0, GetVertex(0) + dist);
+    SetVertex(1, GetVertex(1) + dist);
+
+    // note floating point error
+}
+
 /******************************************************************************
 *    Line::Intersects
 *        Desc:       Find the nearest point between two finite length line segments
@@ -517,7 +715,6 @@ King::Quad King::Line::operator* (const King::Distance& rhs) const
 |                         Author: Graham Rhodes
 |                         Revisions: 05-Apr-2001 - GSR. Original.
 ******************************************************************************/
-
 inline bool __vectorcall King::Line::Intersects(const Point& pointIn) const
 {
     auto nPt = FindNearestPointOnLineSegment(pointIn);
@@ -1164,6 +1361,7 @@ DirectX::XMMATRIX King::Box::MomentsOfInertiaRotated(const DirectX::XMMATRIX& Ii
 vector<pair<FloatPoint3, enum King::Box::CornerDescription>> King::Box::IdentifyCorners(const vector<FloatPoint3>& pointsIn, const Quaternion* quaternionIn) const
 {
     vector<pair<FloatPoint3, CornerDescription>> vectorCorners;
+    vectorCorners.reserve(8);
 
     auto myCorners = GetCorners8(quaternionIn);
 
@@ -1251,10 +1449,10 @@ bool King::Box::Contains(const Box & boxIn) const
 ******************************************************************************/
 void King::Box::SetAABBfromThisTransformedBox(FXMMATRIX M)
 {
-    auto corners = GetCorners8Transformed(M);
+    auto corners = GetCorners8Transformed(M); // need to free this when done
 
     FloatPoint3 min, max, corner;
-    min = max = corner = corners[0];
+    min = max = corner = FloatPoint3(corners[0]);
 
     for (size_t i = 1; i < 8; ++i)
     {
@@ -1262,22 +1460,37 @@ void King::Box::SetAABBfromThisTransformedBox(FXMMATRIX M)
         max = Max(max, corners[i]);
     }
     Set(min, max);
+
+    delete[] corners;
+}
+/******************************************************************************
+*    Method:    SetAABBfromBoundingSphere
+*       Sets the extents outward for an axis aligned box (AAB) that encloses
+*       the original AAB roated to any rotation based on the bounding sphere
+******************************************************************************/
+void __vectorcall King::Box::SetAABBfromBoundingSphere(Sphere s)
+{
+    SetCenterAndExtents(s.GetCenter(), s.GetRadius());
 }
 /******************************************************************************
 *    Method:    GetCorners8Transformed
 ******************************************************************************/
-std::vector<King::FloatPoint3> King::Box::GetCorners8Transformed(const DirectX::FXMMATRIX &M)
+//std::vector<King::FloatPoint3> 
+DirectX::XMFLOAT4* King::Box::GetCorners8Transformed(const DirectX::FXMMATRIX &M)
 {
-    DirectX::XMFLOAT3 pArray[8];
+    DirectX::XMFLOAT3* pArray = new DirectX::XMFLOAT3[8];
+    DirectX::XMFLOAT4* pArrayOut = new DirectX::XMFLOAT4[8];
+
     GetCorners8(pArray);
-
-    DirectX::XMFLOAT4 pArrayOut[8];
     DirectX::XMVector3TransformStream(pArrayOut, sizeof(XMFLOAT4), pArray, sizeof(XMFLOAT3), 8, M);
+    delete[] pArray;
 
-    std::vector<King::FloatPoint3> rtn;
-    for (int i = 0; i < 8; ++i)    rtn.push_back(FloatPoint3(pArrayOut[i]));
+    //std::vector<King::FloatPoint3> rtn;
+    //rtn.reserve(8); // performance increase by allocating once
+    //for (int i = 0; i < 8; ++i)    
+    //    rtn.push_back(FloatPoint3(pArrayOut[i]));
     
-    return rtn;
+    return pArrayOut; // remember to delete[] this array when done
 }
 /******************************************************************************
 *    Method:    GetCorners8
@@ -1477,10 +1690,11 @@ King::ModelScaffold& King::ModelScaffold::operator= (const King::Line& lineIn)
     _modelName = "Line";
     // position is added as default
     // uses the vertx format already set in class
-    _vertexBufferMaster.SetStride(_vertexFormat.GetByteSize());
+    const auto& bs = _vertexFormat.GetByteSize();
+    _vertexBufferMaster.SetStride(bs);
 
     // initialize vertex buffer
-    _vertexBufferMaster.Initialize(2 * _vertexBufferMaster.GetStride());
+    _vertexBufferMaster.Initialize(2 * bs);
     auto size = _vertexBufferMaster.GetElements();
     assert(size == 2);
 
@@ -1683,12 +1897,7 @@ int King::LineModel::CreateMeshFrom(const King::Line& lineIn, float4 colorIn)
     auto index = _meshes.size() - 1;
     mesh->Set_name("lineMesh"s + std::to_string(index));
 
-    // since we created a mesh or append data to our master we will reset the pointer addresses in each mesh
-    for (auto& m : _meshes)
-    {
-        m->SetVB(&_vertexBufferMaster.GetData());
-        m->SetIB(&_indexBufferMaster.GetData());
-    }
+    HelperSetAllMeshesVBandIBtoMaster();
 
     // model
     CalculateBoundingBox();
@@ -1715,7 +1924,7 @@ int King::Model::CreateMeshFrom(const Triangle& tri)
         normals.push_back(normal);
     }
 
-    auto textureCoordinates = HelperCreateTextureCoordinatesForTriOrQuad(positions);
+    auto textureCoordinates = HelperCreateTextureCoordinatesForTriOrQuad(positions, 1);
 
     return HelperCreateMeshFrom(positions, indicies, textureCoordinates, normals);
 }
@@ -1739,70 +1948,147 @@ int King::Model::CreateMeshFrom(const Quad& q)
         normals.push_back(normal);
     }
 
-    auto textureCoordinates = HelperCreateTextureCoordinatesForTriOrQuad(positions);
+    auto textureCoordinates = HelperCreateTextureCoordinatesForTriOrQuad(positions, 1);
 
     return HelperCreateMeshFrom(positions, indicies, textureCoordinates, normals);
 }
 
+/******************************************************************************
+*    Method:    CreateMeshFor GridXZ 
+*       Input:
+*           numWidth        number of cells (verticies - 1) in the X direction
+*           numHeight       number of cells (verticies - 1) in the z direction
+*       Output: 
+*           returns the mesh index number created
+******************************************************************************/
+int King::Model::CreateMeshForGridXZ(const uint32_t numWidth, const uint32_t numHeight, const float2 cellSize)
+{
+    _modelName = "GridXZ";
+
+    const auto numVerticies = (numWidth + 1) * (numHeight + 1);
+    const auto numIndicies = numWidth * numHeight * 6;
+
+    vector<float3>      positions; positions.reserve(numVerticies);
+    vector<uint32_t>    indicies; indicies.reserve(numIndicies);
+    vector<float3>      normals; normals.reserve(numVerticies);
+
+    // RHS 
+    float3 center(0.f, 0.f);
+    float3 start = center - float3(cellSize.GetX() * numWidth, 0.f, cellSize.GetY() * numHeight) * 0.5f;
+
+    for (uint32_t j = 0; j <= numHeight; ++j)
+        for (uint32_t i = 0; i <= numWidth; ++i)
+        {
+            positions.push_back(start + float3((float)i * cellSize.GetX(), 0.f, (float)j * cellSize.GetY()));
+            normals.emplace_back(0.f, 1.f, 0.f);
+        }
+
+    /*
+    0   1   2
+    ---------
+    |T5/|\T7|
+    | / | \ |
+    |/T6|T8\|
+    ---------
+    3   4   5
+    ---------
+    |\T2|T3/|
+    | \ | / |
+    |T1\|/T4|
+    ---------
+    6   7   8
+    */
+
+    // cells
+    bool alternate;
+    bool alternateCols(true);
+    for (uint32_t j = 0; j < numHeight; ++j)
+    {
+        alternateCols = !alternateCols;
+        alternate = alternateCols;
+        uint32_t rowStart = j * (numWidth + 1);
+        for (uint32_t i = 0; i < numWidth; ++i)
+        {
+            // create quad
+            if (alternate)
+            {
+                // LL to UR (3 to 1)
+                indicies.push_back(i + 0 + rowStart);
+                indicies.push_back(i + (numWidth + 1) + rowStart);
+                indicies.push_back(i + 1 + rowStart);
+
+                indicies.push_back(i + 1 + rowStart);
+                indicies.push_back(i + (numWidth + 1) + rowStart);
+                indicies.push_back(i + (numWidth + 2) + rowStart);
+            }
+            else
+            {
+                // UL to LR (3 to 7)
+                indicies.push_back(i + 0 + rowStart);
+                indicies.push_back(i + (numWidth + 1) + rowStart);
+                indicies.push_back(i + (numWidth + 2) + rowStart);
+
+                indicies.push_back(i + 0 + rowStart);
+                indicies.push_back(i + (numWidth + 2) + rowStart);
+                indicies.push_back(i + 1 + rowStart);
+            }
+            alternate = !alternate;
+        }
+    }
+
+    auto textureCoordinates = HelperCreateTextureCoordinatesForTriOrQuad(positions, numWidth + 1);
+
+    return HelperCreateMeshFrom(positions, indicies, textureCoordinates, normals);
+}
 
 /******************************************************************************
 *    Method:    HelperCreateTextureCoordinatesForTriOrQuad
 ******************************************************************************/
-std::vector<King::float2> King::Model::HelperCreateTextureCoordinatesForTriOrQuad(const std::vector<King::float3>& pt)
+std::vector<King::float2> King::Model::HelperCreateTextureCoordinatesForTriOrQuad(const std::vector<King::float3>& pt, uint32_t ptsWide)
 {
     assert(pt.size() > 2);
-    vector<float2> textureCoordinatesOut(pt.size());
+    vector<float2> textureCoordinatesOut;
+    textureCoordinatesOut.reserve(pt.size());
 
     // RHS CCW
-    auto normal = Cross(pt[1] - pt[0], pt[2] - pt[0]);
+    auto normal = Cross(pt[pt.size() - ptsWide] - pt[0], pt[ptsWide - 1] - pt[0]);
     normal.MakeNormalize();
 
     // transform from global space to texture space
     Rectangle2DF texture;
     const float3& from(normal);
     const float3 to(0.f, 0.f, 1.f); // normal to xy plane
-    Quaternion toObjectSpace(from, to);
+    Quaternion toTextureSpace(from, to);
     // for a unit square, 1.41421356237 = diagonal * scale
-    float d1 = (pt[2] - pt[1]).GetMagnitude();
+    float d1 = (pt[pt.size()-1] - pt[0]).GetMagnitude();
     float scale(1.41421356237f);
-    if (pt.size() > 3)
-    {
-        float d2 = (pt[3] - pt[0]).GetMagnitude();
-        scale /= (d1 > d2 ? d1 : d2);
-    }
-    else
-    {
-        scale /= d1;
-    }
+    scale /= d1;
+
     // find the center of the object
     auto c = float3::Average(pt);
-    c = toObjectSpace * c;
+    c = toTextureSpace * c;
     // rotate and scale each point, discarding z which is zero
     // translate from c to 0,0 for center of scale
-    for (auto i = 0ul; i < 4; ++i)
+    for (auto i = 0ul; i < pt.size(); ++i)
     {
-        auto uv = toObjectSpace * pt[i];
+        auto uv = toTextureSpace * pt[i];
         uv -= c;
         uv *= scale;
-        uv += 0.5f * c;
         auto textureCoord = float2(uv);
-        float2::Absolute(textureCoord);
-        //textureCoord.SetY(-textureCoord.GetY()); // ??? invert y or 1-y ???
+        // texture y space is reversed
+        textureCoord.SetY(-textureCoord.GetY());
+        textureCoord += 0.5f;
+
+        textureCoord = float2::Absolute(textureCoord);
+
+        if (textureCoord.GetX() < 1.e-7)
+            textureCoord.SetX(0.f);
+        if (textureCoord.GetY() < 1.e-7)
+            textureCoord.SetY(0.f);
+
         textureCoordinatesOut.push_back(textureCoord);
     }
-    // translate min x to 0 and min y to 0 (max since 0 to -1)
-    float2 t(FLT_MAX, -FLT_MAX);
-    for (auto i = 0ul; i < 4; ++i)
-    {
-        if (textureCoordinatesOut[i].GetX() < t.GetX())
-            t.SetX(textureCoordinatesOut[i].GetX());
-        if (textureCoordinatesOut[i].GetY() > t.GetY())
-            t.SetY(-textureCoordinatesOut[i].GetY()); // note sign change so we offset correctly
-    }
-    for (auto& ea : textureCoordinatesOut)
-        ea -= t;
 
-    // *** TO DO *** uv creation is untested
     return textureCoordinatesOut;
 }
 /******************************************************************************
@@ -1874,10 +2160,22 @@ int King::Model::HelperCreateMeshFrom(const vector<float3>& positionsIn, const v
     assert(indiciesIn.size());
     assert((uvIn.size() == 0 ? true : uvIn.size() == positionsIn.size()));
     assert((normalsIn.size() == 0 ? true : normalsIn.size() == positionsIn.size()));
-    // use existing vertex format
-    auto stride = _vertexFormat.GetByteSize();
-    assert(stride == GetVertexBufferMaster().GetStride());
-    assert(stride);
+
+    // is the existing vertex format sufficient?
+    if (!_materials.count("default"))
+        AddMaterial(Material::Create("default"));
+    if (_vertexFormat.GetByteSize() < 56)
+    {
+        if (!_vertexFormat.Has(VertexAttrib::enumDesc::position))
+            _vertexFormat.SetNext(VertexAttrib::enumDesc::position, VertexAttrib::enumFormat::format_float32x3);
+
+        _vertexFormat.SetNext(VertexAttrib::enumDesc::textureCoord, VertexAttrib::enumFormat::format_float32x2);
+        _vertexFormat.SetNext(VertexAttrib::enumDesc::normal, VertexAttrib::enumFormat::format_float32x3);
+        _vertexFormat.SetNext(VertexAttrib::enumDesc::tangent, VertexAttrib::enumFormat::format_float32x3);
+        _vertexFormat.SetNext(VertexAttrib::enumDesc::bitangent, VertexAttrib::enumFormat::format_float32x3);
+        _vertexBufferMaster.SetStride(_vertexFormat.GetByteSize());
+    }
+
     // format offsets
     auto indexPos = _vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::enumDesc::position); // UINT16_MAX did not find
     auto indexUV = _vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::enumDesc::textureCoord); // UINT16_MAX did not find
@@ -1888,8 +2186,7 @@ int King::Model::HelperCreateMeshFrom(const vector<float3>& positionsIn, const v
         _vertexBufferMaster.Destroy();
         _indexBufferMaster.Destroy();
         _vertexFormat.SetNext(VertexAttrib::enumDesc::position, VertexAttrib::enumFormat::format_float32x3);
-        stride = _vertexFormat.GetByteSize();
-        _vertexBufferMaster.SetStride(stride);
+        _vertexBufferMaster.SetStride(_vertexFormat.GetByteSize());
     }
     // start where the last mesh left off
     const uint32_t vbStart(_vertexBufferMaster.GetElements()); 
@@ -1908,38 +2205,59 @@ int King::Model::HelperCreateMeshFrom(const vector<float3>& positionsIn, const v
         tm->Set_name("CreateMeshFrom");
         tm->Set_materialName("default");
     }
-    // verticies
+    // vertex
     {
         // Expand vertex memory block
         {
             MemoryBlock<uint8_t> vb(positionsIn.size(), GetVertexStride());
             AddMasterVertexData(vb);
         }
+        // build the vertex data
         const auto offsetPosBytes = _vertexFormat.GetAttributeByteStart(indexPos);
         const auto offsetUVBytes = _vertexFormat.GetAttributeByteStart(indexUV);
         const auto offsetNormBytes = _vertexFormat.GetAttributeByteStart(indexNorm);
 
-        assert(indexPos != UINT16_MAX);
-
-        auto srcPos = reinterpret_cast<const uint8_t*>(positionsIn.data());
-        auto srcUV = reinterpret_cast<const uint8_t*>(uvIn.data());
-        auto srcNor = reinterpret_cast<const uint8_t*>(normalsIn.data());
-
-        // build the vertex data with pos, uv, and normals as appropriate
         for (size_t i = 0; i < positionsIn.size(); ++i)
         {
-            // copy directly into the master vertex buffer
-            auto dest = GetVertexAddr(i, vbStart);
             // positions
-            std::copy(srcPos, srcPos + 12, dest + offsetPosBytes);
+            assert(indexPos != UINT16_MAX);
+            {
+                auto src = static_cast<const uint8_t*>(positionsIn[i]);
+                auto dest = GetVertexAddr(i, vbStart) + offsetPosBytes;
+                std::copy(src, src + 12, dest);
+            }
+
             // texture coordinates
-            if (indexUV != UINT16_MAX)
-                std::copy(srcNor, srcNor + 8, dest + offsetUVBytes);
+            if (indexUV && uvIn.size())
+            {
+                auto src = static_cast<const uint8_t*>(uvIn[i]);
+                auto dest = GetVertexAddr(i, vbStart) + offsetUVBytes;
+                std::copy(src, src + 8, dest);
+            }
+
             // normals
-            if (indexNorm != UINT16_MAX)
-                std::copy(srcNor, srcNor + 12, dest + offsetNormBytes);
+            if (indexNorm && normalsIn.size())
+            {
+                auto src = static_cast<const uint8_t*>(normalsIn[i]);
+                auto dest = GetVertexAddr(i, vbStart) + offsetNormBytes;
+                std::copy(src, src + 12, dest);
+            }
         }
+
     }
+
+    //GetIndexBufferMaster().WriteText("ib.txt");
+
+    // normals
+    if (normalsIn.empty())
+        CalculateNormals(); //***TO DO*** draw the vertex normals so these can be checked
+
+    // This is a bad idea, as calculated normals are smoothed
+    //ReverseWindingsToMatchNormals();
+
+    if (uvIn.empty())
+        CalculateTextureCoordinates();
+
     // tangents and bitangents
     CalculateTangentsAndBiTangents();
 
@@ -1989,9 +2307,7 @@ int King::Model::CreateMeshFrom(const King::Box& boxIn)
     // Model() does not get called if Model m = Box(); since Box is not a model and the reference moves the model
     // but, if you Model m(Box()); it will be called first
     if (!_materials.count("default"))
-    {
         AddMaterial(Material::Create("default"));
-    }
     if (!_vertexFormat.Has(VertexAttrib::enumDesc::position))
     {
         _vertexFormat.SetNext(VertexAttrib::enumDesc::position, VertexAttrib::enumFormat::format_float32x3);
@@ -2087,9 +2403,7 @@ int King::Model::CreateMeshFrom(const King::Sphere& sphereIn, const uint32_t seg
     _modelName = "Sphere";
 
     if (!_materials.count("default"))
-    {
         AddMaterial(Material::Create("default"));
-    }
     if (!_vertexFormat.Has(VertexAttrib::enumDesc::position))
     {
         _vertexFormat.SetNext(VertexAttrib::enumDesc::position, VertexAttrib::enumFormat::format_float32x3);
@@ -2107,15 +2421,16 @@ int King::Model::CreateMeshFrom(const King::Sphere& sphereIn, const uint32_t seg
     const float radius = sphereIn.GetRadius();
     float theta = XM_2PI / (float)segmentsIn;
     Path p;
-    for (size_t j = 0; j < segmentsIn / 2u + 1u; ++j)
+
+    const auto to = segmentsIn / (uint32_t)2 + (uint32_t)1;
+    for (size_t j = 0; j < to; ++j)
     {
-        const float cosTheta = cos(theta * (float)j);
-        const float sinTheta = sin(theta * (float)j);
+        auto a = theta * (float)j;
+        const float cosTheta = cos(a);
+        const float sinTheta = sin(a);
         float x = (sinTheta) * radius;
         float y = (cosTheta) * radius;
         p.push_back(float3(x, y, 0.f));
-        // p1: sin(0) = 0, cos(0) = r, (0, r, 0)
-        // pn: sin(XM_2PI) = 0, cos(XM_2PI) = -r, (0, -r, 0)
     }
 
     auto firstIndex = _meshes.size();
@@ -2127,18 +2442,19 @@ int King::Model::CreateMeshFrom(const King::Sphere& sphereIn, const uint32_t seg
 
         auto index = m.CreateMeshFrom(p, p2);
         p = p2;
-        
-        //_indexBufferMaster.WriteText("CreateMeshFromBeforeMerge" + to_string(index) + ".txt");
+
         m.MergeMeshes(firstIndex, index);
 
-        auto a = _indexBufferMaster.Max();
-        //_indexBufferMaster.WriteText("CreateMeshFromAfterMerge" + to_string(index) + ".txt");
-        auto b = _vertexBufferMaster.GetElements();
-        assert(a < b);
+        //auto a = _indexBufferMaster.Max();
+        //auto b = _vertexBufferMaster.GetElements();
+        //assert(a < b);
     }
 
     // optimize
-    RemoveDuplicateVerticies();
+    auto rtn = RemoveDuplicateVerticies();
+
+    auto vert0 = _meshes[firstIndex]->GetVertexPosition(0);
+    assert(vert0.GetX() > -FLT_EPSILON);
 
     _meshes[firstIndex]->CalculateBoundingBox();
 
@@ -2167,11 +2483,7 @@ King::LineModel & King::LineModel::operator= (const King::LineModel &in)
     _indexBufferMaster = in._indexBufferMaster;
     _meshes = in._meshes;
 
-    for (auto & m : _meshes)
-    {
-        m->SetVB(&_vertexBufferMaster.GetData());
-        m->SetIB(&_indexBufferMaster.GetData());
-    }
+    HelperSetAllMeshesVBandIBtoMaster();
     return *this;
 }
 /******************************************************************************
@@ -2213,6 +2525,7 @@ bool King::Model::Load(std::string fileNameIN)
     {
         std::vector<std::shared_ptr<Model>> models;
         ifstream infile(p, std::ios_base::binary);
+
         if (infile.is_open())
         {
             uint32_t magic;
@@ -2224,6 +2537,7 @@ bool King::Model::Load(std::string fileNameIN)
             if (magic != 1971001974)
             {
                 cout << "File: " << fileNameIN << " is not a .KNG native file" << '\n';
+                return false;
             }
             else
             {
@@ -2232,7 +2546,12 @@ bool King::Model::Load(std::string fileNameIN)
                 infile.read(reinterpret_cast<char*>(&version), sizeof(version));
                 infile.read(reinterpret_cast<char*>(&numModels), sizeof(numModels));
 
-                if (infile.fail()) return false;
+                if (infile.fail())
+                {
+                    cout << "  ERROR: Bad read from .KNG file format\n";
+                    assert(0);
+                    return false;
+                }
 
                 uint32_t maxVersion = 1;
                 if (version > maxVersion)
@@ -2249,13 +2568,19 @@ bool King::Model::Load(std::string fileNameIN)
                     models.push_back(model);
                 }
 
-                if (infile.fail()) return false;
+                if (infile.fail())
+                {
+                    cout << "  ERROR: Bad read from .KNG file format\n";
+                    assert(0);
+                    return false;
+                }
 
                 if (models.size())// just want one
                 {
                     *this = *models.front(); // copies model contents to our model
                 }
                 if (models.size()) return true;
+                else return false;
             }
         }
         infile.close();
@@ -2327,7 +2652,7 @@ bool King::Model::Save(std::string fileNameIN)
     {
         Model_IO m;
         std::vector<std::shared_ptr<ModelScaffold>> models;
-        models.push_back(std::dynamic_pointer_cast<Model>(shared_from_this()));
+        models.push_back(std::static_pointer_cast<Model>(shared_from_this()));
 
         rtn = m.Save_OBJ(fileNameIN, models);
         if (rtn)
@@ -2343,7 +2668,11 @@ bool King::Model::Save(std::string fileNameIN)
 ******************************************************************************/
 bool King::Model::Read_v1(ifstream& dataFileIn)
 {
-    if (!dataFileIn.is_open()) return false;
+    if (!dataFileIn.is_open())
+    {
+        assert(0);
+        return false;
+    }
     // lambda
     auto ReadString = [&dataFileIn](string& strOut)
     {
@@ -2362,7 +2691,12 @@ bool King::Model::Read_v1(ifstream& dataFileIn)
     uint32_t numMeshes;
     dataFileIn.read(reinterpret_cast<char*>(&numMeshes), sizeof(numMeshes));
 
-    ModelScaffold::Read_v1(dataFileIn);
+    bool readRtn = ModelScaffold::Read_v1(dataFileIn);
+    if (dataFileIn.fail() || !readRtn)
+    {
+        assert(0);
+        return false;
+    }
 
     bool good = true;
     string key;
@@ -2373,11 +2707,18 @@ bool King::Model::Read_v1(ifstream& dataFileIn)
         
         ReadString(key);
         good = mtl->Read_v1(dataFileIn);
+
         // store
         _materials[key] = mtl;
 
         --numMaterials;
     }
+    if (dataFileIn.fail() || !good)
+    {
+        assert(0);
+        return false;
+    }
+
     while (dataFileIn && good && numMeshes)
     {
         auto mesh = TriangleMesh::Create();
@@ -2394,7 +2735,11 @@ bool King::Model::Read_v1(ifstream& dataFileIn)
         --numMeshes;
     }
 
-    if (dataFileIn.fail() || !good) return false;
+    if (dataFileIn.fail() || !good)
+    {
+        assert(0);
+        return false;
+    }
     return true;
 }
 /******************************************************************************
@@ -2491,11 +2836,13 @@ Box King::Model::CalculateBoundingBox()
 ******************************************************************************/
 void King::Model::CalculateNormals()
 {
-    if (!(_vertexFormat.Has(VertexAttrib::position) && _vertexFormat.Has(VertexAttrib::normal) ))
+    if (!(_vertexFormat.Has(VertexAttrib::position) && _vertexFormat.Has(VertexAttrib::normal)))
         return;
 
     auto& ib = _indexBufferMaster;
     auto& vb = _vertexBufferMaster;
+    assert(ib);
+    assert(vb);
     const auto positionAttribute = _vertexFormat.GetAttribute(_vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::position));
     const auto normalAttribute = _vertexFormat.GetAttribute(_vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::normal));
     // zero out normals
@@ -2504,23 +2851,16 @@ void King::Model::CalculateNormals()
         auto n = reinterpret_cast<float*>(&vb[ib[i]] + normalAttribute.GetOffset());
         n[0] = 0.0f; n[1] = 0.0f; n[2] = 0.0f;
     }
-    // calculate our center position
-    float3 center;
-    for (size_t i = 0; i < ib.GetElements(); ++i)
-    {
-        center += float3(reinterpret_cast<float*>(&vb[ib[i]] + positionAttribute.GetOffset()));
-    }
-    center /= ib.GetElements();
     // add face normal to vertex
     for (size_t i = 0; i < ib.GetElements(); i += 3)
     {
         /*
             5   4   3      4    5    4     3    4    3
             ---------           -----           -----
-            |  /|  /|     /|    |  /      /|    |  / 
-            | / | / | =  / |  + | /   +  / |  + | / 
-            |/  |/  |   /  |    |/      /  |    |/   
-            ---------  -----           -----         
+            |  /|  /|     /|    |  /      /|    |  /
+            | / | / | =  / |  + | /   +  / |  + | /
+            |/  |/  |   /  |    |/      /  |    |/
+            ---------  -----           -----
             0   1   2  0   1    0      1   2    1
 
             f 0 1 2 3 4 5
@@ -2533,7 +2873,9 @@ void King::Model::CalculateNormals()
         const float3 pt2(reinterpret_cast<float*>(addr2 + positionAttribute.GetOffset()));
         // #1f = 0 1 4, #2f = 0 4 5
         // face normal
-        float3 c = Cross(pt1 - pt0, pt2 - pt0);
+        auto fnFaceNormal = [](float3 a, float3 b, float3 c) {return Cross((b - a), (c - a)); };
+
+        float3 c = fnFaceNormal(pt0, pt1, pt2);
         // reverse normal if not outward from the center of the object
         //if (c.DotProduct(pt0 - center) < 0.f)
         //{
@@ -2566,6 +2908,88 @@ void King::Model::CalculateNormals()
         float3 n(ni);
         n.MakeNormalize();
         ni[0] = n.GetX(); ni[1] = n.GetY(); ni[2] = n.GetZ();
+
+//        cout << "Normal " << to_string(i) << ": " << n << '\n';
+    }
+
+    // validate they are smooth and not reversing
+    if (false)
+    {
+        float* n0 = reinterpret_cast<float*>(&vb[ib[0]] + normalAttribute.GetOffset());
+        float3 prev(n0);
+        for (size_t i = 1; i < ib.GetElements(); ++i)
+        {
+            float* ni = reinterpret_cast<float*>(&vb[ib[i]] + normalAttribute.GetOffset());
+            float3 n(ni);
+            assert(n.DotProduct(prev) >= 0.f);
+            prev = ni;
+        }
+    }
+}
+void King::Model::CalculateTextureCoordinates()
+{
+    if (!(_vertexFormat.Has(VertexAttrib::position) &&
+        _vertexFormat.Has(VertexAttrib::textureCoord)))
+        return;
+
+    const auto& ib = _indexBufferMaster;
+    auto& vb = _vertexBufferMaster;
+    const auto textureCoordAttribute = _vertexFormat.GetAttribute(_vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::textureCoord));
+
+    auto temp = GetPositions();
+    size_t i;
+    assert(temp.size() > 3);
+    for (i = 0; i < temp.size() - 3; i += 4)
+    {
+        std::vector<King::float3> pts;
+        pts.push_back(float3(temp[i]));
+        pts.push_back(float3(temp[i + 1]));
+        pts.push_back(float3(temp[i + 2]));
+        pts.push_back(float3(temp[i + 3]));
+
+        auto uvQuad = King::Model::HelperCreateTextureCoordinatesForTriOrQuad(pts, 1);
+
+        auto uv0 = reinterpret_cast<float*>(&vb[ib[i + 0]] + textureCoordAttribute.GetOffset());
+        auto uv1 = reinterpret_cast<float*>(&vb[ib[i + 1]] + textureCoordAttribute.GetOffset());
+        auto uv2 = reinterpret_cast<float*>(&vb[ib[i + 2]] + textureCoordAttribute.GetOffset());
+        auto uv3 = reinterpret_cast<float*>(&vb[ib[i + 3]] + textureCoordAttribute.GetOffset());
+
+        uv0[0] = uvQuad[0].GetX();
+        uv0[1] = uvQuad[0].GetY();
+
+        uv1[0] = uvQuad[1].GetX();
+        uv1[1] = uvQuad[1].GetY();
+
+        uv2[0] = uvQuad[2].GetX();
+        uv2[1] = uvQuad[2].GetY();
+
+        uv3[0] = uvQuad[3].GetX();
+        uv3[1] = uvQuad[3].GetY();
+    }
+    // do we have a triangle at the end and not a full quad?
+    // 0 1 2 3
+    // 0 1 2 3 4 5 6
+    if (i < temp.size() - 3)
+    {
+        std::vector<King::float3> pts;
+        pts.push_back(float3(temp[i]));
+        pts.push_back(float3(temp[i + 1]));
+        pts.push_back(float3(temp[i + 2]));
+
+        auto uvTri = King::Model::HelperCreateTextureCoordinatesForTriOrQuad(pts, 1); // Does this really support tris?
+
+        auto uv0 = reinterpret_cast<float*>(&vb[ib[i + 0]] + textureCoordAttribute.GetOffset());
+        auto uv1 = reinterpret_cast<float*>(&vb[ib[i + 1]] + textureCoordAttribute.GetOffset());
+        auto uv2 = reinterpret_cast<float*>(&vb[ib[i + 2]] + textureCoordAttribute.GetOffset());
+
+        uv0[0] = uvTri[0].GetX();
+        uv0[1] = uvTri[0].GetY();
+
+        uv1[0] = uvTri[1].GetX();
+        uv1[1] = uvTri[1].GetY();
+
+        uv2[0] = uvTri[2].GetX();
+        uv2[1] = uvTri[2].GetY();
     }
 }
 /******************************************************************************
@@ -2738,8 +3162,6 @@ void King::Model::CalculateTangentsAndBiTangents()
 void King::Model::MergeMeshes(const size_t meshIndex1, const size_t meshIndex2)
 {
     if (meshIndex1 == meshIndex2) return;
-    else 
-        auto asdfdsf = 32454353;
     assert(meshIndex1 < _meshes.size());
     assert(meshIndex2 < _meshes.size());
     
@@ -2762,12 +3184,8 @@ void King::Model::MergeMeshes(const size_t meshIndex1, const size_t meshIndex2)
 
         if (split)
         {
-            // the split reallocates, adjust mesh references
-            for (auto ea : _meshes)
-            {
-                ea->SetIB(&_indexBufferMaster.GetData());
-                ea->SetVB(&_vertexBufferMaster.GetData());
-            }
+            // the split might reallocate, adjust mesh references
+            HelperSetAllMeshesVBandIBtoMaster();
 
             // copy data occurring after firstMesh
             uint32_t splitSizeRHS(0);
@@ -2775,7 +3193,7 @@ void King::Model::MergeMeshes(const size_t meshIndex1, const size_t meshIndex2)
                 splitSizeRHS += _meshes[i]->GetNumIndicies();
 
             MemoryBlock<uint32_t> tempBuffer1(splitSizeRHS);
-            tempBuffer1.Copy(0, &split.GetData() + meshF->GetNumIndicies(), splitSizeRHS);
+            tempBuffer1.Copy(0, &split.GetData() + meshF->GetNumIndicies(), splitSizeRHS); // copy into tempBuffer1
 
             // how many elements are between meshF and meshS? 
             const uint32_t meshesToSkip = secondMesh - firstMesh - 1;
@@ -2788,15 +3206,11 @@ void King::Model::MergeMeshes(const size_t meshIndex1, const size_t meshIndex2)
 
             // copy from tempBuffer1 the skipped meshs to after meshS
             if (elementsToSkipIntempBuffer1)
-                split.Copy(meshF->GetNumIndicies() + meshS->GetNumIndicies(), &tempBuffer1.GetData(), elementsToSkipIntempBuffer1);
+                split.Copy((size_t)meshF->GetNumIndicies() + (size_t)meshS->GetNumIndicies(), &tempBuffer1.GetData(), elementsToSkipIntempBuffer1);
             
             _indexBufferMaster.Merge(split);
             // the merge reallocates, adjust mesh references
-            for (auto ea : _meshes)
-            {
-                ea->SetIB(&_indexBufferMaster.GetData());
-                ea->SetVB(&_vertexBufferMaster.GetData());
-            }
+            HelperSetAllMeshesVBandIBtoMaster();
         }
     }
     // add the vertex start delta offset (between the first and second mesh) to the moved second mesh indicies
@@ -2808,7 +3222,7 @@ void King::Model::MergeMeshes(const size_t meshIndex1, const size_t meshIndex2)
     for (uint32_t i = offset; i < offset + items; ++i)
         _indexBufferMaster[i] += adj;
 
-    // adjust cobined mesh to match the merge
+    // adjust combined mesh to match the merge
     auto mesh1 = GetMesh(meshIndex1);
     mesh1->SetNumIndicies(meshF->GetNumIndicies() + meshS->GetNumIndicies());
     mesh1->SetIBStart(meshF->GetIBStart());
@@ -2818,6 +3232,8 @@ void King::Model::MergeMeshes(const size_t meshIndex1, const size_t meshIndex2)
     mesh1->CalculateBoundingBox();
     // remove meshS to finish
     _meshes.erase(std::next(_meshes.begin(), meshIndex2));
+
+    HelperSetAllMeshesVBandIBtoMaster();
 }
 /******************************************************************************
 *    Method:    MergeMeshes
@@ -2869,11 +3285,7 @@ void King::LineModel::MergeMeshes(const size_t meshIndex1, const size_t meshInde
         if (split)
         {
             // the split reallocates, adjust mesh references
-            for (auto ea : _meshes)
-            {
-                ea->SetIB(&_indexBufferMaster.GetData());
-                ea->SetVB(&_vertexBufferMaster.GetData());
-            }
+            HelperSetAllMeshesVBandIBtoMaster();
 
             // copy data occurring after firstMesh
             uint32_t splitSizeRHS(0);
@@ -2923,6 +3335,9 @@ void King::LineModel::MergeMeshes(const size_t meshIndex1, const size_t meshInde
     mesh1->CalculateBoundingBox();
     // remove meshS to finish
     _meshes.erase(std::next(_meshes.begin(), meshIndex2));
+
+    // performed above
+    //HelperSetAllMeshesVBandIBtoMaster();
 }
 /******************************************************************************
 *    Method:    OptimizeMeshVertexBuffer
@@ -3138,7 +3553,7 @@ void King::Model::ReverseWindingsToMatchNormals()
         auto aveNormal = fnAveNormals(n0, n1, n2);
 
         float mustBePositive = Dot(faceNormal, aveNormal);
-        if (abs(mustBePositive) != mustBePositive)
+        if (fabsf(mustBePositive) > mustBePositive + FLT_EPSILON)
         {
             ++numReversed;
             auto temp = indicies[i + 1];
@@ -3226,6 +3641,8 @@ size_t King::Model::RemoveUnusedVerticies()
 
     rtn = _vertexBufferMaster.GetElements() - uniqueVB.GetElements();
     _vertexBufferMaster = uniqueVB;
+
+    HelperSetAllMeshesVBandIBtoMaster();
 
     return rtn;
 }
@@ -3378,6 +3795,8 @@ size_t King::Model::RemoveDuplicateVerticies()
     rtn = _vertexBufferMaster.GetElements() - uniqueVB.GetElements();
     _vertexBufferMaster = uniqueVB;
 
+    HelperSetAllMeshesVBandIBtoMaster();
+
     //for (uint32_t k = 0; k < _vertexBufferMaster.GetElements(); ++k)
     //{
     //    auto d = reinterpret_cast<float*>(&_vertexBufferMaster[k]);
@@ -3438,7 +3857,11 @@ bool King::ModelScaffold::Read_v1(ifstream& dataFileIn)
 {
     bool rtn = true;
 
-    if (!dataFileIn.is_open()) return false;
+    if (!dataFileIn.is_open())
+    {
+        assert(0);
+        return false;
+    }
     // lambda
     auto ReadString = [&dataFileIn](string& strOut)
     {
@@ -3456,22 +3879,60 @@ bool King::ModelScaffold::Read_v1(ifstream& dataFileIn)
     for (int i = 0; i < 8; ++i)
     {
         dataFileIn.read(reinterpret_cast<char*>(&_vertexFormat.attributes[i]._offset), sizeof(uint16_t));
-        
+        if (dataFileIn.fail())
+        {
+            assert(0);
+            return false;
+        }
+
         int temp;
         dataFileIn.read(reinterpret_cast<char*>(&temp), sizeof(temp));
+        if (dataFileIn.fail())
+        {
+            assert(0);
+            return false;
+        }
         _vertexFormat.attributes[i]._format = (enum VertexAttrib::enumFormat)temp;
 
         dataFileIn.read(reinterpret_cast<char*>(&temp), sizeof(temp));
+        if (dataFileIn.fail())
+        {
+            assert(0);
+            return false;
+        }
         _vertexFormat.attributes[i]._desc = (enum VertexAttrib::enumDesc)temp;;
     }
     dataFileIn.read(reinterpret_cast<char*>(&_vertexFormat.nextAttribute), sizeof(_vertexFormat.nextAttribute));
+    if (dataFileIn.fail())
+    {
+        assert(0);
+        return false;
+    }
     dataFileIn.read(reinterpret_cast<char*>(&_indexFormat), sizeof(_indexFormat));
+    if (dataFileIn.fail())
+    {
+        assert(0);
+        return false;
+    }
     // binary model bounding box
     dataFileIn.read(reinterpret_cast<char*>(&_boundingBox), sizeof(_boundingBox));
+    if (dataFileIn.fail())
+    {
+        assert(0);
+        return false;
+    }
     // binary vetex data
     rtn = _vertexBufferMaster.Read(dataFileIn);
+    if (!rtn)
+    {
+        assert(0);
+    }
     // binary index data
-    if (rtn) rtn = _indexBufferMaster.Read(dataFileIn);        
+    if (rtn) rtn = _indexBufferMaster.Read(dataFileIn);  
+    if (!rtn)
+    {
+        assert(0);
+    }
 
     if (dataFileIn.fail() || !rtn) return false;
     return true;
@@ -3557,16 +4018,11 @@ void King::ModelScaffold::Transform(const DirectX::XMMATRIX transformIn)
 *       return the point to start of the vextex data
 *       by vertex number or by indirection through the index buffer
 ******************************************************************************/
-uint8_t* King::ModelScaffold::GetVertexAddr(const uint32_t vertexNumIn)
-{
-    // works becuase _vertexBufferMaster._stride is set to _vertexFormat.GetByteSize()
-    uint8_t* vb = &_vertexBufferMaster.Get(vertexNumIn);
-    return vb;
-}
-uint8_t* King::ModelScaffold::GetVertexAddr(const uint32_t vertexNumIn, uint32_t vbStartIn = 0) 
+uint8_t* King::ModelScaffold::GetVertexAddr(const uint32_t vertexNumIn, uint32_t vbStartIn) 
 {
     // works becuase _vertexBufferMaster._stride is set to _vertexFormat.GetByteSize()
     uint8_t* vb = &_vertexBufferMaster.Get(vertexNumIn + vbStartIn);
+    //uint8_t* vb = &_vertexBufferMaster.Get(vertexNumIn) + vbStartIn; // changed on 6/26/2022 CHK such that vbStartIn is in uint8_t, not element number
     return vb;
 }
 uint8_t* King::ModelScaffold::GetVertexAddr(const uint32_t indexIn, uint32_t vbStartIn, uint32_t ibStartIn)
@@ -3575,9 +4031,10 @@ uint8_t* King::ModelScaffold::GetVertexAddr(const uint32_t indexIn, uint32_t vbS
 
     auto bs = _vertexFormat.GetByteSize(); 
     uint8_t* vb = &_vertexBufferMaster.GetData() + (size_t)vbStartIn * bs;
+    //uint8_t* vb = &_vertexBufferMaster.GetData() + (size_t)vbStartIn; // changed on 6/26/2022 CHK such that vbStartIn is in uint8_t, not element number (this needs to be changed in many places as well!!)
     uint32_t* ib = &_indexBufferMaster.GetData() + ibStartIn;
     uint32_t vertNum = *(ib + indexIn);
-    assert(vertNum < _vertexBufferMaster.GetElements() - vbStartIn);
+    //assert(vertNum < _vertexBufferMaster.GetElements() - vbStartIn);
 
     return vb + vertNum * (size_t)bs;
 }
@@ -3628,10 +4085,25 @@ inline std::shared_ptr<TriangleMesh> King::Model::CreateMesh(const uint32_t numT
 ******************************************************************************/
 int King::Model::CreateMeshFrom(const Line& l, Distance d)
 {
+    if (!_materials.count("default"))
+        AddMaterial(Material::Create("default"));
     // used existing format
     auto stride = _vertexFormat.GetByteSize();
     // is a model vertex buffer already setup?
-    assert(stride == GetVertexBufferMaster().GetStride());
+    if (stride != GetVertexBufferMaster().GetStride())
+    {
+        if (_vertexFormat.GetByteSize() < 56)
+        {
+            if (!_vertexFormat.Has(VertexAttrib::enumDesc::position))
+                _vertexFormat.SetNext(VertexAttrib::enumDesc::position, VertexAttrib::enumFormat::format_float32x3);
+
+            _vertexFormat.SetNext(VertexAttrib::enumDesc::textureCoord, VertexAttrib::enumFormat::format_float32x2);
+            _vertexFormat.SetNext(VertexAttrib::enumDesc::normal, VertexAttrib::enumFormat::format_float32x3);
+            _vertexFormat.SetNext(VertexAttrib::enumDesc::tangent, VertexAttrib::enumFormat::format_float32x3);
+            _vertexFormat.SetNext(VertexAttrib::enumDesc::bitangent, VertexAttrib::enumFormat::format_float32x3);
+            _vertexBufferMaster.SetStride(_vertexFormat.GetByteSize());
+        }
+    }
     auto indexPos = _vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::enumDesc::position); // UINT16_MAX did not find
     auto indexUV = _vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::enumDesc::textureCoord); // UINT16_MAX did not find
     auto indexNorm = _vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::enumDesc::normal); // UINT16_MAX did not find
@@ -3732,7 +4204,8 @@ int King::Model::CreateMeshFrom(const Line& l, Distance d)
 /******************************************************************************
 *    Method:    CreateMeshFrom
 *       Inputs:
-*           Path p          List of points for each new vertex
+*           Path p          List of points for each new vertex that encloses an
+*                               area in CCW rotation.
 *       Output:
 *           Adds a new TriangleMesh to _meshes which forms a closed mesh of the
 *           path.
@@ -3744,11 +4217,12 @@ int King::Model::CreateMeshFrom(const Path& p)
     assert(p.size() > 2);
     auto numPathVerts = p.size();
 
-    _modelName = "ClosedPath";
+    if (_modelName == "")
+        _modelName = "ClosedPath";
 
     vector<float3> verticies;
     vector<uint32_t> indicies;
-    vector<float2> textureCoordinates;
+    vector<float2> uvs;
     vector<float3> normals;
 
     Triangle t;
@@ -3756,58 +4230,226 @@ int King::Model::CreateMeshFrom(const Path& p)
     // make sure first and last are not the same
     if (p[0] == p[numPathVerts - 1])
         --numPathVerts;
-    verticies.push_back(p[0]);
-    normals.push_back(float3());
-    textureCoordinates.push_back(float2());
-
-    verticies.push_back(p[numPathVerts - 1]);
-    normals.push_back(float3());
-    textureCoordinates.push_back(float2());
     
-    for (size_t i = 1; i < numPathVerts; ++i)
+    assert(numPathVerts > 3); // min
+    /* 
+     path ordering:
+     15  14  12  11  10  8   7
+
+     vertex ordering desired:
+     0---2---5---6---9---10--13
+     |  /|\  |  /|\  |  /|\  |
+     | / | \ | / | \ | / | \ |
+     |/  |  \|/  |  \|/  |  \|
+     1---3---4---7---8---11--12
+
+     0   1   2   3   4   5   6
+             ^
+             | loop starts
+*/
+    // Re-order the path into verticies 
+    /*  (verified) 5/15/2022 CHK
+        Input of 5, CCW, bottom first:
+        { path 0: { x:         0 y:         0 z:         0 w:         1 }
+        { path 1: { x:         1 y:         0 z:         0 w:         1 }
+        { path 2: { x:         2 y:         0 z:         0 w:         1 }
+        { path 3: { x:         1 y:         1 z:         0 w:         1 }
+        { path 4: { x:         0 y:         1 z:         0 w:         1 }
+    */
+    /*
+        Input of 6, CCW, bottom first:
+        path 0: { x:         0 y:         0 z:         0 w:         1 }
+        path 1: { x:         1 y:         0 z:         0 w:         1 }
+        path 2: { x:         2 y:         0 z:         0 w:         1 }
+        path 3: { x:         2 y:         1 z:         0 w:         1 }
+        path 4: { x:         1 y:         1 z:         0 w:         1 }
+        path 5: { x:         0 y:         1 z:         0 w:         1 }
+        
+    */
+    // if p[0] is too far left of both points, the tri is inverted, we would need to reverse the winding order
     {
-        // path indicies
-        auto i0 = i;
-        auto i1 = i + 1;
-        auto ia = numPathVerts - 1 - i;
-
-        if (i0 != ia && i1 != ia)
+        if (p[numPathVerts - 1].Get_position().GetY() > p[0].Get_position().GetY())
         {
-            verticies.push_back(p[i0]);
-            // vb indicies
-            auto index = verticies.size() - 1;
-            indicies.push_back(index - 2);
-            indicies.push_back(index);
-            indicies.push_back(index - 1);
-
-            t.Set(verticies[index - 2], verticies[index], verticies[index - 1]);
-            normals.emplace_back(t.GetNormalCCW());
-            textureCoordinates.emplace_back(float2(0.f, 0.f));
+            verticies.push_back(p[numPathVerts - 1]);
+            verticies.push_back(p[0]);
+            verticies.push_back(p[numPathVerts - 2]);
+            /* // this is an error, I think the only way to detect for sure is to valid and fix before passed to this method
+            { x:  -858.622 y : 754.389 z : 0 }
+            { x:  -1000.18 y : -963.679 z : 0 } // p[0]
+            { x:  -590.304 y : 867.352 z : 0 }
+            */
         }
         else
-            break;
-
-        if (ia != i0 && i1 != ia)
         {
-            verticies.push_back(p[ia]);
-            // vb indicies
-            auto index = verticies.size() - 1;
-            indicies.push_back(index - 2);
-            indicies.push_back(index - 1);
-            indicies.push_back(index);
+            // attempt at fixing the input (but the case above still unsolved)
+            // Error in y reverses:
+            //{ x:  -840.297 y : -200.086 z : 0 }
+            //{ x:  -1002.52 y : 206.8 z : 0 }
+            //{ x:  -661.723 y : 1007.02 z : 0 }
+            // p[last].y < p[first].y !!!
+            if (p[numPathVerts - 2].Get_position().GetY() < p[numPathVerts - 1].Get_position().GetY())
+            {
+                // p[numPathVerts - 2] has the smallest y
+                verticies.push_back(p[0]);
+                verticies.push_back(p[numPathVerts - 2]);
+                verticies.push_back(p[numPathVerts - 1]);
+            }
+            else
+            {
+                // p[numPathVerts - 1] has the smallest y
+                verticies.push_back(p[0]);
+                verticies.push_back(p[numPathVerts - 1]);
+                verticies.push_back(p[numPathVerts - 2]);
+            }
 
-            t.Set(verticies[index - 2], verticies[index - 1], verticies[index]);
-            normals.emplace_back(t.GetNormalCCW());
-            textureCoordinates.emplace_back(float2(0.f, 0.f));
         }
-        else
-            break;
     }
-    // set the two "primed" verticies normals
-    normals[0] = normals[2];
-    normals[1] = normals[2];
+    /*
+        Output of 5, CCW, top first then alternating top and bottom:
+        v0 { path 4: { x:         0 y:         1 z:         0 w:         1 } } // t
+        v1 { path 0: { x:         0 y:         0 z:         0 w:         1 } } // b
+        v2 { path 3: { x:         1 y:         1 z:         0 w:         1 } } // t
+        v3 { path 1: { x:         1 y:         0 z:         0 w:         1 } } // b
+        
+        v4 { path 2: { x:         2 y:         0 z:         0 w:         1 } } // b
+    */
+    /*
+        Output of 6, CCW, top first then alternating top and bottom:
+        v0 { path 5: { x:         0 y:         1 z:         0 w:         1 } } // t
+        v1 { path 0: { x:         0 y:         0 z:         0 w:         1 } } // b
+        v2 { path 4: { x:         1 y:         1 z:         0 w:         1 } } // t
+        v3 { path 1: { x:         1 y:         0 z:         0 w:         1 } } // b
+        
+        v4 { path 2: { x:         2 y:         0 z:         0 w:         1 } } // b
+        v5 { path 3: { x:         2 y:         1 z:         0 w:         1 } } // t
+    */
 
-    return HelperCreateMeshFrom(verticies, indicies, textureCoordinates, normals);
+    // Vertex buffer creation
+    bool bottom(true);
+    bool reverse(false);
+    size_t i, end, bottomIndex(0), topIndex(numPathVerts - 2);
+    end = (numPathVerts - 3);
+    for (i = 0; i < end; ++i)
+    {
+        if (i == numPathVerts - 2)
+            __debugbreak();
+        // pattern is b b t t b b t t b b t t ....
+        if (bottom) verticies.push_back(p[++bottomIndex]);
+        else verticies.push_back(p[--topIndex]);
+
+        if (reverse) bottom = !bottom;
+        reverse = !reverse;
+    }
+    cout << "Verticies:\n";
+    for (const auto& i : verticies)
+        cout << i << '\n';
+    
+    assert(numPathVerts == verticies.size());
+
+    // Index buffer creation
+    indicies.push_back(0); // tri1
+    indicies.push_back(1);
+    indicies.push_back(2);
+
+    indicies.push_back(2); // tri2
+    indicies.push_back(1);
+    indicies.push_back(3);
+
+    float3 normalPrev; // used in validation below that we are facing in the same general direction (by use of dot product)
+    {
+        Triangle t1(verticies[indicies[0]], verticies[indicies[1]], verticies[indicies[2]]);
+        Triangle t2(verticies[indicies[2]], verticies[indicies[1]], verticies[indicies[3]]);
+        normalPrev = t2.GetNormalCCW();
+        assert(float3::DotProduct(t1.GetNormalCCW(), normalPrev) >= 0.f);
+    }
+    bottom = false;
+    reverse = false;
+    for (i = 4; i < numPathVerts; ++i)
+    {
+        /*  
+             vertex ordering:
+                +2  +3  +1  +3  +1   +3
+             0---2---5---6---9---10--13
+             | 1/|\4 |5 /|\8 |9 /|\  |
+             | / | \ | / | \ | / | \ |
+             |/ 2|3 \|/6 |7 \|/  |  \|
+             1---3---4---7---8---11--12
+                +2  +1  +3  +1  +3   +1
+        */
+        /* 6 points is 4 tris
+            0,1,2, 2,1,3 ,2,3,4, 2,4,5, (verified) 5/15/2022 CHK
+        */
+        auto indexCount = indicies.size();
+
+        bottom = !bottom;
+
+        if (bottom)
+        {
+            // i = 6, 10
+            if (reverse)
+            {
+                indicies.push_back(i - 1);
+                indicies.push_back(i - 2);
+                indicies.push_back(i);
+            }
+            else // i = 4, 8
+            {
+                indicies.push_back(i - 2);
+                indicies.push_back(i - 1);
+                indicies.push_back(i);
+            }
+        }
+        else
+        {
+            // i = 7, 11
+            if (reverse)
+            {
+                indicies.push_back(i - 1);
+                indicies.push_back(i - 3);
+                indicies.push_back(i);
+
+            }
+            else // i = 5, 9
+            {
+                indicies.push_back(i - 3);
+                indicies.push_back(i - 1);
+                indicies.push_back(i);
+            }
+            reverse = !reverse;
+        }
+        // validate the triangle
+        t.Set(verticies[indicies[indexCount + 0]], verticies[indicies[indexCount + 1]], verticies[indicies[indexCount + 2]]);
+        auto nCCW = t.GetNormalCCW();
+        if (float3::DotProduct(nCCW, normalPrev) >= 0.f)
+        {
+            normalPrev = nCCW;
+        }
+        else
+        {
+            // reverse
+            auto temp = indicies[indexCount + 1];
+            indicies[indexCount + 1] = indicies[indexCount + 2];
+            indicies[indexCount + 2] = temp;
+
+            t.Set(verticies[indicies[indexCount + 0]], verticies[indicies[indexCount + 1]], verticies[indicies[indexCount + 2]]);
+            nCCW = t.GetNormalCCW();
+            if(float3::DotProduct(nCCW, normalPrev) >= 0.f)
+                normalPrev = nCCW;
+            else
+            {
+                // something is wrong, the triangle needs some help, just get rid of it for now
+                indicies.pop_back();
+                indicies.pop_back();
+                indicies.pop_back();
+            }
+        }
+    }
+
+    for (const auto& i : indicies)
+        cout << i << ',';
+    cout << '\n';
+
+    return HelperCreateMeshFrom(verticies, indicies, uvs, normals);
 }
 /******************************************************************************
 *    Method:    CreateMeshFrom
@@ -3823,6 +4465,10 @@ int King::Model::CreateMeshFrom(const Path& p)
 int King::Model::CreateMeshFrom(const Path& p, Distance d)
 {
     assert(p.size() > 2);
+
+    if (_modelName == "")
+        _modelName = "PathDistance";
+
     // Form a series of quad meshes joined by one common edge between pairs.
     const auto& numPathVerts = p.size();
     vector<Quad> quads;
@@ -3866,11 +4512,24 @@ int King::Model::CreateMeshFrom(const Path& p, Distance d)
         normals.emplace_back(q.GetNormalCCW());
     }
 
-    // Buffers and format for model
-    // used existing format
+    if (!_materials.count("default"))
+        AddMaterial(Material::Create("default"));
     auto stride = _vertexFormat.GetByteSize();
     // is a model vertex buffer already setup?
-    assert(stride == GetVertexBufferMaster().GetStride());
+    if (stride != GetVertexBufferMaster().GetStride())
+    {
+        if (_vertexFormat.GetByteSize() < 56)
+        {
+            if (!_vertexFormat.Has(VertexAttrib::enumDesc::position))
+                _vertexFormat.SetNext(VertexAttrib::enumDesc::position, VertexAttrib::enumFormat::format_float32x3);
+
+            _vertexFormat.SetNext(VertexAttrib::enumDesc::textureCoord, VertexAttrib::enumFormat::format_float32x2);
+            _vertexFormat.SetNext(VertexAttrib::enumDesc::normal, VertexAttrib::enumFormat::format_float32x3);
+            _vertexFormat.SetNext(VertexAttrib::enumDesc::tangent, VertexAttrib::enumFormat::format_float32x3);
+            _vertexFormat.SetNext(VertexAttrib::enumDesc::bitangent, VertexAttrib::enumFormat::format_float32x3);
+            _vertexBufferMaster.SetStride(_vertexFormat.GetByteSize());
+        }
+    }
     auto indexPos = _vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::enumDesc::position); // UINT16_MAX did not find
     auto indexUV = _vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::enumDesc::textureCoord); // UINT16_MAX did not find
     auto indexNorm = _vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::enumDesc::normal); // UINT16_MAX did not find
@@ -3993,6 +4652,10 @@ int King::Model::CreateMeshFrom(const Path& p, Distance d)
         }
         count += increment;
     }
+    // normals where checked for general direction match as adjacent and then averaged
+    // so let make the winding order match
+    ReverseWindingsToMatchNormals();
+
     // tangents and bitangents
     CalculateTangentsAndBiTangents();
 
@@ -4001,6 +4664,156 @@ int King::Model::CreateMeshFrom(const Path& p, Distance d)
     // OptimizeMeshVertexBuffer(*tm); // commented out only because it is not tested (modified to accomodate non-zero based indicies and vertex)
     // return the mesh index
     return (int)_meshes.size() - 1;
+}
+
+int King::Model::CreateMeshFromExp(const Path& path, Distance d)
+{
+    if (_modelName == "")
+        _modelName = "CreateMeshFromPathToPath";
+
+    vector<float3> positions;
+    vector<uint32_t> indicies;
+    // these are optional, HelperCreateMeshFrom will create them
+    vector<float2> uv;
+    vector<float3> normals;
+
+    // distance is outward from consecutive points, CCW
+    auto pt0 = path[0];
+    positions.push_back(pt0);
+    normals.push_back(float3());
+    positions.push_back(pt0 + d);
+    normals.push_back(float3());
+
+    Distance prevEdge2 = path[1] - pt0;
+    quat rot;
+    bool tri(false);
+    bool quad(false);
+    for (size_t i = 1; i < path.size(); ++i) // *** 5/22/2022 just the last point added is messed up (i_n + d)
+    {
+        auto& pti = path[i];
+        Distance edge2 = pti - pt0;
+
+        if (edge2.Get_unit_direction() != prevEdge2.Get_unit_direction())
+        {
+            // find the rotation from prevEdge2 to edge2
+            rot = quat(prevEdge2.Get_unit_direction(), edge2.Get_unit_direction());
+            d = rot * d;
+            // if the angle is > 270 deg, insert another point and form a quad
+            if (rot.GetAngle() > UnitOfMeasure::PI * 1.5f)
+            {
+                /*    pt0
+                      /|\
+                     / | \
+                pos0/  |  \pt0 + d
+                      edge    
+                */
+                auto pos0 = positions.back();
+                auto edge = (pos0 + pt0 + d);
+                edge.MakeNormalize();
+                edge *= d.Get_magnitude();
+                // edge
+                positions.push_back(edge);
+                auto n = float3::CrossProduct(pos0 - pt0, edge);
+                n.MakeNormalize();
+                normals.push_back(n);
+                size_t pos = positions.size() - 1;
+                indicies.push_back(pos - 2);
+                indicies.push_back(pos - 1);
+                indicies.push_back(pos);
+                // pt0 + d
+                positions.push_back(pt0 + d);
+                n = float3::CrossProduct(edge, d);
+                n.MakeNormalize();
+                normals.push_back(n);
+                pos = positions.size() - 1;
+                indicies.push_back(pos - 3);
+                indicies.push_back(pos - 1);
+                indicies.push_back(pos);
+
+                quad = true;
+            }
+            else 
+            {
+                // close the gap with a triangle
+                auto pos0 = positions.back();
+                positions.push_back(pt0 + d);
+                auto n = float3::CrossProduct(pos0, d);
+                n.MakeNormalize();
+                normals.push_back(n);
+
+                // close the gap creating an extra tri
+            /*
+                        Path:       0   1 = i
+                          pti = pos-2
+                                    |\
+                                    | \
+                 pti + edge1 = pos-1|  \pos = pt0 + d
+            */
+                size_t pos = positions.size() - 1;
+                indicies.push_back(pos - 2);
+                indicies.push_back(pos - 1);
+                indicies.push_back(pos);
+
+                tri = true;
+            }
+        }
+
+        // our quad
+        {
+            // direction is inline, add two more points
+        /*
+                    Path:       0   1 = i
+                      pt0 = pos0-----pos2 = pti
+                                |  /|
+                                | / |
+              pt0 + edge1 = pos1|/  |pos3 = pti + edge1
+
+        */
+            positions.push_back(pti);
+            auto n = float3::CrossProduct(d, edge2);
+            n.MakeNormalize();
+            normals.push_back(n);
+
+            size_t pos = positions.size() - 1;
+            
+            if (quad)
+            {
+                quad = false;
+                indicies.push_back(pos - 4);
+            }
+            else if (tri)
+            {
+                tri = false;
+                indicies.push_back(pos - 3);
+            }
+            else
+                indicies.push_back(pos - 2);
+
+            indicies.push_back(pos - 1);
+            indicies.push_back(pos);
+
+            positions.push_back(pti + d);
+            normals.push_back(n);
+
+            pos = positions.size() - 1;
+            indicies.push_back(pos - 1);
+            indicies.push_back(pos - 2);
+            indicies.push_back(pos);
+        }
+        // advance the loop base edge
+        prevEdge2 = edge2;
+        pt0 = pti;
+    }
+
+    // close it all up by adding one last triangle at the end
+    size_t pos = positions.size() - 1;
+    indicies.push_back(0);
+    indicies.push_back(pos);
+    indicies.push_back(1);
+
+    auto meshIndex = HelperCreateMeshFrom(positions, indicies, uv, normals);
+
+    return meshIndex;
 }
 /******************************************************************************
 *    Method:    CreateMeshFrom
@@ -4016,6 +4829,9 @@ int King::Model::CreateMeshFrom(const Path& p, Distance d)
 int King::Model::CreateMeshFrom(const Path& pFrom, const Path& pTo)
 {
     assert(pFrom.size() > 1 && pTo.size() > 1);
+
+    if (_modelName == "")
+        _modelName = "CreateMeshFromPathToPath";
 
     auto numPathVerts = min(pFrom.size(), pTo.size());
     vector<float3> verts;
@@ -4071,11 +4887,25 @@ int King::Model::CreateMeshFrom(const Path& pFrom, const Path& pTo)
         ++face;
     }
     assert(normals.size() == quadOrTri.size());
-    // Buffers and format for model
-    // used existing format
+
+    if (!_materials.count("default"))
+        AddMaterial(Material::Create("default"));
     auto stride = _vertexFormat.GetByteSize();
     // is a model vertex buffer already setup?
-    assert(stride == GetVertexBufferMaster().GetStride());
+    if (stride != GetVertexBufferMaster().GetStride())
+    {
+        if (_vertexFormat.GetByteSize() < 56)
+        {
+            if (!_vertexFormat.Has(VertexAttrib::enumDesc::position))
+                _vertexFormat.SetNext(VertexAttrib::enumDesc::position, VertexAttrib::enumFormat::format_float32x3);
+
+            _vertexFormat.SetNext(VertexAttrib::enumDesc::textureCoord, VertexAttrib::enumFormat::format_float32x2);
+            _vertexFormat.SetNext(VertexAttrib::enumDesc::normal, VertexAttrib::enumFormat::format_float32x3);
+            _vertexFormat.SetNext(VertexAttrib::enumDesc::tangent, VertexAttrib::enumFormat::format_float32x3);
+            _vertexFormat.SetNext(VertexAttrib::enumDesc::bitangent, VertexAttrib::enumFormat::format_float32x3);
+            _vertexBufferMaster.SetStride(_vertexFormat.GetByteSize());
+        }
+    }
     auto indexPos = _vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::enumDesc::position); // UINT16_MAX did not find
     auto indexUV = _vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::enumDesc::textureCoord); // UINT16_MAX did not find
     auto indexNorm = _vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::enumDesc::normal); // UINT16_MAX did not find
@@ -4172,6 +5002,10 @@ int King::Model::CreateMeshFrom(const Path& pFrom, const Path& pTo)
             std::copy(src, src + 8, dest);
         }
     }
+    // check
+    //auto vert0 = float3(GetVertexAddr(0, vbStart) + offsetPosBytes);
+    //assert(vert0.GetX() > -FLT_MIN);
+
     // normals
     if (indexNorm != UINT16_MAX)
     {
@@ -4183,7 +5017,11 @@ int King::Model::CreateMeshFrom(const Path& pFrom, const Path& pTo)
             auto nin = i + 1;
             if (nin >= iSize)
                 nin = i;
-
+            // make sure normals are in the same general direction as the one before
+            float check = normals[i].DotProduct(normals[nin]);
+            if (check < 0.f)
+                normals[nin] = -normals[nin];
+            // average the two faces so they are smooth
             float3 norm = (normals[i] + normals[nin]) * 0.5f;
             auto src = static_cast<uint8_t*>(norm);
 
@@ -4211,10 +5049,14 @@ int King::Model::CreateMeshFrom(const Path& pFrom, const Path& pTo)
         }
     }
     //auto a = _indexBufferMaster.Max();
-    _indexBufferMaster.WriteText("CreateMeshFromPathPath.txt");
+    //_indexBufferMaster.WriteText("CreateMeshFromPathPath.txt");
     //auto b = _vertexBufferMaster.GetElements();
     //assert(a < b);
     
+    // normals where checked for general direction match as adjacent and then averaged
+    // so let make the winding order match
+    ReverseWindingsToMatchNormals();
+
     CalculateTangentsAndBiTangents();
     CalculateBoundingBox();
 
@@ -4269,7 +5111,7 @@ void King::ModelScaffold::SetIndexStream(const size_t& startIndexIn, uint32_t* d
 /******************************************************************************
 *    Method:    SetVertexElement
 ******************************************************************************/
-void King::ModelScaffold::SetVertexElement(const size_t & vertexIndexIn, const VertexAttrib::enumDesc & propertyIn, uint8_t * dataIn)
+void King::ModelScaffold::SetVertexElement(const size_t & vertexIndexIn, const VertexAttrib::enumDesc & propertyIn, const uint8_t * dataIn)
 {
     assert((bool)_vertexBufferMaster);
     auto index = _vertexFormat.GetAttributeIndexFromDescription(propertyIn);
@@ -4385,14 +5227,24 @@ Box King::TriangleMesh::CalculateBoundingBox()
 
     // NOTE: if the line below fails, did the memory get reallocated with a Merge, Split, or other reallocation for a Mesh?
     // if so, go through the model and reset the references to VB and IB for all Meshes
-    Box rtn(GetVertexPosition(0));
+
+    // optimize GetVertexPosition() for a loop
+    const auto attrI = _vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::enumDesc::position);
+    const auto offset = _vertexFormat.GetAttribute(attrI).GetOffset();
+    const auto vb = GetVB();
+    const auto ib = GetIB();
+    const auto bs = _vertexFormat.GetByteSize();
+    float3 pos;
+
+    Box rtn(reinterpret_cast<float*>(vb + *(ib + 0) * bs + offset));
+
+    const auto to = GetNumVerticies();
+    for (uint32_t i = 1; i < to; ++i)
     {
-        const auto to = GetNumVerticies();
-        for (uint32_t i = 1; i < to; ++i)
-        {
-            rtn.Merge(GetVertexPosition(i));
-        }
+        pos = FloatPoint3(reinterpret_cast<float*>(vb + *(ib + i) * bs + offset));
+        rtn.Merge(pos);
     }
+
     _boundingBox = rtn;
     return rtn;
 }
@@ -6639,14 +7491,14 @@ uint32_t King::VertexAttrib::GetByteSize() const
 *       onto the xy plane using the first, second, and last points to form
 *       the plane normal to align with the XY plane first.
 ******************************************************************************/
-Polygon2DF __vectorcall King::Path::Get_Polygon2DF() const
+Polygon2DF King::Path::Get_Polygon2DF() const
 {
     assert(size() > 2);
     vector<float2> out(size());
 
     const auto& b = begin();
     const auto& n = std::next(b,1);
-    const auto& e = end();
+    const auto& e = std::prev(end(),1);
     // RHS CCW
     auto normal = Cross(*n - *b, *e - *b);
     normal.MakeNormalize();
@@ -6663,4 +7515,20 @@ Polygon2DF __vectorcall King::Path::Get_Polygon2DF() const
     }
 
     return Polygon2DF();
+}
+/******************************************************************************
+*    Path:    Offset
+*       Transforms the path outward by a set amount
+******************************************************************************/
+void King::Path::Offset(const float dist, Plane offsetPlaneIn)
+{
+    auto temp = *this; // copy
+    for (size_t i = 1; i < size(); ++i)
+    {
+        Line l(at(i - 1), at(i));
+        l.Offset(dist, offsetPlaneIn);
+        temp[i - 1] = l.GetVertex(0);
+        temp[i] = l.GetVertex(1);
+    }
+    swap(temp);
 }

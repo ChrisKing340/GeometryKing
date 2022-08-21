@@ -15,7 +15,8 @@ bool King::TextFileParse::Load(string fileName)
     dataFile.open( fileName );
     if( ! dataFile ) 
     {
-        string str = "\nFile " + fileName + " could not be opened.";
+        //string str = "\nFile " + fileName + " could not be opened.";
+        //cout << str << "\n";
         return false;
     }
 

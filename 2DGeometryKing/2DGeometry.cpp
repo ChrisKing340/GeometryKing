@@ -10,6 +10,7 @@ std::ostream& King::operator<<(std::ostream& os, const King::Triangle2DF& in) { 
 std::ostream& King::operator<<(std::ostream& os, const King::Rectangle2DF& in) { return os << "{ LT" << in.lt << " RB" << in.rb << " }"; }
 std::ostream& King::operator<<(std::ostream& os, const King::Rectangle2D& in) { return os << "{ LT" << in.lt << " RB" << in.rb << " }"; }
 std::ostream& King::operator<<(std::ostream& os, const King::Circle2DF& in) { return os << "{ Center" << in.GetCenter() << " Radius" << in.GetRadius() << " }"; }
+std::ostream& King::operator<<(std::ostream& os, const King::Polygon2DF& in) { os << "{ "; for (const auto& pt : in._pt) { os << pt << " "; } os << " }"; return os; }
 // Input streams
 std::istream& King::operator>>(std::istream& is, King::Line2DF& out) { return is >> out.pt[0] >> out.pt[1]; } // binary in
 std::istream& King::operator>>(std::istream& is, King::Triangle2DF& out) { return is >> out.pt[0] >> out.pt[1] >> out.pt[2]; }// binary in
@@ -98,6 +99,8 @@ King::FloatPoint2 King::Line2DF::FindNearestPointOnLineSegment(const FloatPoint2
 {
     const float epsilon_squared = FLT_EPSILON * FLT_EPSILON;
     FloatPoint2 ray = pt[1] - pt[0];
+    const float maxSizeNotToOverFlow = sqrtf(FLT_MAX - 1.0f);
+    assert(float2::Magnitude(ray) <= maxSizeNotToOverFlow);
 
     // Line/Segment is degenerate (distance between them is near zero)
     float d = FloatPoint2::SumComponents(DirectX::XMVectorPow(ray, { 2.f,2.f ,2.f ,2.f }));
@@ -189,6 +192,160 @@ void King::Line2DF::LineTraverse(std::function<void(IntPoint2 ptOut)> callBack)
     }
 }
 
+void King::Line2DF::Offset(const float distIn)
+{
+    float2 dir;
+
+    // CCW inside would rotate about Z with (+) PI/2
+    // we offset outside, so rotate about Z with (-) PI/2
+    quat q(0.f, 0.f, -3.141592f * 0.5f);
+    float2 normalOffset = GetDirectionFrom0to1();
+    normalOffset = q * normalOffset;
+
+    auto dist = distIn * normalOffset;
+
+    SetVertex(0, GetVertex(0) + dist);
+    SetVertex(1, GetVertex(1) + dist);
+
+    // note floating point error
+}
+
+void King::Line2DF::Offset(const float2 distIn)
+{
+    SetVertex(0, GetVertex(0) + distIn);
+    SetVertex(1, GetVertex(1) + distIn);
+}
+
+bool King::Line2DF::Join(Line2DF& otherlineIn)
+{
+    float2 ptIntersect;
+    const float MAXFLT = sqrtf(FLT_MAX - 2.0f); // guard against overflow but extend to infinity
+
+    if (IsParallel(otherlineIn))
+    {
+        // are these segments of the same line already?
+        Line2DF l0to0(GetVertex(0), otherlineIn.GetVertex(0));
+        Line2DF l0to1(GetVertex(0), otherlineIn.GetVertex(1));
+
+        if (l0to0.IsParallel(l0to1))
+        {
+            // yes, colinear, join the nearst end points
+            auto npt0 = FindNearestPointOnLineSegment(otherlineIn.GetVertex(0));
+            auto nptOther0 = otherlineIn.FindNearestPointOnLineSegment(GetVertex(0));
+            // merge
+            if (npt0 == GetVertex(0))
+            {
+                if (nptOther0 == otherlineIn.GetVertex(0))
+                    SetVertex(0, otherlineIn.GetVertex(0));
+                else
+                    SetVertex(0, otherlineIn.GetVertex(1));
+            }
+            else if (npt0 == GetVertex(1))
+            {
+                if (nptOther0 == otherlineIn.GetVertex(0))
+                    SetVertex(1, otherlineIn.GetVertex(0));
+                else
+                    SetVertex(1, otherlineIn.GetVertex(1));
+            }
+            return true;
+        }
+        else       
+            return false;
+    }
+    else if (Intersects(otherlineIn, &ptIntersect))
+    {
+        // trim the lines 
+        SetVertex(1, ptIntersect);
+        otherlineIn.SetVertex(0, ptIntersect);
+        return true;
+    }
+    else
+    {
+        // lines must be extended
+        // find the nearst end point to our line
+        /* Case 1:      Case 2:     
+           L1---------  L2---------
+             0       1    0       1
+              L2| 0        L1|1
+                | 1          |0
+        */
+        // find the nearest end point on both lines
+        float2 npL1;
+        auto npL1to0 = FindNearestPointOnLineSegment(otherlineIn.GetVertex(0));
+        auto npL1to1 = FindNearestPointOnLineSegment(otherlineIn.GetVertex(1));
+        // is either my end point?
+        if (npL1to0 == GetVertex(0))
+        {
+            // yes, "outside" must extend vertex 0
+            auto newPt0 = float2(MAXFLT, MAXFLT);
+            auto dir = GetDirectionFrom1to0();
+            dir.MakeNormalize();
+            newPt0 = dir * newPt0;
+            SetVertex(0, newPt0);
+            // now, repeat
+            npL1to0 = FindNearestPointOnLineSegment(otherlineIn.GetVertex(0));
+            SetVertex(0, npL1to0);
+            otherlineIn.SetVertex(0, npL1to0);
+        }
+        else if (npL1to0 == GetVertex(1))
+        {
+            // yes, "outside" must extend vertex 1
+            auto newPt1 = float2(MAXFLT, MAXFLT);
+            auto dir = GetDirectionFrom0to1();
+            dir.MakeNormalize();
+            newPt1 = dir * newPt1;
+            SetVertex(1, newPt1);
+            // now, repeat
+            npL1to0 = FindNearestPointOnLineSegment(otherlineIn.GetVertex(0));
+            SetVertex(1, npL1to0);
+            otherlineIn.SetVertex(0, npL1to0);
+        }
+        else
+        {
+            // no, "inside" must trim one and extend one
+            // let trim 
+            // that is, segment one 0->1, 1 is trimmed and for segment two 0->1, 0 is trimmed
+            // npL1to0 and npL1to1 lay on L1 between 0 and 1, which is the closest to L1 vertex 0?
+            auto d00 = (npL1to0 - GetVertex(0)).GetMagnitude();
+            auto d01 = (npL1to1 - GetVertex(0)).GetMagnitude();
+            if (d00 < d01)
+            {
+                SetVertex(1, npL1to0);
+                otherlineIn.SetVertex(0, npL1to0);
+            }
+            else
+            {
+                SetVertex(1, npL1to1);
+                otherlineIn.SetVertex(1, npL1to1);
+            }
+        }
+
+        return true;
+    }
+
+    return false;
+}
+
+bool King::Line2DF::IsParallel(const Line2DF& lineIn) const
+{
+    auto d = float2::DotProduct(GetDirectionFrom0to1(), lineIn.GetDirectionFrom0to1()).GetX();
+    if (d < -0.999995f || d > 0.999995f)
+        return true;
+    else
+        return false;
+}
+
+bool King::Line2DF::IsPerpendicular(const Line2DF& lineIn) const
+{
+    auto d = float2::DotProduct(GetDirectionFrom0to1(), lineIn.GetDirectionFrom0to1()).GetX();
+    d = fabsf(d);
+    if (d < 0.000005f)
+        return true;
+    else
+        return false;
+    return false;
+}
+
 bool King::Triangle2DF::Intersects(Triangle2DF & triIn)
 {
     // exclusion principle first
@@ -255,6 +412,36 @@ bool King::Triangle2DF::Contains(const FloatPoint2 & ptIn)
     return c + (dist * r);
 }
 
+ void King::Circle2DF::Set(const Polygon2DF& polyIn)
+ {
+     auto center = float2::Average(polyIn._pt);
+     auto radius = 0.f;
+
+     for (const auto& pt : polyIn._pt)
+     {
+         auto delta = pt - center;
+         float dist = delta.GetMagnitude();
+         radius = max(radius, dist);
+     }
+     SetCenter(center);
+     SetRadius(radius);
+ }
+
+ void King::Rectangle2DF::Set(const Polygon2DF& polyIn)
+ {
+     float2 mn(FLT_MAX);
+     float2 mx(FLT_MIN);
+
+     for (const auto& pt : polyIn._pt)
+     {
+         mn = Min(mn, pt);
+         mx = Max(mx, pt);
+     }
+
+     SetLT(mn);
+     SetRB(mx);
+ }
+
  bool King::Rectangle2DF::Intersects(const Rectangle2DF & rectIn) const { return (rectIn.lt.GetX() < rb.GetX()) && (lt.GetX() < rectIn.rb.GetX()) && (rectIn.lt.GetY() < rb.GetY()) && (lt.GetY() < rectIn.rb.GetY()); }
 
  bool King::Rectangle2DF::Intersects(const RECT & rectIn) const { return (rectIn.left < rb.GetX()) && (lt.GetX() < rectIn.right) && (rectIn.top < rb.GetY()) && (lt.GetY() < rectIn.bottom); }
@@ -267,6 +454,155 @@ bool King::Triangle2DF::Contains(const FloatPoint2 & ptIn)
     auto rectPointNearest = FindNearestPoint(circleIn.GetCenter());
     return circleIn.Intersects(rectPointNearest);
 }
+
+ /******************************************************************************
+*    Rectangle2DF::Clip
+*        Desc:       Lines are clipped to the reactangle treating it as a
+*                    bounding box.
+*        Input:      a line in 2-dimensional space
+*        Output:     none
+*        Returns:    a line with both points at (0,0) if completely outside of 
+                     the rectangle.
+*        Remarks:    Based on the work of Liang-Barsky function by Daniel White @ http://www.skytopia.com/project/articles/compsci/clipping.html
+******************************************************************************/
+ Line2DF King::Rectangle2DF::Clip(const Line2DF &src)
+ {
+     // make sure our edges are set correctly
+     //float left = min(lt.GetX(), rb.GetX());
+     //float right = max(lt.GetX(), rb.GetX());
+     //float top = max(lt.GetY(), rb.GetY()); // for our algorithim, (+)y is up
+     //float bottom = min(lt.GetY(), rb.GetY());
+     // faster than above noting that lt is mins and rb is maxes
+     float left = lt.GetX();
+     float bottom = lt.GetY();
+     float right = rb.GetX();
+     float top = rb.GetY();
+
+     Line2DF clip;
+
+     float t0 = 0.0;    
+     float t1 = 1.0;
+     float2 delta = src.pt[1] - src.pt[0];
+     float dx = delta.GetX();
+     float dy = delta.GetY();
+     float p, q, r;
+
+     auto pt0 = src.GetVertex(0).Get_XMFLOAT2();
+     auto pt1 = src.GetVertex(1).Get_XMFLOAT2();
+
+     for (int edge = 0; edge < 4; edge++) 
+     {  
+         if (edge == 0) { p = -dx; q = -(left - pt0.x); }
+         else if (edge == 1) { p = dx; q = (right - pt0.x); }
+         else if (edge == 2) { p = -dy; q = -(bottom - pt0.y); }
+         else { p = dy; q = (top - pt0.y); }
+         
+         // parallel line outside?
+         if (p == 0 && q < 0) return Line2DF();
+
+         r = q / p;
+
+         if (p < 0) 
+         {
+             // is it completely outside?
+             if (r > t1) return Line2DF();
+             else if (r > t0) t0 = r;
+         }
+         else if (p > 0) 
+         {
+             // is it completely outside?
+             if (r < t0) return Line2DF();
+             else if (r < t1) t1 = r;
+         }
+     }
+     Line2DF clipped;
+     clipped.SetVertex(0, src.pt[0] + t0 * delta);
+     clipped.SetVertex(1, src.pt[0] + t1 * delta);
+     return clipped;
+ }
+
+ King::Polygon2DF King::Rectangle2DF::Clip(const King::Triangle2DF& src)
+ {
+     Polygon2DF tri;
+     tri.Add_pt(src.GetVertex(0));
+     tri.Add_pt(src.GetVertex(1));
+     tri.Add_pt(src.GetVertex(2));
+     auto rtn = Clip(tri);
+     return rtn;
+ }
+
+ King::Rectangle2DF King::Rectangle2DF::Clip(const King::Rectangle2DF& rectIn)
+{
+    auto rtn = *this;
+    rtn.SetLT(Max(GetLT(), rectIn.GetLT()));
+    rtn.SetRB(Min(GetRB(), rectIn.GetRB()));
+    return rtn;
+}
+ // *** TO DO *** one scenario not accounted for, when the polylines re-enter on a different edge, a diagonal will be drawn
+ // rather than going to the rectangle corner first to start the new edge
+ Polygon2DF King::Rectangle2DF::Clip(const Polygon2DF& ptsIn)
+ {
+     Polygon2DF rtn;
+     bool outside(false);
+     float2 last;
+
+     for (size_t i = 0; i < ptsIn._pt.size(); ++i)
+     {
+         float2 ea = ptsIn._pt[i];
+         auto istore = i;
+
+        if (Intersects(ea))
+            rtn.Add_pt(ea);
+        else
+        {
+            // inside the rectangle and going outside
+            outside = true;
+            {
+                auto c = Clip(Line2DF(rtn._pt.back(), ea));
+                if (rtn._pt.back() != c.pt[1])
+                    rtn.Add_pt(c.pt[1]);
+                else if (rtn._pt.back() != c.pt[0])
+                    rtn.Add_pt(c.pt[0]);
+            }
+        }
+        last = ea;
+        if (outside)
+        {
+            ++i;
+            while (outside && i < ptsIn._pt.size()+1)
+            {
+                // special case must wrap to the beginning
+                if (i >= ptsIn._pt.size())
+                    ea = rtn._pt.front();
+                else
+                    ea = ptsIn._pt[i];
+                
+                if (Intersects(ea))
+                {
+                    // outside of the rectangle and coming back in
+                    {
+                        outside = false;
+                        auto c = Clip(Line2DF(last, ea));
+                        if (ea == c.pt[0]) rtn.Add_pt(c.pt[1]);
+                        else rtn.Add_pt(c.pt[0]);
+                        rtn.Add_pt(ea);
+                    }
+                }
+                else
+                {
+                    // last and current are outside, keep skipping
+                    last = ea;
+                    ++i;
+                }
+            }
+        }
+     }
+     // confirm that the last and first do not duplicate in certain scenarios
+     if (rtn._pt.front() == rtn._pt.back())
+         rtn._pt.pop_back();
+
+     return rtn;
+ }
 
  void King::Rectangle2DF::ClipTo(const King::Rectangle2DF& rectIn)
 {
@@ -315,4 +651,22 @@ bool __vectorcall King::Polygon2DF::Contains(const FloatPoint2 ptIn) const
     }
 
     return collision;
+}
+/******************************************************************************
+*    Polygon2DF:    Offset
+*       Transforms the ploygon outward by a set amount
+******************************************************************************/
+void King::Polygon2DF::Offset(const float dist)
+{
+    auto temp = _pt; // copy
+    for (size_t i = 1; i < _pt.size(); ++i)
+    {
+        Line2DF l(_pt.at(i - 1), _pt.at(i));
+        l.Offset(dist);
+        temp[i - 1] = l.GetVertex(0);
+        temp[i] = l.GetVertex(1);
+    }
+    _pt.swap(temp);
+
+
 }

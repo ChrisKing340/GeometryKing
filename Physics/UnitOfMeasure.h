@@ -1,7 +1,7 @@
 ﻿/******************************************************************************
 MIT License
 
-Copyright (c) 2019 and 2020 Christopher H. King
+Copyright (c) 2019 and 2022 Christopher H. King
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -179,6 +179,7 @@ namespace UnitOfMeasure
     const float PI_DIV2 = PI / 2.f; // 90 deg
     const float PI_DIV4 = PI / 4.f; // 45 deg
     const float PI_DIV6 = PI / 6.f; // 30 deg
+    const float PI_DIV8 = PI / 8.f; // 22.5 deg
     const float PI_DIV12 = PI / 12.f; // 15 deg
     const float PI_DIV18 = PI / 18.f; // 10 deg
     const float PI_DIV36 = PI / 36.f; // 5 deg
@@ -382,7 +383,7 @@ namespace UnitOfMeasure
         inline Type operator- () const { return Type(-1 * _value); } \
         inline Type operator+ (const Type & in) const { return Type(_value + in._value); } \
         inline Type operator- (const Type & in) const { return Type(_value - in._value); } \
-        inline Type operator* (const float & in) const { return Type(_value * in); } \
+        inline Type operator* (const float & in) const { return Type((double)_value * (double)in); } \
         inline Type operator/ (const float & in) const { return Type(_value / in); } \
         inline Type & operator= (const float & in) { _value = in; return *this; } \
         inline Type & operator+= (const Type & in) { _value = _value + in._value; return *this; } \

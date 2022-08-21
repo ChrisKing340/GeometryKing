@@ -87,7 +87,8 @@ namespace King {
         explicit inline Position(const float x, const float y, const float z) { Set(FloatPoint3(x,y,z)); }
         explicit inline Position(const DirectX::XMVECTOR &vIn) { Set(FloatPoint3(vIn)); }
         explicit inline Position(const DirectX::XMVECTORF32 &vIn) { Set(FloatPoint3(vIn)); }
-        explicit inline Position(const FloatPoint4 &vectorIn) { Set(static_cast<FloatPoint3>(vectorIn)); }
+        explicit inline Position(const FloatPoint2& vIn) { Set(vIn); }
+        explicit inline Position(const FloatPoint4& vectorIn) { Set(static_cast<FloatPoint3>(vectorIn)); }
         explicit inline Position(const Distance &distanceIn) { Set(static_cast<FloatPoint3>(distanceIn)); }
         Position(const Position &in) { *this = in; } // forward to copy assignment
         Position(Position &&in) noexcept { *this = std::move(in); } // forward to move assignment
@@ -113,12 +114,13 @@ namespace King {
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<Position*>(p)); }
-        inline Position & operator= (const DirectX::XMVECTOR &in) { Set(FloatPoint4(in,1.f)); return *this; } // copy assignment
+        inline Position& operator= (const DirectX::XMVECTOR &in) { Set(FloatPoint4(in,1.f)); return *this; } // copy assignment
         //inline Position & operator= (const XMVECTORF32 &in) { Set(FloatPoint4(in,1.f)); return *this; } // copy assignment
-        inline Position & operator= (const FloatPoint3 &in) { Set(in); return *this; } // copy assignment
-        inline Position & operator= (const FloatPoint4 &in) { Set(static_cast<FloatPoint3>(in)); return *this; } // copy assignment
-        inline Position & operator= (const Position &other) { _position = other._position; return *this; } // copy assign
-        inline Position & operator= (Position &&other) noexcept { std::swap(_position, other._position); return *this; } // move assign
+        inline Position& operator= (const FloatPoint2& in) { Set(in); return *this; } // copy assignment
+        inline Position& operator= (const FloatPoint3 &in) { Set(in); return *this; } // copy assignment
+        inline Position& operator= (const FloatPoint4 &in) { Set(static_cast<FloatPoint3>(in)); return *this; } // copy assignment
+        inline Position& operator= (const Position &other) { _position = other._position; return *this; } // copy assign
+        inline Position& operator= (Position &&other) noexcept { std::swap(_position, other._position); return *this; } // move assign
         explicit operator bool() const { return (bool)_position; } // valid
         bool operator !() const { return !(bool)_position; } // invalid
         // Math Operators
@@ -172,7 +174,10 @@ namespace King {
         DirectX::XMVECTOR                   GetVector() { return _position.GetVec(); }
         DirectX::XMVECTOR                   GetVecConst() const { return _position.GetVecConst(); }
         // Assignments
-        inline void __vectorcall            Set(const float3& positionIn) { _position = positionIn; _position.SetW(1.0f); }
+        inline void __vectorcall            Set(const float2 positionXYIn) { _position = positionXYIn; _position.SetZ(0.0f); _position.SetW(1.0f); }
+        inline void __vectorcall            Set(const float3 positionXYZIn) { _position = positionXYZIn; _position.SetW(1.0f); }
+        inline void __vectorcall            Set(const DirectX::XMVECTOR positionXYZIn) { Set(FloatPoint3(positionXYZIn)); }
+        inline void __vectorcall            Set(const DirectX::XMVECTORF32 positionXYZIn) { Set(FloatPoint3(positionXYZIn)); }
         void __vectorcall                   Set_SphericalCoordinates(float3 rhoThetaPhiIn) { DirectX::XMFLOAT3 rtp(rhoThetaPhiIn); Set_SphericalCoordinates(rtp.x, rtp.y, rtp.z); }
         void                                Set_SphericalCoordinates(const float& rhoIn, const float& thetaIn, const float& phiIn);
         // Input & Output functions that can have access to protected & private data

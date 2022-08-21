@@ -16,7 +16,7 @@ Usage:          Use the typedef keywords in your applications as a generic
                                 
 Contact:        https://chrisking340.github.io/GeometryKing/
 
-Copyright (c) 2019 - 2021 Christopher H. King
+Copyright (c) 2019 - 2022 Christopher H. King
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -52,7 +52,7 @@ SOFTWARE.
 #endif
 
 #define KING_2DGEOMETRY_VERSION_MAJOR 1
-#define KING_2DGEOMETRY_VERSION_MINOR 3
+#define KING_2DGEOMETRY_VERSION_MINOR 5
 #define KING_2DGEOMETRY_VERSION_PATCH 0
 /*
     History:
@@ -62,6 +62,16 @@ SOFTWARE.
             Authored std:cout functionality with ostream and istream to all 2D classes
         KING_2DGEOMETRY_VERSION_MINOR 3 Release 12/24/2021:
             Authored polygon 2D class Polygon2DF
+        KING_2DGEOMETRY_VERSION_MINOR 4 Release 5/8/2022:
+            Authored clip function to Rectangle2DF for Rectangle2DF, Line2DF, Triangle2DF and Polygon2DF that returns a copy with object(s) clipped to the boundaries of the Rectangle2DF
+            Authored bounding geometry of Rectangle2DF and Circle2DF from polygons as Set(Polygon2DF) and constructors.
+        KING_2DGEOMETRY_VERSION_MINOR 5 Release 5/21/2022:
+            Authored Offset function to Polygon2DF
+            Authored Offset function to Line2DF
+            Authored Join function to Line2DF
+            Authored IsParallel function to Line2DF
+            Authored IsPerpendicular function to Line2DF
+            
 */
 
 #include "..\MathSIMD\MathSIMD.h"
@@ -105,7 +115,7 @@ namespace King {
         // Construction/Destruction
         Line2DF() = default;
         Line2DF(const Line2DF &in) { *this = in; } // copy, involk operator=(&int)
-        Line2DF(Line2DF &&in) { *this = std::move(in); } // move, involk operator=(&&in)
+        Line2DF(Line2DF &&in) noexcept { *this = std::move(in); } // move, involk operator=(&&in)
         Line2DF(const FloatPoint2 &pt1In, const FloatPoint2 &pt2In) { pt[0] = pt1In; pt[1] = pt2In; }
         explicit Line2DF(std::initializer_list<FloatPoint2> il) { assert(il.size() < 3); std::size_t count = 0; for (auto & each : il) { pt[count] = each; ++count; } }
 
@@ -114,15 +124,23 @@ namespace King {
         // Operators 
         void * operator new (std::size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<Line2DF*>(p)); }
-        inline Line2DF & operator= (const Line2DF &in) { Set(in); } // copy assignment
+        inline Line2DF & operator= (const Line2DF &in) { Set(in); return *this; } // copy assignment
         inline Line2DF & operator= (Line2DF &&in) = default; // move assignment
 
         // Functionality
         bool __vectorcall                   Intersects(const Line2DF &lineIn, FloatPoint2 *intersectPointOut = nullptr);
         FloatPoint2 __vectorcall            FindNearestPointOnLineSegment(const FloatPoint2 &pointIn);
         void                                LineTraverse(std::function<void(IntPoint2 ptOut)> callBack); // rasterize the line and callback for each point along the line
+        void                                Offset(const float distIn); // translate this line by this amount, using the normal to the outside of a CCW rotation as the direction
+        void                                Offset(const float2 distIn); // translate this line by this amount
+        bool                                Join(Line2DF& otherlineIn); // modifies both lines to join the ends, returns false if parrallel and no modifications
+        bool                                IsParallel(const Line2DF& lineIn) const;
+        bool                                IsPerpendicular(const Line2DF& lineIn) const;
         // Accessors
         const auto &                        GetVertex(const uint32_t vertexIndexIn) const { return pt[vertexIndexIn]; }
+        FloatPoint2                         GetLength() const { auto rtn = pt[1] - pt[0]; rtn.MakeAbsolute(); return rtn; }
+        FloatPoint2                         GetDirectionFrom0to1() const { auto rtn = pt[1] - pt[0]; rtn.MakeNormalize(); return rtn; }
+        FloatPoint2                         GetDirectionFrom1to0() const { auto rtn = pt[0] - pt[1]; rtn.MakeNormalize(); return rtn; }
         // Assignments
         inline void __vectorcall            Set(const Line2DF &in) { pt[0] = in.pt[0]; pt[1] = in.pt[1]; }
         inline void __vectorcall            SetVertex(const uint32_t vertexIndexIn, const FloatPoint2 &in) { pt[vertexIndexIn] = in; }
@@ -151,7 +169,7 @@ namespace King {
         // Construction/Destruction
         Triangle2DF() = default;
         Triangle2DF(const Triangle2DF &in) { *this = in; } // copy, involk operator=(&int)
-        Triangle2DF(Triangle2DF &&in) { *this = std::move(in); } // move, involk operator=(&&in)
+        Triangle2DF(Triangle2DF &&in) noexcept { *this = std::move(in); } // move, involk operator=(&&in)
         Triangle2DF(const FloatPoint2 &pt1In, const FloatPoint2 &pt2In, const FloatPoint2 &pt3In) { Set(pt1In,pt2In,pt3In); }
         // Construction Initializer
         Triangle2DF(std::initializer_list<FloatPoint2> il) { assert(il.size() < 4); size_t count = 0; for (auto & each : il) { pt[count] = each; ++count; } }
@@ -160,8 +178,8 @@ namespace King {
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
         void   operator delete (void *p) { _aligned_free(static_cast<Triangle2DF*>(p)); }
-        inline Triangle2DF & operator= (const Triangle2DF &in) { Set(in); } // copy assignment
-        inline Triangle2DF & operator= (Triangle2DF &&in) = default; // move assignment
+        inline Triangle2DF& operator= (const Triangle2DF& in) { Set(in); return *this; } // copy assignment
+        inline Triangle2DF& operator= (Triangle2DF &&in) = default; // move assignment
         // Functionality
         bool                                Intersects(Triangle2DF &triIn);
         bool                                Contains(const FloatPoint2 &ptIn);
@@ -177,18 +195,18 @@ namespace King {
         inline void __vectorcall            SetVertex(const uint32_t vertexIn012, const FloatPoint2 &ptIn) { pt[vertexIn012] = ptIn; }
     };
     /******************************************************************************
-    *   Rectangle2DF
-    *   lt -------  
-    *      |     |
-    *      |     |
+    *   Rectangle2DF        min
+    *   lt -------          |----> (+)x
+    *      |     |          |
+    *      |     |          V (+)y  max
     *      ------- rb
     ******************************************************************************/
     class alignas(16) Rectangle2DF
     {
         /* variables */
     public:
-        FloatPoint2     lt;
-        FloatPoint2     rb;
+        FloatPoint2     lt; // min
+        FloatPoint2     rb; // max
     protected:
 
     private:
@@ -202,15 +220,15 @@ namespace King {
         Rectangle2DF() = default;
         Rectangle2DF(const Rectangle2DF &in) = default; // copy 
         Rectangle2DF(Rectangle2DF &&in) = default; // move
-        inline virtual Rectangle2DF * Clone() const { return new Rectangle2DF(*this); } // Copy polymorphically
         Rectangle2DF(const RECT &rIn) { Set(rIn); } // copy
-        Rectangle2DF(const FloatPoint2 &ptIn) : lt(0.f, 0.f), rb(ptIn) { ; }
-        Rectangle2DF(const FloatPoint2 &ltIn, const FloatPoint2 &rbIn) : lt(ltIn), rb(rbIn) { ; }
-        Rectangle2DF(const float &w, const float &h) : lt(0.f, 0.f), rb(w, h) { ; }
+        Rectangle2DF(const FloatPoint2 &ptIn) : lt(0.f, 0.f), rb(ptIn) { Set(lt,rb); }
+        Rectangle2DF(const FloatPoint2 &ltIn, const FloatPoint2 &rbIn) { Set(ltIn, rbIn); }
+        Rectangle2DF(const float &w, const float &h) : lt(0.f, 0.f), rb(w, h) { Set(lt, rb); }
         Rectangle2DF(const long &w, const long &h) : lt(0.f, 0.f), rb(static_cast<float>(w), static_cast<float>(h)) { ; }
         Rectangle2DF(const int &w, const int &h) : lt(0.f, 0.f), rb(static_cast<float>(w), static_cast<float>(h)) { ; }
         Rectangle2DF(const float &x1, const float &y1, const float &x2, const float &y2) : lt(x1, y1), rb(x2, y2) { ; }
-        Rectangle2DF(const Triangle2DF &triIn) { Set(triIn); }
+        Rectangle2DF(const Triangle2DF &triIn) { Set(triIn); } // bounding rectangle from triangle
+        Rectangle2DF(const Polygon2DF& polyIn) { Set(polyIn); } // bounding rectangle from polygon
         virtual ~Rectangle2DF() = default;
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
@@ -233,22 +251,26 @@ namespace King {
         inline operator RECT() const { return Get_RECT(); }
         inline operator const RECT() const { return Get_RECT(); }
         // Functionality
-        inline void __vectorcall            MoveBy(const FloatPoint2 &deltaIn) { lt += deltaIn; rb += deltaIn; }
+        inline void __vectorcall            MoveBy(const FloatPoint2 deltaIn) { lt += deltaIn; rb += deltaIn; }
         inline void                         MoveBy(const long &dxIn, const long &dyIn) { lt.Set(lt.GetX() + dxIn, lt.GetY() + dyIn); rb.Set(rb.GetX() + dxIn, rb.GetY() + dyIn); }
         inline void                         MoveDX(const long &dxIn) { lt.SetX(lt.GetX() + dxIn); rb.SetX(rb.GetX() + dxIn); }
         inline void                         MoveDY(const long &dyIn) { lt.SetY(lt.GetY() + dyIn); rb.SetY(rb.GetY() + dyIn); }
-        inline void __vectorcall            MoveTo(const FloatPoint2 &ptLTIn) { auto wh = GetSize(); lt = ptLTIn; rb = lt + wh; }
+        inline void __vectorcall            MoveTo(const FloatPoint2 ptLTIn) { auto wh = GetSize(); lt = ptLTIn; rb = lt + wh; }
         inline bool                         MoveTo(const long &xIn, const long &yIn) { MoveTo(FloatPoint2(xIn, yIn)); }
 
-        inline void __vectorcall            Grow(const FloatPoint2 &scale3In) { auto s = scale3In * GetSize(); SetWH(s); }
+        inline void __vectorcall            Grow(const FloatPoint2 scale3In) { auto s = scale3In * GetSize(); SetWH(s); }
 
         bool                                Intersects(const Rectangle2DF &rectIn) const;
         bool                                Intersects(const RECT &rectIn) const;
-        bool __vectorcall                   Intersects(const FloatPoint2 &pt2In) const { return (lt.GetX() <= pt2In.GetX()) && (pt2In.GetX() < rb.GetX()) && (lt.GetY() <= pt2In.GetY()) && (pt2In.GetY() < rb.GetY()); };
+        bool __vectorcall                   Intersects(const FloatPoint2 pt2In) const { return (lt.GetX() <= pt2In.GetX()) && (pt2In.GetX() < rb.GetX()) && (lt.GetY() <= pt2In.GetY()) && (pt2In.GetY() < rb.GetY()); };
         bool                                Intersects(const float &xIn, const float &yIn) const;
         bool                                Intersects(const Circle2DF & circleIn) const;
 
-        inline void                         ClipTo(const Rectangle2DF& rectIn);
+        inline void                         ClipTo(const Rectangle2DF& rectIn); // clip this
+        Rectangle2DF                        Clip(const King::Rectangle2DF& rectIn);
+        Line2DF                             Clip(const Line2DF &src);
+        Polygon2DF                          Clip(const Triangle2DF& src);
+        Polygon2DF                          Clip(const Polygon2DF& pts);
 
         inline FloatPoint2                  FindNearestPoint(const FloatPoint2 &pt2In) const;
         // Accessors
@@ -270,14 +292,15 @@ namespace King {
         inline auto                         Get_Triangle2DF_LT_CW() const { return Triangle2DF(GetLB(), GetLT(), GetRT()); } // CW winding
         inline auto                         Get_Triangle2DF_RB_CW() const { return Triangle2DF(GetRT(), GetRB(), GetLB()); } // CW winding
         // Assignments
-        inline void __vectorcall            Set(const Rectangle2DF &rIn) { *this = rIn; }
-        inline void __vectorcall            Set(const Triangle2DF &triIn) { Set(Min(Min(triIn.GetVertex(0), triIn.GetVertex(1)), triIn.GetVertex(2)), Max(Max(triIn.GetVertex(0), triIn.GetVertex(1)), triIn.GetVertex(2))); }
+        inline void __vectorcall            Set(const Rectangle2DF rIn) { *this = rIn; }
+        inline void __vectorcall            Set(const Triangle2DF triIn) { Set(Min(Min(triIn.GetVertex(0), triIn.GetVertex(1)), triIn.GetVertex(2)), Max(Max(triIn.GetVertex(0), triIn.GetVertex(1)), triIn.GetVertex(2))); }
+        void                                Set(const Polygon2DF& polyIn);
         inline void                         Set(const RECT &rIn) { lt = FloatPoint2(rIn.left, rIn.top); rb = FloatPoint2(rIn.right, rIn.bottom); }
-        inline void __vectorcall            Set(const FloatPoint2 &ltIn, const FloatPoint2 &rbIn) { lt = ltIn; rb = rbIn; }
-        inline void __vectorcall            SetLT(const FloatPoint2 &ltIn) { lt = ltIn; }
-        inline void __vectorcall            SetRB(const FloatPoint2 &rbIn) { rb = rbIn; }
-        inline void __vectorcall            SetSize(const FloatPoint2 &sz) { rb = lt + sz; }
-        inline void __vectorcall            SetWH(const FloatPoint2 &whIn) { FloatPoint2 offset = Abs(whIn) * 0.5f; FloatPoint2 c = GetCenter(); lt = c - offset; rb = c + offset; }
+        inline void __vectorcall            Set(const FloatPoint2 ltIn, const FloatPoint2& rbIn) { lt = Min(ltIn, rbIn); rb = Max(ltIn, rbIn); }
+        inline void __vectorcall            SetLT(const FloatPoint2 ltIn) { Set(ltIn, rb); }
+        inline void __vectorcall            SetRB(const FloatPoint2 rbIn) { Set(lt, rbIn); }
+        inline void __vectorcall            SetSize(const FloatPoint2 sz) { rb = lt + sz; }
+        inline void __vectorcall            SetWH(const FloatPoint2 whIn) { FloatPoint2 offset = Abs(whIn) * 0.5f; FloatPoint2 c = GetCenter(); lt = c - offset; rb = c + offset; }
         inline void                         SetWidth(const float &w) { rb.SetX(lt.GetX() + w); }
         inline void                         SetHeight(const float &h) { rb.SetY(lt.GetY() + h); }
         inline void                         SetLeft(const float &x) { lt.SetX(x); }
@@ -418,6 +441,7 @@ namespace King {
         Circle2DF(const Circle2DF &in) { *this = in; } // copy, involk operator=(&int)
         Circle2DF(Circle2DF &&in) noexcept { *this = std::move(in); } // move, involk operator=(&&in)
         Circle2DF(const FloatPoint2 &centerIn, const float &radiusIn) { _centerXYradiusZ = DirectX::XMVectorSet(centerIn.GetX(), centerIn.GetY(), radiusIn, 0.0f); }
+        Circle2DF(const Polygon2DF& polyIn) { Set(polyIn); } // bounding circle from polygon
 
         virtual ~Circle2DF() = default;
 
@@ -438,7 +462,9 @@ namespace King {
         const FloatPoint3 &                 GetXYradiusZ() const { return _centerXYradiusZ; }
         // Assignments
         inline void __vectorcall            Set(const Circle2DF in) { _centerXYradiusZ = in._centerXYradiusZ; }
-        inline void __vectorcall            SetCenter(const FloatPoint3 c) { _centerXYradiusZ.SetX(c.GetX());  _centerXYradiusZ.SetY(c.GetY()); }
+        void                                Set(const Polygon2DF& polyIn);
+        inline void __vectorcall            SetCenter(const FloatPoint2 c) { _centerXYradiusZ = float3(c,GetRadius()); }
+        inline void __vectorcall            SetCenter(const FloatPoint3 c) { _centerXYradiusZ.SetX(c.GetX()); _centerXYradiusZ.SetY(c.GetY()); }
         inline void __vectorcall            SetRadius(const float r) { _centerXYradiusZ.SetZ(r); }
         inline void __vectorcall            Set_centerXYradiusZ(const FloatPoint3 in) { _centerXYradiusZ = in; }
     };
@@ -476,6 +502,7 @@ namespace King {
         inline Polygon2DF& operator= (Polygon2DF&& in) = default; // move assignment
         // Functionality
         bool __vectorcall                   Contains(const FloatPoint2 ptIn) const;
+        void                                Offset(const float dist);
 
         inline void __vectorcall            Add_pt(const FloatPoint3 val) { _pt.push_back(val); }
         inline void __vectorcall            Remove_pt(const FloatPoint3 val) { auto it = std::find(std::begin(_pt), std::end(_pt), val); if (it != std::end(_pt)) _pt.erase(it); }
@@ -493,6 +520,7 @@ namespace King {
     std::ostream& operator<< (std::ostream& os, const King::Rectangle2DF& in);
     std::ostream& operator<< (std::ostream& os, const King::Rectangle2D& in);
     std::ostream& operator<< (std::ostream& os, const King::Circle2DF& in);
+    std::ostream& operator<< (std::ostream& os, const King::Polygon2DF& in);
 
     std::istream& operator>> (std::istream& is, King::Line2DF& out);
     std::istream& operator>> (std::istream& is, King::Triangle2DF& out);

@@ -94,10 +94,12 @@ SOFTWARE.
     12/20/2021 - Version 2.3 - Class Path gained method to convert the 3D Path to a 2D Polygon2DF (in XY plane). Works best
         for a planar Path and this conversion rotates it into the XY plane.
     03/05/2022 - Version 2.4 - Class Sphere gained methods for inertia, surface area and volume
+    05/21/2022 - Version 2.5 - Classes Path and Line gained methods for offset, transforming them by the distance specified 
+        along an "outward" normal to CCW. A plane must be specified that the normal lays within.
 
     Version 3.0 Planned release - oriented box on oriented box and sphere collision tests. Previously extended our axis 
         aligned bounding box in version 1 to oriented by passing in a orientation quaterion. WIP code to implement
-        separating axis theorem. Goal is to to finish the physics engine by taking the OB on OB contacts and pentration
+        separating axis theorem. Goal is to finish the physics engine by taking the OB on OB contacts and penetration
         and implementing a momentum based response to resolve the collisions. Plan is to support OB and Sphere collisions
         in the v3 release candidate: 1st: Sphere on Sphere, 2nd: Sphere on OB, 3rd: OB on OB. 
         Experimental code: 
@@ -107,8 +109,8 @@ SOFTWARE.
 */
 
 constexpr auto KING_3DGEOMETRY_VERSION_MAJOR = 2;
-constexpr auto KING_3DGEOMETRY_VERSION_MINOR = 4;
-constexpr auto KING_3DGEOMETRY_VERSION_PATCH = 1;
+constexpr auto KING_3DGEOMETRY_VERSION_MINOR = 5;
+constexpr auto KING_3DGEOMETRY_VERSION_PATCH = 0;
 
 #include <DirectXCollision.h>
 #include <vector>
@@ -558,6 +560,8 @@ namespace King {
         inline bool operator==  (const Line& rhs) { return pt[0] == rhs.pt[0] && pt[1] == rhs.pt[1]; }
         inline bool operator!=  (const Line& rhs) { return (pt[0] != rhs.pt[0] || pt[1] != rhs.pt[1]); }
         // Functionality
+        void                                Offset(const float distIn, Plane offsetPlaneIn); // modifies the line
+
         inline bool __vectorcall            Intersects(const Point &pointIn) const;
         inline bool __vectorcall            Intersects(const Line &lineIn, FloatPoint3 *intersectionOut = nullptr) const;
         FloatPoint3 __vectorcall            FindNearestPointOnLineSegment(const FloatPoint3 &pointIn) const;
@@ -565,6 +569,8 @@ namespace King {
         const auto &                        GetVertex(const uint32_t vertexIndexIn) const { return pt[vertexIndexIn]; }
         float                               GetLength() const { return FloatPoint3::Magnitude(pt[1] - pt[0]); }
         FloatPoint3                         GetLengthVector() const { return (pt[1] - pt[0]); }
+        FloatPoint3                         GetDirectionFrom0to1() const { float3 rtn(pt[1] - pt[0]); rtn.MakeNormalize(); return rtn; }
+        FloatPoint3                         GetDirectionFrom1to0() const { float3 rtn(pt[0] - pt[1]); rtn.MakeNormalize(); return rtn; }
         FloatPoint3                         GetCenter() const { return (pt[0] + pt[1]) * 0.5f; }
         FloatPoint3                         GetPerpendicular() const; // infinte solutions, returns only 1 semi-optimized. By rotating this vector about our line, you may retrieve all solutions
         FloatPoint3 __vectorcall            GetPerpendicular(FloatPoint3 firstPlaneIn) const; // two solutions, to get the other negate the vector returned
@@ -653,6 +659,7 @@ namespace King {
         static std::unique_ptr<Path>    CreateUnique() { return std::make_unique<Path>(); }
         // Construction/Destruction
         Path() = default;
+        explicit Path(const Polygon2DF& polyIn) { for (const auto& pt : polyIn._pt) { push_back(Position(pt)); } }
         Path(const Path &in) { *this = in; } // forward to copy assignment
         Path(Path &&in) noexcept { *this = std::move(in); } // forward to move assignment
         explicit Path(std::initializer_list<float3> il) { clear(); reserve(il.size()); for (const auto& ea : il) { push_back(ea); } }
@@ -672,11 +679,15 @@ namespace King {
         friend Path operator* (Path lhs, const DirectX::XMMATRIX &m) { lhs *= m; return lhs; } // invokes std::move(lhs)
         // Conversions
         inline operator King::Polygon2DF() const { return Get_Polygon2DF(); }
-        Polygon2DF __vectorcall             Get_Polygon2DF() const;
+        Polygon2DF                          Get_Polygon2DF() const;
         // Functionality
+        void                                Offset(const float dist, Plane offsetPlaneIn);
         // Accessors
         // Assignments
-   };
+        // Input & Output
+        friend std::ostream& operator<< (std::ostream& os, const Path& in);
+    };
+    std::ostream& operator<< (std::ostream& os, const King::Path& in);
     /******************************************************************************
     *    Ray
     *    origin *---> direction (normalized)
@@ -990,7 +1001,8 @@ namespace King {
     public:
         // Construction/Destruction
         inline Sphere() { FloatPoint4::Set(float3(), abs(1.0f)); }
-        inline Sphere(const FloatPoint3 center, const float radius) { FloatPoint4::Set(center, abs(radius)); }
+        inline Sphere(const float radius) { FloatPoint4::Set(float3(), abs(radius)); }
+        inline Sphere(const FloatPoint3 center, const float radius = 1.0f) { FloatPoint4::Set(center, abs(radius)); }
         Sphere(const float x, const float y, const float z, const float radius) { FloatPoint4::Set(x, y, z, abs(radius)); }
 
         inline explicit Sphere(const DirectX::XMVECTOR &vec) { v = vec; }
@@ -1001,6 +1013,7 @@ namespace King {
         // Operators 
         Sphere & operator= (const Sphere &in) = default; // copy assignment
         Sphere & operator= (Sphere &&in) = default; // move assignment
+        //inline Sphere& operator= (const Box& in) { v = FloatPoint4(in.GetCenter(), in.GetRadius()); return *this; }
         inline Sphere & operator= (const FXMVECTOR &in) { v = in; return *this; }
         inline Sphere& operator*= (const DirectX::XMMATRIX& m) { auto r = GetW(); v = DirectX::XMVector4Transform(FloatPoint4(v, 1.0f), m); SetW(r* DirectX::XMVectorGetX(m.r[0])); return *this; } //supports uniform scaling by using x axis only but could be non-uniformed
         friend Sphere operator* (Sphere lhs, const DirectX::XMMATRIX &m) { lhs *= m; return lhs; } // invokes std::move(lhs)
@@ -1218,6 +1231,7 @@ namespace King {
         inline FloatPoint3                  GetSize() const { return Abs(pt_max - pt_min); } // width, height & depth
         inline FloatPoint3                  GetExtents() const { return (pt_max - pt_min) * 0.5f; }
         inline FloatPoint3                  GetCenter() const { return (pt_max + pt_min) * 0.5f; }
+        inline float                        GetRadius() const { return ((pt_max - pt_min) * 0.5f).GetMagnitudeEst(); }
 
         inline const FloatPoint3 &          GetMin() const { return pt_min; }
         inline const FloatPoint3 &          GetMax() const { return pt_max; }
@@ -1229,7 +1243,8 @@ namespace King {
         inline float                        GetVolume() const { auto d = GetDiagonal(); return 2.f * (d.f[0] * d.f[1] * d.f[2]); }
 
         vector<pair<FloatPoint3, CornerDescription>> IdentifyCorners(const vector<FloatPoint3>& pointsIn, const Quaternion* quaternionIn = nullptr) const;
-        std::vector<FloatPoint3>            GetCorners8Transformed(const DirectX::FXMMATRIX& M); // scaled, rotate and translate a "unit" Box to a model bounding box
+        //std::vector<FloatPoint3>            
+        DirectX::XMFLOAT4* GetCorners8Transformed(const DirectX::FXMMATRIX& M); // scaled, rotate and translate a "unit" Box to a model bounding box
         std::vector<FloatPoint3>            GetCorners8(const Quaternion * quaternionIn = nullptr) const; // return all 8 corners with enum CornerDescription indexing
         std::vector<FloatPoint3>            GetCornersTop4(const Quaternion * quaternionIn = nullptr) const; 
         std::vector<FloatPoint3>            GetCornersBottom4(const Quaternion * quaternionIn = nullptr) const;
@@ -1255,6 +1270,7 @@ namespace King {
         inline void __vectorcall            SetWHD(const FloatPoint3 whdIn) { FloatPoint3 offset = Abs(whdIn) * 0.5f; FloatPoint3 c = GetCenter(); pt_min = c - offset; pt_max = c + offset; }
         inline void __vectorcall            SetCenter(const FloatPoint3 centerIn) { FloatPoint3 delta = centerIn - GetCenter(); MoveBy(delta); }
         void __vectorcall                   SetAABBfromThisTransformedBox(FXMMATRIX M);
+        void __vectorcall                   SetAABBfromBoundingSphere(Sphere s); // orientation does not matter, will be the largest AABB, but quicker than SetAABBfromThisTransformedBox(FXMMATRIX M);
         // I/O
         friend std::ostream& operator<< (std::ostream &os, const King::Box &in);
         friend std::istream& operator>> (std::istream &is, Box &out);
@@ -1446,8 +1462,8 @@ namespace King {
 
         LineIndexed                         GetLineIndexed(const uint32_t &lineIndexIn) const { auto o = (GetIB() + lineIndexIn * 2); return LineIndexed(GetVB(), _vertexFormat, *o, *(o + 1)); }
 
-        auto                                GetVertexAddr(const uint32_t indexIn) const { assert(indexIn < GetNumIndicies()); return GetVB() + *(GetIB() + indexIn) * _vertexFormat.GetByteSize(); } // byte pointer to start of vertex data
-        FloatPoint3                         GetVertexPosition(const uint32_t indexIn) const;
+        auto                                GetVertexAddr(const uint32_t vertNumIn) const { return GetVB() + vertNumIn * _vertexFormat.GetByteSize(); } // byte pointer to start of vertex data
+        FloatPoint3                         GetVertexPosition(const uint32_t vertNumIn) const;
         // Assignments
         void                                Set_name(const string _name_IN) { _name = _name_IN; }
         void                                SetIB(uint32_t *ibIn) { _ib = ibIn; }
@@ -1522,11 +1538,9 @@ namespace King {
 
         TriangleIndexed                     GetTriangleIndexed(const uint32_t &triangleIndexIn) const { auto o = (GetIB() + (uint32_t)triangleIndexIn * 3); return TriangleIndexed(GetVB(), _vertexFormat, *o, *(o + 1), *(o + 2)); }
         
-        auto                                GetVertexAddr(const uint32_t indexIn) const 
-        { 
-            auto c = GetNumIndicies();
-            assert(indexIn < c); return GetVB() + *(GetIB() + indexIn) * (uint32_t)_vertexFormat.GetByteSize(); } // byte pointer to start of vertex data
-        FloatPoint3                         GetVertexPosition(const uint32_t indexIn) const;
+        auto                                GetVertexAddr(const uint32_t vertNumIn) const { return GetVB() + vertNumIn * _vertexFormat.GetByteSize(); } // byte pointer to start of vertex data
+        //auto                                GetVertexAddrByIndexBuffer(const uint32_t indexIn) const { auto c = GetNumIndicies(); assert(indexIn < c); return GetVB() + *(GetIB() + indexIn) * (uint32_t)_vertexFormat.GetByteSize(); } // byte pointer to start of vertex data
+        FloatPoint3                         GetVertexPosition(const uint32_t vertNumIn) const;
         // Assignments
         void                                Set_name(const string _name_IN) { _name = _name_IN; }
         void                                Set_materialName(std::string materialNameIn) { _materialName = materialNameIn; }
@@ -1537,6 +1551,10 @@ namespace King {
         void                                SetNumTriangles(uint32_t numTrianglesIn) { _numTriangles = numTrianglesIn; }
         void                                SetNumIndicies(size_t numIndiciesIn) { _numTriangles = (uint32_t)(numIndiciesIn / 3); }
         void                                SetVertexFormat(const VertexFormat & vertexFormatIn) { _vertexFormat = vertexFormatIn; }
+
+        void                                SetVertexPosition(const uint32_t indexIn, FloatPoint3 posIn);
+        // Helpers
+        void                                HelperMoveVertexOnGrid(const float3 delta, const unsigned int vertexNumIn, const unsigned int verticiesIn_i, const unsigned int verticiesIn_j);
     };
     /******************************************************************************
     *    HeightGrid
@@ -1591,7 +1609,7 @@ namespace King {
         {
             uint16_t ver = 1;
             float ambient[3] = { 1.f, 1.f, 1.f };
-            float diffuse[3] = { 0.8f, 0.8f, 0.8f };
+            float diffuse[3] = { 1.f, 1.f, 1.f };
             float specular[3] = { 0.1f, 0.1f, 0.1f };
             float emissive[3] = { 0.f, 0.f, 0.f };
             float transparent[3] = { 0.5f, 0.5f, 0.5f }; // light passing through a transparent surface is multiplied by this filter color
@@ -1739,8 +1757,7 @@ namespace King {
         const auto&                         GetModelName() const { return _modelName; }
         const auto&                         GetBoundingBox() const { return _boundingBox; }
 
-        uint8_t*                            GetVertexAddr(const uint32_t vertexNumIn); // no indirection
-        uint8_t*                            GetVertexAddr(const uint32_t vertexNumIn, uint32_t vbStartIn); // no indirection
+        uint8_t*                            GetVertexAddr(const uint32_t vertexNumIn, uint32_t vbStartIn = 0); // no indirection
         uint8_t*                            GetVertexAddr(const uint32_t indexIndirectionIn, uint32_t vbStartIn, uint32_t ibStartIn); // byte pointer to start of vertex data, indirection through index
         uint32_t                            GetVertexCount() const { return (uint32_t)(_vertexBufferMaster.GetLength() / _vertexFormat.GetByteSize()); }
         auto &                              GetVertexFormat() const { return _vertexFormat; }
@@ -1773,7 +1790,7 @@ namespace King {
         void                                SetVertexStream(const size_t& vertexIndexIn, uint8_t* dataIn, size_t numVertex);
         void                                SetIndexStream(const size_t& startIndexIn, uint8_t* dataIn, size_t numIndicies);
         void                                SetIndexStream(const size_t& startIndexIn, uint32_t* dataIn, size_t numIndicies);
-        void                                SetVertexElement(const size_t & vertexIndexIn, const VertexAttrib::enumDesc & propertyIn, uint8_t * dataIn);
+        void                                SetVertexElement(const size_t & vertexIndexIn, const VertexAttrib::enumDesc & propertyIn, const uint8_t * dataIn);
         void                                SetVertexFormat(const VertexFormat & vfIn) { _vertexFormat = vfIn; _vertexBufferMaster.SetStride(_vertexFormat.GetByteSize()); }
     protected:
         vector<vector<float>>               GetDataAttribute(VertexAttrib::enumDesc attributeEnum, uint32_t vbStartIn = 0, uint32_t ibStartIn = 0, bool unique = true);
@@ -1826,6 +1843,8 @@ namespace King {
         auto                                AddMesh(std::shared_ptr<LineMesh> meshIn) { _meshes.push_back(meshIn); return _meshes.size()-1; }
         std::shared_ptr<LineMesh>           CreateMesh(uint32_t numLinesIn, uint32_t vbStartIn = 0, uint32_t ibStartIn = 0);
         int                                 CreateMeshFrom(const King::Line& lineIn, float4 colorIn = float4(0.f, 1.0f, 1.0f, 1.0f));
+    protected:
+        void                                HelperSetAllMeshesVBandIBtoMaster() { for (auto& m : _meshes) { m->SetVB(&_vertexBufferMaster.GetData()); m->SetIB(&_indexBufferMaster.GetData()); } }
     };
     /******************************************************************************
     *    Model
@@ -1879,6 +1898,7 @@ namespace King {
 
         virtual Box                         CalculateBoundingBox() override;
         void                                CalculateNormals();
+        void                                CalculateTextureCoordinates();
         void                                CalculateTangentsAndBiTangents();
 
         void                                ReverseNormals();
@@ -1918,14 +1938,26 @@ namespace King {
         int                                 CreateMeshFrom(const Triangle& tri);
         int                                 CreateMeshFrom(const Quad& quad); 
         int                                 CreateMeshFrom(const Box& box); // presently, takes over all the data for the model, *** TO DO ** add mesh
-        int                                 CreateMeshFrom(const Sphere& sphere, const uint32_t segmentsIn = 16); // quads
+        int                                 CreateMeshFrom(const Sphere& sphere, const uint32_t segmentsIn = 32); // quads
         int                                 CreateMeshFrom(const Path& closedPath); // closed path in ccw ordering, RHS as a triangle fan of path(first, second, last) then path(last, second, last-1), etc
         int                                 CreateMeshFrom(const Line& line, Distance d); // extrude d away from l as a quad
         int                                 CreateMeshFrom(const Path& path, Distance d); // extrude d away from p as a series of perpendicular quads
+        int                                 CreateMeshFromExp(const Path& path, Distance d); // extrude d away from p as a series of perpendicular quads, d assumes "outward"
         int                                 CreateMeshFrom(const Path& pFrom, const Path& pTo); // extrude pFrom to pTo as a series of connected quads
+    
+        int                                 CreateMeshForGridXZ(const uint32_t numWidth, const uint32_t numHeight, const float2 cellSize);
+
+        void                                SetColor(float3 cIn) { // diffuse color
+                                                auto mtl = GetMaterial("default");
+                                                auto mtlProp = mtl->Get_properties();
+                                                mtlProp.color.diffuse[0] = cIn.GetX();
+                                                mtlProp.color.diffuse[1] = cIn.GetY();
+                                                mtlProp.color.diffuse[2] = cIn.GetZ();
+                                                mtl->Set_properties(mtlProp); }
     protected:
+        void                                HelperSetAllMeshesVBandIBtoMaster() { for (auto& m : _meshes) { m->SetVB(&_vertexBufferMaster.GetData()); m->SetIB(&_indexBufferMaster.GetData()); } }
         int                                 HelperCreateMeshFrom(const vector<float3>& positionsIn, const vector<uint32_t>& indiciesIn, const vector<float2>& uvIn, const vector<float3>& normalsIn);
-        std::vector<King::float2>           HelperCreateTextureCoordinatesForTriOrQuad(const std::vector<King::float3>& pt);
+        std::vector<King::float2>           HelperCreateTextureCoordinatesForTriOrQuad(const std::vector<King::float3>& pt, uint32_t ptsWide);
         void                                HelperCreateTextureCoordinatesForSphere();
     };                                                     
     

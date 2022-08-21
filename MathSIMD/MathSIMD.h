@@ -599,8 +599,8 @@ namespace King {
         static FloatPoint2 __vectorcall         Normal(const FloatPoint2 point2In) { return FloatPoint2(DirectX::XMVector2Normalize(point2In)); }
         static const float __vectorcall         Magnitude(const FloatPoint2 point2In) { return DirectX::XMVectorGetX(DirectX::XMVector2Length(point2In)); }
         static const float __vectorcall         MagnitudeEst(const FloatPoint2 point2In) { return DirectX::XMVectorGetX(DirectX::XMVector2LengthEst(point2In)); }
-        static FloatPoint2 __vectorcall         DotProduct(const FloatPoint2 vec1In, const FloatPoint2 & vec2In) { return DirectX::XMVector2Dot(vec1In, vec2In); } // order does not mater A•B = B•A
-        static FloatPoint2 __vectorcall         CrossProduct(const FloatPoint2 vec1In, const FloatPoint2 & vec2In) { return DirectX::XMVector2Cross(vec1In, vec2In); } // order does mater AxB = -(BxA)
+        static FloatPoint2 __vectorcall         DotProduct(const FloatPoint2 vec1In, const FloatPoint2 vec2In) { return DirectX::XMVector2Dot(vec1In, vec2In); } // order does not mater A•B = B•A
+        static FloatPoint2 __vectorcall         CrossProduct(const FloatPoint2 vec1In, const FloatPoint2 vec2In) { return DirectX::XMVector2Cross(vec1In, vec2In); } // order does mater AxB = -(BxA)
         static float __vectorcall               SumComponents(const FloatPoint2 vec1In) { return DirectX::XMVectorGetX(DirectX::XMVectorSum(vec1In)); }
         static FloatPoint2 __vectorcall         MultiplyAdd(const FloatPoint2 vec1MulIn, const FloatPoint2 & vec2MulIn, const FloatPoint2 & vec3AddIn) { return DirectX::XMVectorMultiplyAdd(vec1MulIn, vec2MulIn, vec3AddIn); }
         static FloatPoint2                      Average(const std::vector<FloatPoint2> & arrayIn) { assert(arrayIn.size()); FloatPoint2 ave; for (const auto& each : arrayIn) ave += each; ave /= (float)arrayIn.size(); return ave; }
@@ -898,6 +898,7 @@ namespace King {
         inline Quaternion operator* (const Quaternion rhs) const { return Quaternion(DirectX::XMQuaternionMultiply(v, rhs)); }
         inline Quaternion operator* (const float& scalerAngle) const { return Quaternion(GetAxis(), scalerAngle * GetAngle()); }
         inline Quaternion operator/ (const Quaternion rhs) const { return *this * rhs.Inverse(); }
+        inline FloatPoint2 operator* (const FloatPoint2 rhs) const { return FloatPoint2(DirectX::XMVector3Rotate(FloatPoint3(rhs, 0.f), v)); } // truncates z
         inline FloatPoint3 operator* (const FloatPoint3 rhs) const { return FloatPoint3(DirectX::XMVector3Rotate(rhs, v)); }
         inline FloatPoint3 operator* (const DirectX::XMVECTOR rhs) const { return FloatPoint3(DirectX::XMVector3Rotate(rhs, v)); }
         inline Quaternion& operator*= (const Quaternion rhs) { *this = *this * rhs; return *this; } // same as adding two rotations (multiply the transforms)

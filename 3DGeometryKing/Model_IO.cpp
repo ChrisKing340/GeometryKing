@@ -123,6 +123,8 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
 {
     std::vector<shared_ptr<King::Model>> models;
 
+    bool reportMetricsOut(false);
+
     King::TextFileParse f;
     f.SetCommentDesignator("#");
 
@@ -241,7 +243,7 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
             }
         }
         
-        cout << "  numMeshes " << numMeshes << "\n";
+        if (reportMetricsOut) cout << ".OBJ Load: numMeshes " << numMeshes << "\n";
 
         for (int meshCount = 0; meshCount < numMeshes; ++meshCount)
         {
@@ -304,7 +306,7 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
                 // if vertex are not grouped together, seek out the next one
                 while (f.NextWord() != obj.prop_vertexPosition && !f.IsLast()) {};
             } while (!f.IsLast());
-            cout << "  numVertex " << numVertex << "\n";
+            if (reportMetricsOut) cout << ".OBJ Load: numVertex " << numVertex << "\n";
             //assert(numVertex == positions.size());
         }
         // Get texture UV
@@ -333,7 +335,7 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
                 // if vertexTextureCoord are not grouped together, seek out the next one
                 while (f.NextWord() != obj.prop_vertexTextureCoord && !f.IsLast()) {};
             } while (!f.IsLast());
-            cout << "  numTextureCoords " << numTextureCoords << "\n";
+            if (reportMetricsOut) cout << ".OBJ Load: numTextureCoords " << numTextureCoords << "\n";
             //assert(numTextureCoords == textureUV.size());
         }
         else
@@ -366,7 +368,7 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
                 // if normals are not grouped together, seek out the next one
                 while (f.NextWord() != obj.prop_vertexNormal && !f.IsLast()) {};
             } while (!f.IsLast());
-            cout << "  numNormals " << numNormals << "\n";
+            if (reportMetricsOut) cout << ".OBJ Load: numNormals " << numNormals << "\n";
             //assert(numNormals == normals.size());
         }
         else
@@ -381,7 +383,7 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
         f.WordIndex(wpos_models); // reset position back to start of model
         if (numFaces = f.CountStringAndStopAtMarker(obj.prop_face, obj.prop_modelName))
         {
-            cout << "  number of face definitions in model " << numFaces << "\n";
+            if (reportMetricsOut) cout << ".OBJ Load: number of face definitions in model " << numFaces << "\n";
             bool search = f.FindNext(obj.prop_face);
             while (!f.IsLast() && search)
             {
@@ -455,7 +457,7 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
                                     }
                                     else
                                     {
-                                        cout << "  BAD vertex position read from file, index is " << index << '\n';
+                                        cout << ".OBJ Load: BAD vertex position read from file, index is " << index << '\n';
                                         badFaceRead = true;
                                     }
                                 }
@@ -470,7 +472,7 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
                                     }
                                     else
                                     {
-                                        cout << "  BAD vertex texture coordinate read from file, index is " << index << '\n';
+                                        cout << ".OBJ Load: BAD vertex texture coordinate read from file, index is " << index << '\n';
                                         badFaceRead = true;
                                     }
                                 }
@@ -492,7 +494,7 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
                                     }
                                     else
                                     {
-                                        cout << "  BAD vertex normal read from file, index is " << index << '\n';
+                                        cout << ".OBJ Load: BAD vertex normal read from file, index is " << index << '\n';
                                         badFaceRead = true;
                                     }
                                 }
@@ -640,7 +642,7 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
                     }
                     else
                     {
-                        cout << "  Bad face read during load" << '\n';
+                        cout << ".OBJ Load: Bad face read during load" << '\n';
                         for (unsigned long i = 0; i < numVertexThisFace; ++i)
                         {
                             // remove data if it was loaded
@@ -661,11 +663,12 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
                     if (++currentMesh < model->GetNumMeshes())
                         nMesh = model->GetMesh(currentMesh);
                     else
-                        assert(false, "Number of meshes established in preprocessor does not match number in file");
+                        assert(false, ".OBJ Load: Number of meshes established in preprocessor does not match number in file");
 
                     if (numFaces > 0)
-                        search = f.FindNext(obj.prop_face); // this should always be true or the file is missing face data
-                    else assert(false);
+                        search = f.FindNext(obj.prop_face);
+                    else 
+                        assert(false, ".OBJ Load: File is missing face data.");
                 }
                 else
                 {
@@ -697,24 +700,22 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
         {
             vertexBufferRaw.Initialize(verticiesComposite.size() * sizeof(vertexComposite));
             vertexBufferRaw.SetStride(sizeof(vertexComposite));
-            if (vertexBufferRaw) vertexBufferRaw = reinterpret_cast<uint8_t*>(verticiesComposite.data()); // copy
+            if (vertexBufferRaw) vertexBufferRaw = (reinterpret_cast<uint8_t*>(verticiesComposite.data())); // copy
         }
         else if (vertexFormatIn->GetByteSize() == sizeof(vertexCompositePadTo56)) // position, uv, normals, tangents, bitangents
         {
             vertexBufferRaw.Initialize(verticiesComposite.size() * sizeof(vertexCompositePadTo56));
             vertexBufferRaw.SetStride(sizeof(vertexCompositePadTo56));
             // copy and pad
-            if (vertexBufferRaw)
+            auto ptrFrom = verticiesComposite.data();
+            for (size_t i = 0; i < verticiesComposite.size(); ++i)
             {
-                auto ptrFrom = verticiesComposite.data();
-                for (size_t i = 0; i < verticiesComposite.size(); ++i)
-                {
-                    auto ptrTo = reinterpret_cast<vertexCompositePadTo56*>(&(vertexBufferRaw[i]));
+                auto ptrTo = reinterpret_cast<vertexCompositePadTo56*>(&(vertexBufferRaw[i]));
+                *ptrTo = vertexCompositePadTo56(*ptrFrom); // copy
 
-                    *ptrTo = vertexCompositePadTo56(*ptrFrom); // copy
-                    ++ptrFrom;
-                }
+                ++ptrFrom;
             }
+            vertexBufferRaw.SetLength(verticiesComposite.size() * sizeof(vertexCompositePadTo56));
         }
 
         // append
@@ -749,6 +750,10 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
     {
         // material file
         auto name = f.NextWord();
+        // extract object files path to use with resources
+        filesystem::path p(fileNameIN);
+        name = p.remove_filename().string() + name;
+
         materials = Load_MTL(name);
     }
     // embedded materials
@@ -975,7 +980,7 @@ bool King::Model_IO::Save_OBJ(const std::string fileNameIN, const std::vector<sh
                     // first find duplicates and give the same index
                     for (size_t k = 0; k < ls - 1; ++k)
                     {
-                        cout << "  " << "Evaluating position " << k+2 << " of " << ls << '\r';
+                        cout << "  " << "Evaluating position " << k << " of " << ls << '\r';
                         // unique
                         if (indexLocations[k] == UINT32_MAX) indexLocations[k] = static_cast<unsigned int>(k);
                         // search for matches to this index by location value
@@ -1588,24 +1593,24 @@ std::map<std::string, std::shared_ptr<Material>> King::Model_IO::Load_MTL(const 
     TextFileParse mtlFile;
     {
         bool loaded = mtlFile.Load(fileNameIN);
-        if (!loaded)
-            loaded = mtlFile.Load("Models/" + fileNameIN);
-        if (!loaded)
-            loaded = mtlFile.Load("Materials/" + fileNameIN);
-        if (!loaded)
-            loaded = mtlFile.Load("Textures/" + fileNameIN);
-        if (!loaded)
-            loaded = mtlFile.Load("Images/" + fileNameIN);
-        if (!loaded)
-            loaded = mtlFile.Load("Resources/" + fileNameIN);
-        if (!loaded)
-            loaded = mtlFile.Load("Resources/Models/" + fileNameIN);
-        if (!loaded)
-            loaded = mtlFile.Load("Resources/Textures/" + fileNameIN);
-        if (!loaded)
-            loaded = mtlFile.Load("Resources/Images/" + fileNameIN);
-        if (!loaded)
-            loaded = mtlFile.Load("Resources/Materials/" + fileNameIN);
+        //if (!loaded)
+        //    loaded = mtlFile.Load("Models/" + fileNameIN);
+        //if (!loaded)
+        //    loaded = mtlFile.Load("Materials/" + fileNameIN);
+        //if (!loaded)
+        //    loaded = mtlFile.Load("Textures/" + fileNameIN);
+        //if (!loaded)
+        //    loaded = mtlFile.Load("Images/" + fileNameIN);
+        //if (!loaded)
+        //    loaded = mtlFile.Load("Resources/" + fileNameIN);
+        //if (!loaded)
+        //    loaded = mtlFile.Load("Resources/Models/" + fileNameIN);
+        //if (!loaded)
+        //    loaded = mtlFile.Load("Resources/Textures/" + fileNameIN);
+        //if (!loaded)
+        //    loaded = mtlFile.Load("Resources/Images/" + fileNameIN);
+        //if (!loaded)
+        //    loaded = mtlFile.Load("Resources/Materials/" + fileNameIN);
         if (!loaded)
         {
             cout << "Material file not found: " << fileNameIN << '\n';

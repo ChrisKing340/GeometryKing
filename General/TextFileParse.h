@@ -16,6 +16,7 @@
 #include <sstream>
 #include <fstream>
 #include <iomanip>
+#include <iostream>
 
 #include <comutil.h>
 #pragma comment(lib, "comsuppw.lib")
