@@ -34,6 +34,7 @@ This code is the foundation of a fully functional DirectX 12 game engine and phy
     class Rectangle2DF; // SIMD
     class Rectangle2D; // not accelerated, replaces Windows RECT class thourgh conversions
     class Circle2DF; // SIMD
+    class Polygon2DF; // SIMD
 
 ## Geometry Mesh and Models
 
