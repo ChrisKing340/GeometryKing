@@ -1,7 +1,8 @@
 # GeometryKing
 
-Generic, render independent, geometric game engine foundation. Intended as the foundation for "made from scratch" game engines with all the basics of 2D/3D geometry, model loading and saving, and physics body simulation to get you started quickly.  C\+\+ foundation classes within the library support json streams to serialize and easily transmit your data structures to cout, across a network, or file loading/saving.
+Generic, render independent, geometric game engine foundation. Intended as the foundation for "made from scratch" game engines with all the basics of 2D/3D geometry, model loading and saving, and physics body simulation with intrinsic SIMD acceleration.  C\+\+ classes support json for data transport, 2DGeometryKing has ImageBlock with Draw(...) methods from primitives to a memory buffer, and 3DGeometryKing has Model with constructors to convert 3D primitives to Models with vertex and index buffers ready for rendering. Physics classes represent real world motion while the geometry classes handling collision detection. Use all or mix and match to your needs with code inlined to a high degree for readability and compiled only if used.
 
+Export from class ImageTga after being drawn from 2D primities of Triangle2DF, Circle2DF, and Rectangle2DF:
 ![image](https://user-images.githubusercontent.com/15188055/192162868-6b863a96-c34d-49b2-83d2-d2f9f18e1af1.png)
 
 Compiled with Visual Studio 2019, C\+\+17, 64 Bit Windows 10
