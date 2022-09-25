@@ -2,6 +2,8 @@
 
 Generic, render independent, geometric game engine foundation. Intended as the foundation for "made from scratch" game engines with all the basics of 2D/3D geometry, model loading and saving, and physics body simulation to get you started quickly.  C\+\+ foundation classes within the library support json streams to serialize and easily transmit your data structures to cout, across a network, or file loading/saving.
 
+![image](https://user-images.githubusercontent.com/15188055/192162868-6b863a96-c34d-49b2-83d2-d2f9f18e1af1.png)
+
 Compiled with Visual Studio 2019, C\+\+17, 64 Bit Windows 10
 
 For the latest version of DirectXMath, visit:
