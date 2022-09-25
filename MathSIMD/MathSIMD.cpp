@@ -1,4 +1,4 @@
-#include "MathSIMD.h"
+﻿#include "MathSIMD.h"
 
 using namespace King;
 using namespace std;
@@ -86,42 +86,112 @@ King::FloatPoint3::FloatPoint3(FloatPoint4 vecIn)
 
 // Store the Euler angles in radians, credit to:
 // http://www.gamedev.net/topic/597324-quaternion-to-euler-angles-and-back-why-is-the-rotation-changing/
+// returns [-π , +π] radians
 DirectX::XMFLOAT3 King::Quaternion::GetEulerAngles() const
 {
     DirectX::XMFLOAT3 pitchYawRoll; // output
+    // x:ψ, y:θ, and z:φ
 
-    float4 sqVec = DirectX::XMVectorMultiply(v, v);
+    float4 vn = DirectX::XMVector4Normalize(v);
+    if (DirectX::XMVectorGetW(v) < 0.f)
+        vn = -vn;
+
+    float4 sqVec = DirectX::XMVectorMultiply(vn, vn);
     DirectX::XMFLOAT4 sq = sqVec;
 
     DirectX::XMFLOAT4 q;
-    DirectX::XMStoreFloat4(&q, v);
+    DirectX::XMStoreFloat4(&q, vn);
 
     // If quaternion is normalized the unit is one, otherwise it is the correction factor
     //float unit = sqx + sqy + sqz + sqw; // = 1.0f if was normalized
     float unit = float4::SumComponents(sqVec);
     float test = q.x * q.y + q.z * q.w;
 
-    //if (test > 0.4995f * unit)
+    if (test > 0.499998f * unit)
+    {
+        // Singularity at north pole
+        pitchYawRoll.x = 0.f;
+        pitchYawRoll.y = -2.f * atan2(q.x, q.w);
+        pitchYawRoll.z = -DirectX::XM_PIDIV2;
+        return pitchYawRoll;
+    }
+    else if (test < -0.499998f * unit)
+    {
+        // Singularity at south pole
+        pitchYawRoll.x = 0.f;
+        pitchYawRoll.y = 2.f * atan2(q.x, q.w);
+        pitchYawRoll.z = DirectX::XM_PIDIV2;
+        return pitchYawRoll;
+    }
+    // Wiki
+    //pitchYawRoll.x = atan2(2.f * (q.x * q.w + q.y * q.z), (1.f - 2.f * (sq.x + sq.y)));
+    //pitchYawRoll.y = asin(2.f * (q.y * q.w - q.x * q.z));
+    //pitchYawRoll.z = atan2(2.f * (q.z * q.w + q.x * q.y), (1.f - 2.f * (sq.y + sq.z)));
+    
+    // extract the euler angles from the rotation matrix  
+    // http://eecs.qmul.ac.uk/~gslabaugh/publications/euler.pdf
+    //auto rM = DirectX::XMMatrixRotationQuaternion(v);
+    ///*
+    //_11, _12, _13, _14;
+    //_21, _22, _23, _24;
+    //_31, _32, _33, _34;
+    //_41, _42, _43, _44;
+    //*/
+
+    //auto _31 = DirectX::XMVectorGetX(rM.r[2]);
+
+    //if (abs(_31) != 1.0f)
     //{
-    //    // Singularity at north pole
-    //    pitchYawRoll.x = -DirectX::XM_PIDIV2;
-    //    pitchYawRoll.y = -2.f * atan2(q.x, q.w);
-    //    pitchYawRoll.z = 0.f;
-    //    return pitchYawRoll;
+    //    // two solutions
+    //    pitchYawRoll.y = -asin(_31);
+    //    //auto 𝜃2 = DirectX::XM_PI - 𝜃1;
+
+    //    auto cos𝜃1 = cos(pitchYawRoll.y);
+    //    //auto cos𝜃2 = cos(𝜃2);
+
+    //    auto _32 = DirectX::XMVectorGetY(rM.r[2]);
+    //    auto _33 = DirectX::XMVectorGetZ(rM.r[2]);
+
+    //    auto _11 = DirectX::XMVectorGetX(rM.r[0]);
+    //    auto _21 = DirectX::XMVectorGetX(rM.r[1]);
+
+    //    pitchYawRoll.x = atan2(_32 / cos𝜃1, _33 / cos𝜃1);
+    //    //auto ψ2 = atan2(_32 / cos𝜃2, _33 / cos𝜃2);
+
+    //    pitchYawRoll.z = atan2(_21 / cos𝜃1, _11 / cos𝜃1);
+    //    //auto 𝛷2 = atan2(_21 / cos𝜃2, _11 / cos𝜃2);
     //}
-    //else if (test < -0.4995f * unit)
+    //else
     //{
-    //    // Singularity at south pole
-    //    pitchYawRoll.x = DirectX::XM_PIDIV2;
-    //    pitchYawRoll.y = 2.f * atan2(q.x, q.w);
-    //    pitchYawRoll.z = 0.f;
-    //    return pitchYawRoll;
+    //    // θ = π/2 and θ = −π/2 cases, we have found that
+    //    // ψ and φ are linked, commonly called Gimbal lock.
+    //    // infinite solutions since 𝛷 can be any value
+    //    auto _12 = DirectX::XMVectorGetY(rM.r[0]);
+    //    auto _13 = DirectX::XMVectorGetZ(rM.r[0]);
+    //    
+    //    pitchYawRoll.z = 0;
+    //    if (_31 == -1.0)
+    //    {
+    //        pitchYawRoll.x = pitchYawRoll.z + atan2(_12, _13);
+    //        pitchYawRoll.y = DirectX::XM_PIDIV2;
+    //    }
+    //    else
+    //    {
+    //        pitchYawRoll.x = -pitchYawRoll.z + atan2(-_12, -_13);
+    //        pitchYawRoll.y = -DirectX::XM_PIDIV2;
+    //    }
     //}
+
+    // MatLab
+    //pitchYawRoll.x = atan2(2.f * (q.x * q.w + q.y * q.z), sq.w - sq.x - sq.y + sq.z);// range out is [-π, +π]
+    //pitchYawRoll.y = asin(2.f * (q.y * q.w - q.x * q.z)); // [-π/2, +π/2]
+    //pitchYawRoll.z = atan2(2.f * (q.z * q.w + q.x * q.y), sq.w + sq.x - sq.y - sq.z);// range out is [-π, +π]
+
     // (+)x = w/RHS, thumb down the (+) x axis for 180 deg (+PI), then(-PI) increasing back to zero for 360 deg.
     // (+)y = w/RHS, thumb down the (+) y axis for 180 deg (+PI), then(-PI) increasing back to zero for 360 deg.
-    pitchYawRoll.x =  atan2(2.f * (q.x * q.w - q.y * q.z), -sq.x + sq.y - sq.z + sq.w);
-    pitchYawRoll.y =  atan2(2.f * (q.y * q.w - q.x * q.z), sq.x - sq.y - sq.z + sq.w);
-    pitchYawRoll.z =  asin(2.f * test / unit);
+    pitchYawRoll.x =  atan2(2.f * (q.x * q.w - q.y * q.z), -sq.x + sq.y - sq.z + sq.w); // range out is [-π, +π]
+    pitchYawRoll.y =  atan2(2.f * (q.y * q.w - q.x * q.z), sq.x - sq.y - sq.z + sq.w); // range out is [-π, +π]
+    pitchYawRoll.z =  asin(2.f * test / unit); // domain in is [-1.0, 1.0] and range out is [-π/2, + π/2]
 
     // (+)z = w/RHS, thumb down the (+) z axis
     // EX: quadrant 1 (left of north), on (+) rotation as it crosses into quadrant 2:

@@ -5,15 +5,18 @@ Description:    CPU side 2D geometry utilizing our SIMD math library for
                 accelerated math operations.  Includes json support so that
                 these data types may be serialized easily for network 
                 communication, file storage, or inspection during debugging.
+                Uses our generic MemoryBlock class shared with 3DGeometryKing
+                to draw primitives. The MemoryBlock class is inherited to keep
+                width and height dimensions
 
-Usage:          Use the typedef keywords in your applications as a generic
-                use of the library.  Most of the code is inline and won't be 
-                included in your code if not referenced.  This code is intended 
-                to be complied for 64 bit operating systems with native 
-                16 byte alignment.  16 byte alignment is specified so this code
-                should work with 32 bit operating systems but not part of my
-                testing regiment.
+Usage:          Intersection and collission detection for physics and games
+                Simple 2D CAD applications
+                Simple 3D Paint applications
+                Visualization of memory through image exports in .TGA format
                                 
+Dependicies:    DirectXMath https://learn.microsoft.com/en-us/windows/win32/dxmath/directxmath-portal
+                JSON for Modern C++ https://github.com/nlohmann/json
+
 Contact:        https://chrisking340.github.io/GeometryKing/
 
 Copyright (c) 2019 - 2022 Christopher H. King
@@ -51,8 +54,8 @@ SOFTWARE.
 #error requires Visual C++ 2019 or later.
 #endif
 
-#define KING_2DGEOMETRY_VERSION_MAJOR 1
-#define KING_2DGEOMETRY_VERSION_MINOR 5
+#define KING_2DGEOMETRY_VERSION_MAJOR 2
+#define KING_2DGEOMETRY_VERSION_MINOR 0
 #define KING_2DGEOMETRY_VERSION_PATCH 0
 /*
     History:
@@ -71,10 +74,19 @@ SOFTWARE.
             Authored Join function to Line2DF
             Authored IsParallel function to Line2DF
             Authored IsPerpendicular function to Line2DF
-            
+
+        KING_2DGEOMETRY_VERSION_MAJOR 2 Release 9/25/2022:
+            Authored Class ImageBlock for raw texture storage and methods to draw to the texture. This major release is intended to showcase the use of the 2D primitives in drawing to
+                a generic memory buffer. High level functionality is obtained by making use of the 2D primitives clip functions that convert to polygons and then draw each line of the
+                polygon. We also allow fractional draws, whereby the lines are drawn partially from the first point outward. Clipping prevents memory overrights and image wrapping. 
+                With version 2.0.0 the library forms the basis for a simple 2D CAD application and a simple paint application.
+            Authored Class ImageTGA for saving and loading ImageBlock data in an exportable file format. TGA was chosen for it simplicity and age, meaning it is widely supported. Also
+                has a simple but effective compression scheme of run length encoding. This scheme is useful for data blocks for maps and path finding algorithims. By using MemoryBlock
+                to store information you may then easily visuallize your data by exporting it to an image viewing application.
 */
 
 #include "..\MathSIMD\MathSIMD.h"
+#include "..\General\MemoryBlock.h"
 
 #include "..\..\json\single_include\nlohmann\json.hpp"
 //#include "..\3rdParty\json.hpp"
@@ -117,7 +129,7 @@ namespace King {
         Line2DF(const Line2DF &in) { *this = in; } // copy, involk operator=(&int)
         Line2DF(Line2DF &&in) noexcept { *this = std::move(in); } // move, involk operator=(&&in)
         Line2DF(const FloatPoint2 &pt1In, const FloatPoint2 &pt2In) { pt[0] = pt1In; pt[1] = pt2In; }
-        explicit Line2DF(std::initializer_list<FloatPoint2> il) { assert(il.size() < 3); std::size_t count = 0; for (auto & each : il) { pt[count] = each; ++count; } }
+        Line2DF(std::initializer_list<FloatPoint2> il) { assert(il.size() < 3); std::size_t count = 0; for (auto & each : il) { pt[count] = each; ++count; } }
 
         virtual ~Line2DF() = default;
 
@@ -130,10 +142,13 @@ namespace King {
         // Functionality
         bool __vectorcall                   Intersects(const Line2DF &lineIn, FloatPoint2 *intersectPointOut = nullptr);
         FloatPoint2 __vectorcall            FindNearestPointOnLineSegment(const FloatPoint2 &pointIn);
-        void                                LineTraverse(std::function<void(IntPoint2 ptOut)> callBack); // rasterize the line and callback for each point along the line
+
+        void                                Traverse(std::function<void(IntPoint2 ptOut)> callBack) const; // rasterize the line and callback for each point along the line
+        
         void                                Offset(const float distIn); // translate this line by this amount, using the normal to the outside of a CCW rotation as the direction
         void                                Offset(const float2 distIn); // translate this line by this amount
         bool                                Join(Line2DF& otherlineIn); // modifies both lines to join the ends, returns false if parrallel and no modifications
+        
         bool                                IsParallel(const Line2DF& lineIn) const;
         bool                                IsPerpendicular(const Line2DF& lineIn) const;
         // Accessors
@@ -218,17 +233,22 @@ namespace King {
         static std::unique_ptr<Rectangle2DF>    CreateUnique() { return std::make_unique<Rectangle2DF>(); }
 
         Rectangle2DF() = default;
-        Rectangle2DF(const Rectangle2DF &in) = default; // copy 
-        Rectangle2DF(Rectangle2DF &&in) = default; // move
-        Rectangle2DF(const RECT &rIn) { Set(rIn); } // copy
-        Rectangle2DF(const FloatPoint2 &ptIn) : lt(0.f, 0.f), rb(ptIn) { Set(lt,rb); }
-        Rectangle2DF(const FloatPoint2 &ltIn, const FloatPoint2 &rbIn) { Set(ltIn, rbIn); }
-        Rectangle2DF(const float &w, const float &h) : lt(0.f, 0.f), rb(w, h) { Set(lt, rb); }
-        Rectangle2DF(const long &w, const long &h) : lt(0.f, 0.f), rb(static_cast<float>(w), static_cast<float>(h)) { ; }
-        Rectangle2DF(const int &w, const int &h) : lt(0.f, 0.f), rb(static_cast<float>(w), static_cast<float>(h)) { ; }
-        Rectangle2DF(const float &x1, const float &y1, const float &x2, const float &y2) : lt(x1, y1), rb(x2, y2) { ; }
-        Rectangle2DF(const Triangle2DF &triIn) { Set(triIn); } // bounding rectangle from triangle
+        Rectangle2DF(const Rectangle2DF& in) = default; // copy 
+        Rectangle2DF(Rectangle2DF&& in) = default; // move
+        Rectangle2DF(const RECT& rIn) { Set(rIn); } // copy
+        Rectangle2DF(const FloatPoint2& ptIn) : lt(0.f, 0.f), rb(ptIn) { Set(lt, rb); }
+        Rectangle2DF(const FloatPoint2& ltIn, const FloatPoint2& rbIn) { Set(ltIn, rbIn); }
+        Rectangle2DF(const float& w, const float& h) : lt(0.f, 0.f), rb(w, h) { Set(lt, rb); }
+        Rectangle2DF(const uint16_t& w, const uint16_t& h) : lt(0.f, 0.f), rb(static_cast<float>(w), static_cast<float>(h)) { ; }
+        Rectangle2DF(const uint32_t& w, const uint32_t& h) : lt(0.f, 0.f), rb(static_cast<float>(w), static_cast<float>(h)) { ; }
+        Rectangle2DF(const long& w, const long& h) : lt(0.f, 0.f), rb(static_cast<float>(w), static_cast<float>(h)) { ; }
+        Rectangle2DF(const int& w, const int& h) : lt(0.f, 0.f), rb(static_cast<float>(w), static_cast<float>(h)) { ; }
+        Rectangle2DF(const float& x1, const float& y1, const float& x2, const float& y2) : lt(x1, y1), rb(x2, y2) { ; }
+        Rectangle2DF(const Triangle2DF& triIn) { Set(triIn); } // bounding rectangle from triangle
         Rectangle2DF(const Polygon2DF& polyIn) { Set(polyIn); } // bounding rectangle from polygon
+        // Construction Initializer
+        Rectangle2DF(std::initializer_list<FloatPoint2> il) { assert(il.size() < 3); auto it = il.begin(); lt = *it; rb = *(++it); };
+        
         virtual ~Rectangle2DF() = default;
         // Operators 
         void * operator new (size_t size) { return _aligned_malloc(size, 16); }
@@ -442,6 +462,7 @@ namespace King {
         Circle2DF(Circle2DF &&in) noexcept { *this = std::move(in); } // move, involk operator=(&&in)
         Circle2DF(const FloatPoint2 &centerIn, const float &radiusIn) { _centerXYradiusZ = DirectX::XMVectorSet(centerIn.GetX(), centerIn.GetY(), radiusIn, 0.0f); }
         Circle2DF(const Polygon2DF& polyIn) { Set(polyIn); } // bounding circle from polygon
+        Circle2DF(std::initializer_list<float> il) { assert(il.size() < 4); auto it = il.begin(); _centerXYradiusZ = DirectX::XMVectorSet(*it, *(++it), *(++it), 0.0f); };
 
         virtual ~Circle2DF() = default;
 
@@ -511,6 +532,140 @@ namespace King {
          // Assignments
         inline void __vectorcall            Set(const Polygon2DF in) { _pt = in._pt; }
         inline void __vectorcall            Set_pt(const size_t index, const FloatPoint3 def) { assert(index < _pt.size()); _pt[index] = def; }
+    };
+    /******************************************************************************
+    *   ImageBlock
+    *   0,0 -------
+    *       |     |
+    *       ------- (w,h)
+    ******************************************************************************/
+    class alignas(16) ImageBlock : public MemoryBlock<uint8_t>
+    {
+        /* variables */
+    protected:
+        // The row pitch, or width
+        uint32_t _w = 0;
+        // The depth pitch, or height
+        uint32_t _h = 0;
+
+        /* methods */
+    public:
+        // Creation/Life cycle
+        static std::shared_ptr<ImageBlock> Create() { return std::make_shared<ImageBlock>(); }
+        static std::shared_ptr<ImageBlock> Create(const uint32_t& w, const uint32_t& h, const uint32_t& texelSizeInBytes = 4) { return std::make_shared<ImageBlock>(w, h, texelSizeInBytes); }
+        static std::unique_ptr<ImageBlock> CreateUnique() { return std::make_unique<ImageBlock>(); }
+        static std::unique_ptr<ImageBlock> CreateUnique(const uint32_t& w, const uint32_t& h, const uint32_t texelSizeInBytes) { return std::make_unique<ImageBlock>(w, h, texelSizeInBytes); }
+        // Construction/Destruction
+        ImageBlock() = default;
+        ImageBlock(const uint32_t& w, const uint32_t& h, const uint32_t texelSizeInBytes = 4) { Initialize(w, h, texelSizeInBytes); }
+        ImageBlock(const ImageBlock& in) { *this = in; } // copy, involk operator=(&int)
+        ImageBlock(ImageBlock&& in) noexcept { *this = std::move(in); } // move, involk operator=(&&in)
+
+        virtual ~ImageBlock() = default;
+
+        // Operators 
+        void*  operator new (std::size_t size) { return _aligned_malloc(size, 16); }
+        void   operator delete (void* p) { _aligned_free(static_cast<ImageBlock*>(p)); }
+        inline ImageBlock& operator= (const ImageBlock& in) { Set(in); } // copy assignment
+        inline ImageBlock& operator= (ImageBlock&& in) = default; // move assignment
+        // Functionality
+        void                            Initialize(const uint32_t& w, const uint32_t& h, const uint32_t& texelInBytes = 4);
+        bool                            Read(std::ifstream& dataFileIn); // custom binary file, very simple
+        bool                            Write(std::ofstream& outfileIn);
+
+        void                            Draw(const Line2DF& lineIn, float4 colorIn, const float fractionIn = 1.0f);
+        void                            Draw(const Triangle2DF& triIn, float4 colorIn, const float fractionIn = 1.0f);
+        void                            Draw(const Polygon2DF& polyIn, float4 colorIn, const float fractionIn = 1.0f);
+        void                            Draw(const Rectangle2DF& rectIn, float4 colorIn, const float fractionIn = 1.0f);
+        void                            Draw(const Circle2DF& cirIn, float4 colorIn, const float fractionIn = 1.0f);
+
+        void                            DrawFilled(const Triangle2DF& triIn, float4 colorIn);
+        void                            DrawFilled(const Rectangle2DF& rectIn, float4 colorIn);
+        void                            DrawFilled(const Circle2DF& cirIn, float4 colorIn);
+        void                            DrawFilledScanLine(const uint32_t& xFrom, const uint32_t& xTo, const uint32_t& y_HorzScanLine, unsigned char* colorBufferIn, const bool guardIn = false);
+
+        void                            CopyRectOut(const Rectangle2DF& srcRect, ImageBlock* destOut);
+        void                            CopyImageBlockIn(const ImageBlock& srcIn, const float& x, const float& y);
+
+        void                            FlipVertically();
+        // Accessors
+        const auto&                     GetWidth() const { return _w; }
+        const auto&                     GetHeight() const { return _h; }
+        void                            GetPixel(const uint32_t& x, const uint32_t& y, unsigned char* out);
+         // Assignments
+        void                            Set(const ImageBlock& in) { MemoryBlock<unsigned char>::operator=(in); _w = in._w; _h = in._h; }
+        void                            SetWidth(const uint32_t wIn, uint32_t* heightOut) { _w = wIn; if (_length > 0) _h = _length / _w; *heightOut = _h; }
+        void                            SetHeight(const uint32_t hIn, uint32_t* widthOut) { _h = hIn; if (_length > 0) _w = _length / _h; *widthOut = _w; }
+        void                            SetPixel(const uint32_t& x, const uint32_t& y, unsigned char* colorBufferIn, const bool guardIn = false);
+    };
+    /******************************************************************************
+    *   ImageTGA
+    *   The Targa format, which stands for Truevision Advanced Raster Graphics Adapter, was designed by Truevision (now Avid Technology) in 1984 for use with its first video software programs. 
+    *   The original format consisted of 2 areas:
+    *       TGA File Header
+    *       Image/Color Map Data
+    *
+    *   Header datatypecode values:
+    *       0  -  No image data included.
+    *       1  -  Uncompressed, color-mapped images.
+    *       2  -  Uncompressed, RGB images.
+    *       3  -  Uncompressed, black and white images.
+    *       9  -  Runlength encoded color-mapped images.
+    *      10  -  Runlength encoded RGB images.
+    *      11  -  Compressed, black and white images.
+    ******************************************************************************/
+    class alignas(16) ImageTGA : public ImageBlock
+    {
+        /* variables */
+    public:
+        // TGA header
+        struct TGAHeader
+        {
+            char  idlength = 0; // string length after the header
+            char  colormaptype = 0; // 0 is none, 1 is yes
+            char  datatypecode = 2; // 2 and 10 supported for reads, 2 for writes
+            short int colormaporigin = 0; // (not supported yet)
+            short int colormaplength = 0; // Total length in bytes
+            char  colormapdepth = 0; // each color map entry is 2, 3, or 4 bytes.  
+            short int x_origin = 0; // used with imagedescriptor = 40
+            short int y_origin = 0; // 
+            short int width = 0; // 2 bytes in low-high order
+            short int height = 0; // 2 bytes in low-high order
+            char  bitsperpixel = 32;
+            char  imagedescriptor = 1 << 5; // Bit 4 of the image descriptor byte indicates right-to-left pixel ordering if set. Bit 5 indicates an ordering of top-to-bottom. Otherwise, pixels are stored in bottom-to-top, left-to-right order.
+        } header;
+
+        std::string IdentificationFieldString; // read after header of idlength bytes
+
+        /* methods */
+    public:
+        // Creation/Life cycle
+        static std::shared_ptr<ImageTGA> Create() { return std::make_shared<ImageTGA>(); }
+        static std::shared_ptr<ImageTGA> Create(const uint32_t& w, const uint32_t& h, const uint32_t& texelSizeInBytes = 4) { return std::make_shared<ImageTGA>(w, h, texelSizeInBytes); }
+        static std::unique_ptr<ImageTGA> CreateUnique() { return std::make_unique<ImageTGA>(); }
+        static std::unique_ptr<ImageTGA> CreateUnique(const uint32_t& w, const uint32_t& h, const uint32_t texelSizeInBytes) { return std::make_unique<ImageTGA>(w, h, texelSizeInBytes); }
+        // Construction/Destruction
+        ImageTGA() = default;
+        ImageTGA(const uint32_t& w, const uint32_t& h, const uint32_t texelSizeInBytes = 4) { Initialize(w, h, texelSizeInBytes); }
+        ImageTGA(const ImageTGA& in) { *this = in; } // copy, involk operator=(&int)
+        ImageTGA(ImageTGA&& in) noexcept { *this = std::move(in); } // move, involk operator=(&&in)
+
+        virtual ~ImageTGA() = default;
+
+        // Operators 
+        void* operator new (std::size_t size) { return _aligned_malloc(size, 16); }
+        void   operator delete (void* p) { _aligned_free(static_cast<ImageTGA*>(p)); }
+        inline ImageTGA& operator= (const ImageTGA& in) { Set(in); } // copy assignment
+        inline ImageTGA& operator= (ImageTGA&& in) = default; // move assignment
+        // Functionality
+        bool                            ReadTGA(std::ifstream& dataFileIn);
+        bool                            WriteTGA(std::ofstream& outfileIn);
+        // Accessors
+        // Assignments
+        void                            Set(const ImageTGA& in) { MemoryBlock<unsigned char>::operator=(in); _w = in._w; _h = in._h; }
+    private:
+        uint32_t                        Read4ByteBGRAasRGBA(std::ifstream& dataFileIn);
+        uint32_t                        Read3ByteBGRasRGBA(std::ifstream& dataFileIn);
     };
     /******************************************************************************
     *   streams to enable std::cout and std::cin

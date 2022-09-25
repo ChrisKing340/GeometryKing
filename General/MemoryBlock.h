@@ -1,26 +1,18 @@
 /*%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 Title:          MemoryBlock
 
-Description:    Dynamic (eg. has an over allocated reserve) CPU memory buffer 
-                that can be aligned and has proper move and copy assignment semantics.  
+Description:    Dynamic CPU memory buffer that can be aligned and has proper 
+                move and copy assignment semantics. Supports file read and 
+                write access to/from the block. Supports strides of the data
+                type to work with vertex buffers of dynamic structures. 
+                Supports custum data types by properly calling destructors on
+                delete and constructors when emplace new. This class wraps a 
+                memory pointer and tracks _length in use and _capacity 
+                available. Methods to merge, append, or split MemoryBlocks and
+                support of std::initializer_list<T>.
 
-                This class differs from std::vector<T> in that it supports strides
-                that we will be using to work with vertex buffers of dynamic
-                structures.  Down side is you don't get the standard's algorithims
-                to sort and find info in the vector.  This class wraps a memory 
-                pointer and tracks _length in use and _capacity available.
-
-                MemoryBlock<T> has operator overloading of + and += to Append
-
-Remarks:        Also supports read and write to files in native T type and
-                raw binary as well as writing in text.  You may find it convienent to define 
-                data into MemoryBlock<T> and then merge that into MemoryBlock<uint8_t>
-                when finished. An advantage of this is stride use for 
-                reinterpreting the data for vertex buffers and to have one common file 
-                read and write code for every buffer. Extension into our memory pool class 
-                for the engine later on is simple since it builds upon this class and allocations
-                to a fixed pool manager is done by just swapping out the class type of MemoryBlock 
-                for the pool class type.
+Remarks:        Header only implementation for inline speed and code reduction
+                of unused methods.
 
 Revisions:      7/23/2021: Implemented MinMax(...), Min(), and Max() for efficient determination of the data pool
                 12/31/2021: Implemented thread safety with mutex locks on data writes
@@ -34,7 +26,12 @@ Revisions:      7/23/2021: Implemented MinMax(...), Min(), and Max() for efficie
                     4) Implemented Clear() that calls destructor of elements for _length, but not of allocation of _capacity.
                         This required refactoring of delete from [] operators to the ::operater delete which does not call
                         destructors when freeing and just the memory we specify.
-                7/30/2022 Implemented json support for file saving and loading and network transport
+                9/18/2022: Revised PushBack() dynamic memory allocator to both reduce reallocation frequency on small buffers 
+                    and cap resizing growth rate above 256 to increments of 256. Also changed initial allocation to null
+                    inlieu of two as the initial often was never enough and almost always results in a reallocation which is
+                    costly.
+                9/19/2022: Added file read and write for 8, 16, and 32 bits that keeps 8 as uint8_t and performs little indian 
+                    conversion to uint16_t and uint32_t for 16 and 32.
 
 Contact:        ChrisKing340@gmail.com
 
@@ -78,7 +75,7 @@ template<typename T, std::size_t align = 16> // bytes
 class alignas(align) MemoryBlock
 {
     /* variables */
-private:
+protected:
     size_t              _length = 0; // number of T elements assigned within data allocation
     size_t              _capacity = 0; //number of T elements reserved for in data allocation
     size_t              _stride = 1; // number of T elements to skip per operator [] indexing (convenient). Note Size() is now depreciated to make this clearer in loops
@@ -87,7 +84,7 @@ private:
     /* methods */
 public:
     // construction/life cycle
-    explicit MemoryBlock() : _capacity(0) { Allocate(2); }
+    explicit MemoryBlock() : _capacity(0) {}// { Allocate(2); } // Allocates empty, PushBack() handles dynamic increases
     MemoryBlock(nullptr_t) : MemoryBlock() {} // allow nullptr construct since that is the default
     explicit MemoryBlock(size_t elementCount, size_t byteStridePerElement = 1) : _stride(byteStridePerElement) { Allocate(elementCount * _stride); Fill(); }
     explicit MemoryBlock(const MemoryBlock& other) { *this = other; } // Copy constructor
@@ -103,10 +100,12 @@ public:
     const T& operator [](size_t i) const { assert(i*_stride<_length); return _data[i*_stride]; } // accessor 
     T& operator [](size_t i) { assert(i*_stride<_capacity); return _data[i*_stride]; } // assignment
     
+    explicit operator T* () const { return 0; } // prevents implicit conversions to other data types, use static_cast
     T* operator->() { return _data; } // data pointer access
     const T* operator->() const { return _data; } // const data pointer access
     explicit operator bool() const { return (bool)_length; } // valid
     bool operator !() const { return !(bool)_data || !(bool)_length; } // invalid
+
     inline MemoryBlock& operator+=(const MemoryBlock& other);
     inline MemoryBlock operator+(const MemoryBlock& other);
 
@@ -143,7 +142,7 @@ public:
     [[deprecated("Use Write instead.")]]
     inline bool WriteMemoryBlock(std::ofstream& outfileIn) {}
 
-    inline bool                 Read(std::ifstream& dataFileIn); // pass stream so we can pack multiple MemoryBlocks into one file
+    inline bool                 Read(std::ifstream& dataFileIn); // pass stream so we could pack multiple MemoryBlocks into one file
     inline bool                 Write(std::ofstream& outfileIn);
 
     inline bool                 ReadRawBinary(std::string& fileNameIn); // length unknown, so read entire file and use file length as byte size
@@ -167,8 +166,31 @@ public:
     const auto&                 GetFront() const { assert(_length); return _data[0]; }
     const auto&                 GetBack() const { return operator [](GetElements() - 1); }
     // Assignments
-    void                        SetLength(const size_t& lengthIn); // note: this does not construct in place objects, use this method only if you have copied the data into the length that grows
+    void                        Set(size_t i, T valueIn) { if (i * _stride < _length) _data[i * _stride] = valueIn; }
+    void                        SetLength(const size_t& lengthIn);
     void                        SetStride(const size_t& strideIn) { std::lock_guard<std::mutex> guard(_mutex); _stride = strideIn; }
+    // Memory helpers
+    uint8_t                     Read1Byte(size_t elem);
+    uint16_t                    Read2ByteWord(size_t elem);
+    uint32_t                    Read4ByteDword(size_t elem);
+    uint64_t                    Read8ByteDDword(size_t elem);
+    float                       ReadFloat(size_t elem);
+
+    void                        Write1Byte(size_t elem, uint8_t byteIn);
+    void                        Write2ByteWord(size_t elem, uint16_t wordIn);
+    void                        Write4ByteDword(size_t elem, uint32_t dwordIn);
+    void                        Write8ByteDword(size_t elem, uint64_t ddwordIn);
+    // File helpers
+    uint8_t                     Read1Byte(std::ifstream& dataFileIn);
+    uint16_t                    Read2ByteWord(std::ifstream& dataFileIn);
+    uint32_t                    Read4ByteDword(std::ifstream& dataFileIn);
+    uint64_t                    Read8ByteDDword(std::ifstream& dataFileIn);
+    float                       ReadFloat(std::ifstream& dataFileIn);
+
+    void                        Write1Byte(std::ofstream& dataFileOut, uint8_t byteIn);
+    void                        Write2ByteWord(std::ofstream& dataFileOut, uint16_t wordIn);
+    void                        Write4ByteDword(std::ofstream& dataFileOut, uint32_t dwordIn);
+    void                        Write8ByteDDword(std::ofstream& dataFileOut, uint64_t ddwordIn);
 
 private:
     void                        Allocate(const std::size_t capacityIn);
@@ -263,11 +285,7 @@ inline MemoryBlock<T, align>& MemoryBlock<T, align>::operator=(MemoryBlock&& oth
 template<typename T, std::size_t align>
 inline void MemoryBlock<T, align>::SetLength(const size_t& lengthIn) 
 { 
-    // note: this does not construct in place objects, use this method only if you have copied the data into the length that grows
-
-    // grows?
-    if (lengthIn > _capacity) 
-        ReAllocate(lengthIn); 
+    auto oldLength = _length;
 
     std::lock_guard<std::mutex> guard(_mutex);
     // shrinks?
@@ -279,8 +297,21 @@ inline void MemoryBlock<T, align>::SetLength(const size_t& lengthIn)
             _data[_length].~T();
         }
     }
+    // grows?
+    else if (lengthIn > _capacity)
+        ReAllocate(lengthIn);
     
     _length = lengthIn; 
+
+    if (_length > oldLength)
+    {
+        // construct emplace
+        do 
+        {
+            new(&_data[oldLength]) T();
+        } 
+        while (++oldLength < _length);
+    }
 }
 
 template<typename T, std::size_t align>
@@ -354,8 +385,9 @@ inline void MemoryBlock<T, align>::Destroy()
 { 
     if (_capacity) 
     { 
+        // remove all elements
         Clear();
-        
+        // delete our memory reserve
         std::lock_guard<std::mutex> guard(_mutex);
         if (_data != nullptr)
             ::operator delete(_data, _capacity * sizeof(T));
@@ -363,10 +395,10 @@ inline void MemoryBlock<T, align>::Destroy()
         _data = nullptr; 
         _length = 0;
         _capacity = 0;
-        //_stride = 1; leave this same as before Destroy so order of setting it does not matter. Often Detroy would be called implicitly
+        //_stride = 1; leave this same as before Destroy so order of setting it does not matter. Often Destroy would be called implicitly
     } 
 }
-
+// add an element to the end
 template<typename T, std::size_t align>
 inline void MemoryBlock<T, align>::PushBack(const T& valueIn)
 {
@@ -380,13 +412,23 @@ inline void MemoryBlock<T, align>::PushBack(const T& valueIn)
 template<typename T, std::size_t align>
 inline void MemoryBlock<T, align>::PushBack(const T&& valueIn)
 {
+    // dynamic to 4, 8, 12, 18, 27, 40, 60, 90, 135... when starting from zero
+    if (!_capacity)
+        Allocate(4);
     if (_length >= _capacity)
-        ReAllocate(_capacity + _capacity / 2);
+    {
+        if (_capacity >= 4 && _capacity < 16)
+            ReAllocate(16);
+        else if (_capacity > 256)
+            ReAllocate((_capacity / 256 + 1) * 256);
+        else
+            ReAllocate(_capacity + _capacity / 2); // 16, 24, 36, 48, 72,...
+    }
 
     _data[_length] = std::move(valueIn);
     ++_length;
 }
-
+// remove the last element
 template<typename T, std::size_t align>
 inline void MemoryBlock<T, align>::PopBack()
 {
@@ -401,13 +443,23 @@ template<typename T, std::size_t align>
 template<typename ...Args>
 inline T& MemoryBlock<T, align>::EmplaceBack(Args && ...args)
 {
+    // dynamic to 4, 8, 12, 18, 27, 40, 60, 90, 135... when starting from zero
+    if (!_capacity)
+        Allocate(4);
     if (_length >= _capacity)
-        ReAllocate(_capacity + _capacity / 2);
+    {
+        if (_capacity >= 4 && _capacity < 16)
+            ReAllocate(16);
+        else if (_capacity > 256)
+            ReAllocate((_capacity / 256 + 1) * 256);
+        else
+            ReAllocate(_capacity + _capacity / 2); // 16, 24, 36, 48, 72,...
+    }
 
     new(&_data[_length]) T(std::forward<Args>(args)...);
     return _data[_length++];
 }
-
+// remove all elements
 template<typename T, std::size_t align>
 inline void MemoryBlock<T, align>::Clear()
 {
@@ -420,11 +472,14 @@ inline void MemoryBlock<T, align>::Clear()
     _length = 0;
 }
 
+// Fill all allocated memory (size of _capacity)
 template<typename T, std::size_t align>
 inline void MemoryBlock<T, align>::Fill()
 {
+    // call destructors
+    Clear();
+    
     std::lock_guard<std::mutex> guard(_mutex);
-
     // use the default constructor values;
     // copy
     for (size_t i = 0; i < _length; ++i)
@@ -439,8 +494,10 @@ inline void MemoryBlock<T, align>::Fill()
 template<typename T, std::size_t align>
 inline void MemoryBlock<T, align>::Fill(T valueIn) 
 { 
-    std::lock_guard<std::mutex> guard(_mutex); 
+    // call destructors
+    Clear();
 
+    std::lock_guard<std::mutex> guard(_mutex); 
     // copy
     for (size_t i = 0; i < _length; ++i) 
         _data[i] = valueIn;
@@ -514,8 +571,6 @@ inline bool MemoryBlock<T, align>::Read(std::ifstream& dataFileIn) // Memory blo
 
     size_t readLength;
     size_t readStride;
-
-    //dataFileIn >> readLength >> readStride; // 6/27/2022 CHK error: not reading the values correctly, but the below works fine
 
     dataFileIn.read(reinterpret_cast<char*>(&readLength), sizeof(size_t));
     dataFileIn.read(reinterpret_cast<char*>(&readStride), sizeof(size_t));
@@ -771,5 +826,165 @@ inline T MemoryBlock<T, align>::Max()
     }
     return ma;
 }
+// Memory helpers
+template<typename T, std::size_t align>
+inline uint8_t MemoryBlock<T, align>::Read1Byte(std::size_t elem)
+{
+    int value = Get(elem);
+    return (uint8_t)value;
+}
 
+template<typename T, std::size_t align>
+inline uint16_t MemoryBlock<T, align>::Read2ByteWord(std::size_t elem)
+{
+    auto addr = &Get(elem);
+    return *(reinterpret_cast<uint16_t*>(addr));
+}
+
+template<typename T, std::size_t align>
+inline uint32_t MemoryBlock<T, align>::Read4ByteDword(std::size_t elem)
+{
+    auto addr = &Get(elem);
+    return *(reinterpret_cast<uint32_t*>(addr));
+}
+
+template<typename T, std::size_t align>
+inline float MemoryBlock<T, align>::ReadFloat(size_t elem)
+{
+    auto addr = reinterpret_cast<float*>(&Get(elem));
+    return *(addr);
+}
+
+template<typename T, std::size_t align>
+inline uint64_t MemoryBlock<T, align>::Read8ByteDDword(std::size_t elem)
+{
+    auto addr = &Get(elem);
+    return *(reinterpret_cast<uint64_t*>(addr));
+}
+
+template<typename T, std::size_t align>
+inline void MemoryBlock<T, align>::Write1Byte(size_t elem, uint8_t byteIn)
+{
+    auto addr = reinterpret_cast<uint8_t*>(&Get(elem));
+    *addr = byteIn;
+}
+
+template<typename T, std::size_t align>
+inline void MemoryBlock<T, align>::Write2ByteWord(size_t elem, uint16_t wordIn)
+{
+    auto addr = reinterpret_cast<uint16_t*>(&Get(elem));
+    *addr = wordIn;
+}
+
+template<typename T, std::size_t align>
+inline void MemoryBlock<T, align>::Write4ByteDword(size_t elem, uint32_t dwordIn)
+{
+    auto addr = reinterpret_cast<uint32_t*>(&Get(elem));
+    *addr = dwordIn;
+}
+
+template<typename T, std::size_t align>
+inline void MemoryBlock<T, align>::Write8ByteDword(size_t elem, uint64_t ddwordIn)
+{
+    auto addr = reinterpret_cast<uint64_t*>(&Get(elem));
+    *addr = ddwordIn;
+}
+
+// File helpers
+template<typename T, std::size_t align>
+inline uint8_t MemoryBlock<T, align>::Read1Byte(std::ifstream& dataFileIn)
+{
+    int value = dataFileIn.get();
+    if (value != EOF)
+        return (uint8_t)value;
+    // mask 0xff
+    else return 0;
+}
+
+template<typename T, std::size_t align>
+inline uint16_t MemoryBlock<T, align>::Read2ByteWord(std::ifstream& dataFileIn)
+{
+    // little endian ordering
+    auto b1 = Read1Byte(dataFileIn);
+    auto b2 = Read1Byte(dataFileIn);
+    if (dataFileIn.fail()) return 0;
+    // mask 0xffff
+    return ((b2 << 8) | b1);
+}
+
+template<typename T, std::size_t align>
+inline uint32_t MemoryBlock<T, align>::Read4ByteDword(std::ifstream& dataFileIn)
+{
+    // little endian ordering
+    auto b1 = Read1Byte(dataFileIn);
+    auto b2 = Read1Byte(dataFileIn);
+    auto b3 = Read1Byte(dataFileIn);
+    auto b4 = Read1Byte(dataFileIn);
+    if (dataFileIn.fail()) return 0;
+    // mask 0xffffffff
+    return ((b4 << 24) | (b3 << 16) | (b2 << 8) | b1);
+}
+
+template<typename T, std::size_t align>
+inline float MemoryBlock<T, align>::ReadFloat(std::ifstream& dataFileIn)
+{
+    float f;
+    dataFileIn.read(reinterpret_cast<char*>(&f), 4);
+    return f;
+}
+
+template<typename T, std::size_t align>
+inline uint64_t MemoryBlock<T, align>::Read8ByteDDword(std::ifstream& dataFileIn)
+{
+    // little endian ordering
+    auto b1 = Read1Byte(dataFileIn);
+    auto b2 = Read1Byte(dataFileIn);
+    auto b3 = Read1Byte(dataFileIn);
+    auto b4 = Read1Byte(dataFileIn);
+    auto b5 = Read1Byte(dataFileIn);
+    auto b6 = Read1Byte(dataFileIn);
+    auto b7 = Read1Byte(dataFileIn);
+    auto b8 = Read1Byte(dataFileIn);
+    if (dataFileIn.fail()) return 0;
+    // mask 0xffffffffffffffff
+    return ((b8 << 56) | (b7 << 48) | (b6 << 40) | (b5 << 32) | (b4 << 24) | (b3 << 16) | (b2 << 8) | b1);
+}
+
+template<typename T, std::size_t align>
+inline void MemoryBlock<T, align>::Write1Byte(std::ofstream& dataFileOut, uint8_t byteIn)
+{
+    dataFileOut.put(byteIn);
+}
+
+template<typename T, std::size_t align>
+inline void MemoryBlock<T, align>::Write2ByteWord(std::ofstream& dataFileOut, uint16_t wordIn)
+{
+    // little endian ordering
+    Write1Byte(dataFileOut, wordIn & 0x00FF);
+    Write1Byte(dataFileOut, (wordIn & 0xFF00) >> 8);
+}
+
+template<typename T, std::size_t align>
+inline void MemoryBlock<T, align>::Write4ByteDword(std::ofstream& dataFileOut, uint32_t dwordIn)
+{
+    // little endian ordering
+    Write1Byte(dataFileOut, dwordIn & 0xFF);
+    Write1Byte(dataFileOut, (dwordIn >> 8) & 0xFF);
+    Write1Byte(dataFileOut, (dwordIn >> 16) & 0xFF);
+    Write1Byte(dataFileOut, (dwordIn >> 24) & 0xFF);
+}
+
+template<typename T, std::size_t align>
+inline void MemoryBlock<T, align>::Write8ByteDDword(std::ofstream& dataFileOut, uint64_t ddwordIn)
+{
+    // little endian ordering
+    Write1Byte(dataFileOut, ddwordIn & 0xFF);
+    Write1Byte(dataFileOut, (ddwordIn >> 8) & 0xFF);
+    Write1Byte(dataFileOut, (ddwordIn >> 16) & 0xFF);
+    Write1Byte(dataFileOut, (ddwordIn >> 24) & 0xFF);
+    Write1Byte(dataFileOut, (ddwordIn >> 32) & 0xFF);
+    Write1Byte(dataFileOut, (ddwordIn >> 40) & 0xFF);
+    Write1Byte(dataFileOut, (ddwordIn >> 48) & 0xFF);
+    Write1Byte(dataFileOut, (ddwordIn >> 56) & 0xFF);
+}
 }

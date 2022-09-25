@@ -91,7 +91,7 @@ namespace Physics {
     // all of the below are a subset topics belonging to mechanics
 
     //*** Trajectory *** 
-    // Ease math is when the force on an object is constant, and therefore acceleration is constant (such as the force of gravity).
+    // When the force on an object is constant, and therefore acceleration is constant (such as the force of gravity), simple calculations:
     // p = p0 + v0 t + 1/2 a t^2
     King::Position              Mechanics_Trajectory(const Position& initialPosIn, const Velocity& initialVelIn, const Acceleration& constAccelIn, const UnitOfMeasure::Time& tIn);
     // p = p0 + v0 t + 1/2 g t^2

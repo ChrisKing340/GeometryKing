@@ -4606,13 +4606,13 @@ int King::Model::CreateMeshFrom(const Path& p, Distance d)
     const auto offsetUVBytes = _vertexFormat.GetAttributeByteStart(indexUV);
     const auto offsetNormBytes = _vertexFormat.GetAttributeByteStart(indexNorm);
 
-    size_t count(0);
+    uint32_t count(0);
     const size_t increment = 4;
     for (const auto& q : quads)
     {
         // positions
         assert(indexPos != UINT16_MAX);
-        for (int i = 0; i < 4; ++i)
+        for (uint32_t i = 0; i < 4; ++i)
         {
             auto src = static_cast<uint8_t*>(q.GetVertex(i));
             auto dest = GetVertexAddr(count + i, vbStart) + offsetPosBytes;
@@ -4698,8 +4698,8 @@ int King::Model::CreateMeshFromExp(const Path& path, Distance d)
             // find the rotation from prevEdge2 to edge2
             rot = quat(prevEdge2.Get_unit_direction(), edge2.Get_unit_direction());
             d = rot * d;
-            // if the angle is > 270 deg, insert another point and form a quad
-            if (rot.GetAngle() > UnitOfMeasure::PI * 1.5f)
+            // if the angle is > 270 deg, insert another point and form a quad [-pi, +pi] CW
+            if (rot.GetAngleEuler() > UnitOfMeasure::PI_DIV2)
             {
                 /*    pt0
                       /|\
@@ -4983,7 +4983,7 @@ int King::Model::CreateMeshFrom(const Path& pFrom, const Path& pTo)
     const auto offsetUVBytes = _vertexFormat.GetAttributeByteStart(indexUV);
     const auto offsetNormBytes = _vertexFormat.GetAttributeByteStart(indexNorm);
 
-    for (size_t i = 0; i < verts.size(); ++i)
+    for (uint32_t i = 0; i < verts.size(); ++i)
     {
         // positions
         assert(indexPos != UINT16_MAX);
@@ -5009,10 +5009,10 @@ int King::Model::CreateMeshFrom(const Path& pFrom, const Path& pTo)
     // normals
     if (indexNorm != UINT16_MAX)
     {
-        size_t c = 2; // vertex count
+        uint32_t c = 2; // vertex count
         // quadOrTri size is number of faces
         const auto& iSize = quadOrTri.size();
-        for (size_t i = 0; i < iSize; ++i)
+        for (uint32_t i = 0; i < iSize; ++i)
         {
             auto nin = i + 1;
             if (nin >= iSize)

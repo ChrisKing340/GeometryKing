@@ -144,9 +144,9 @@ namespace King {
         float                               GetValueSI() const { return UnitOfMeasure::N * (float)_magnitude; }
         // Assignments
         // Note: set unit direction before magnitude in case sign of magnitude is switched
-        void __vectorcall                   SetVector(const float3& vecotrIN) { _magnitude = float3::Magnitude(vecotrIN); _unit_direction = float3::Normal(vecotrIN); }
+        void __vectorcall                   SetVector(const float3 vecotrIN) { _magnitude = float3::Magnitude(vecotrIN); _unit_direction = float3::Normal(vecotrIN); }
         void                                Set_magnitude(const float &_magnitude_IN) { _magnitude = abs(_magnitude_IN); if (_magnitude != _magnitude_IN) { _unit_direction = -_unit_direction; }; }
-        void __vectorcall                   Set_unit_direction(const float3 &_unit_direction_IN) { _unit_direction = _unit_direction_IN; } // assumes it is normalized on input
+        void __vectorcall                   Set_unit_direction(const float3 _unit_direction_IN) { _unit_direction = _unit_direction_IN; } // assumes it is normalized on input
     
         // Input & Output functions that can have access to protected & private data
         friend std::ostream& operator<< (std::ostream& os, const Force& in);

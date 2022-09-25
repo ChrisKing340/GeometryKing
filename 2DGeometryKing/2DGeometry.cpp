@@ -126,7 +126,7 @@ King::FloatPoint2 King::Line2DF::FindNearestPointOnLineSegment(const FloatPoint2
 *       Remarks:    rasterizes the line with integers utilizing the Bresenham
 *                    method.
 ******************************************************************************/
-void King::Line2DF::LineTraverse(std::function<void(IntPoint2 ptOut)> callBack)
+void King::Line2DF::Traverse(std::function<void(IntPoint2 ptOut)> callBack) const
 {
     // TO DO ********* make a 3D version for Line class, reference https://gist.github.com/yamamushi/5823518 and need an int3
 
@@ -518,6 +518,8 @@ bool King::Triangle2DF::Contains(const FloatPoint2 & ptIn)
      Line2DF clipped;
      clipped.SetVertex(0, src.pt[0] + t0 * delta);
      clipped.SetVertex(1, src.pt[0] + t1 * delta);
+
+     // we need to back reverse the top and bottom for y
      return clipped;
  }
 
@@ -667,6 +669,1002 @@ void King::Polygon2DF::Offset(const float dist)
         temp[i] = l.GetVertex(1);
     }
     _pt.swap(temp);
-
-
 }
+
+/******************************************************************************
+*    ImageBlock
+******************************************************************************/
+
+inline void King::ImageBlock::Initialize(const uint32_t& w, const uint32_t& h, const uint32_t& texelInBytes)
+{
+    _w = w;
+    _h = h;
+    SetStride(texelInBytes);
+    size_t length = (size_t)w * h * texelInBytes;
+    MemoryBlock<unsigned char>::Initialize(length);
+}
+
+inline bool King::ImageBlock::Read(std::ifstream& dataFileIn)
+{
+    if (!dataFileIn.is_open()) return false;
+    if (!dataFileIn.good()) return false;
+
+    dataFileIn.read(reinterpret_cast<char*>(&_w), sizeof(_w));
+    if (dataFileIn.fail()) return false;
+
+    auto rtn = MemoryBlock<unsigned char>::Read(dataFileIn);
+
+    if (rtn)
+        _h = GetElements() / _w;
+
+    return rtn;
+}
+
+inline bool King::ImageBlock::Write(std::ofstream& outfileIn)
+{
+    if (!outfileIn.is_open()) return false;
+
+    // write extra dimension at the beginning so we can take the image block
+    // and determine its dimensions after loading
+    outfileIn.write(reinterpret_cast<const char*>(&_w), sizeof(_w));
+
+    if (outfileIn.fail()) return false;
+    return MemoryBlock<unsigned char>::Write(outfileIn);
+}
+
+void King::ImageBlock::Draw(const Line2DF& lineIn, float4 colorIn, const float fractionIn)
+{
+    assert(fractionIn <= 1.0f && fractionIn > 0.f);
+
+    Rectangle2DF me(_w, _h);
+    auto line = me.Clip(lineIn);
+
+    line.SetVertex(1, line.GetVertex(0) + fractionIn * (line.pt[1] - line.pt[0]));
+
+    const auto l = line.GetLength();
+    if (l.GetX() < 1.0f && l.GetY() < 1.0f)
+        return;
+
+    // color
+    MemoryBlock<unsigned char> c;
+    if (_stride > 0)
+        c.PushBack((uint8_t)(255.f * colorIn.GetX()));
+    if (_stride > 1)
+        c.PushBack((uint8_t)(255.f * colorIn.GetY()));
+    if (_stride > 2)
+        c.PushBack((uint8_t)(255.f * colorIn.GetZ()));
+    if (_stride > 3)
+        c.PushBack((uint8_t)(255.f * colorIn.GetW()));
+
+    uint8_t* src = &c.GetData();
+    std::function<void(IntPoint2 ptOut)> callBack = [&](IntPoint2 ptOut) { SetPixel(ptOut.GetX(), ptOut.GetY(), src, false); };
+
+    //std::lock_guard<std::mutex> guard(_mutex);
+    line.Traverse(callBack);
+}
+
+void King::ImageBlock::Draw(const Triangle2DF& triIn, float4 colorIn, const float fractionIn)
+{
+    Rectangle2DF me(_w, _h);
+    const Polygon2DF& poly = me.Clip(triIn);
+    if (poly._pt.size() < 2) return;
+
+    std::lock_guard<std::mutex> guard(_mutex);
+    for (size_t i = 0; i < poly._pt.size(); ++i)
+    {
+        auto n(i+1);
+        const auto& ptFrom = poly._pt[i];
+        if (n >= poly._pt.size())
+            n = 0;
+        const auto& ptTo = poly._pt[n];
+        Draw(Line2DF(ptFrom, ptTo), colorIn, fractionIn);
+    }
+}
+
+void King::ImageBlock::Draw(const Polygon2DF& polyIn, float4 colorIn, const float fractionIn)
+{
+    Rectangle2DF me(_w, _h);
+    const Polygon2DF& poly = me.Clip(polyIn);
+    if (poly._pt.size() < 2) return;
+
+    std::lock_guard<std::mutex> guard(_mutex);
+    for (size_t i = 0; i < poly._pt.size(); ++i)
+    {
+        auto n(i + 1);
+        const auto& ptFrom = poly._pt[i];
+        if (n >= poly._pt.size())
+            n = 0;
+        const auto& ptTo = poly._pt[n];
+        Draw(Line2DF(ptFrom, ptTo), colorIn, fractionIn);
+    }
+}
+
+void King::ImageBlock::Draw(const Rectangle2DF& rectIn, float4 colorIn, const float fractionIn)
+{
+    assert(fractionIn <= 1.0f && fractionIn > 0.f);
+    assert(rectIn.GetLT() < rectIn.GetRB());
+    std::lock_guard<std::mutex> guard(_mutex);
+
+    Rectangle2DF me(_w, _h);
+    const auto rect = me.Clip(rectIn);
+    const auto x = (uint32_t)rect.GetLeft();
+    const auto y = (uint32_t)rect.GetTop();
+    const auto w = (uint32_t)rect.GetWidth();
+    const auto h = (uint32_t)rect.GetHeight();
+
+    // color
+    MemoryBlock<unsigned char> c;
+    if (_stride > 0)
+        c.PushBack((uint8_t)(255.f * colorIn.GetX()));
+    if (_stride > 1)
+        c.PushBack((uint8_t)(255.f * colorIn.GetY()));
+    if (_stride > 2)
+        c.PushBack((uint8_t)(255.f * colorIn.GetZ()));
+    if (_stride > 3)
+        c.PushBack((uint8_t)(255.f * colorIn.GetW()));
+
+    // horizontal lines
+    auto destTopStart = (uint8_t*)&Get((size_t)y * _w);
+    auto destBttmStart = (uint8_t*)&Get(((size_t)y + h) * _w);
+    for (uint32_t i = x * _stride; i < (x + w + 1) * _stride * fractionIn; i += _stride)
+    {
+        for (uint32_t byteNumber = 0; byteNumber < c.GetLength(); ++byteNumber)
+        {
+            *(destTopStart + i + byteNumber) = c[byteNumber];
+            *(destBttmStart + i + byteNumber) = c[byteNumber];
+        }
+    }
+    // vertical lines
+    for (uint32_t j = y; j < y + h; ++j)
+    {
+        auto destLeft = (uint8_t*)&Get((size_t)j * _w + x);
+        auto destRight = (uint8_t*)&Get((size_t)j * _w + x + w);
+
+        for (uint32_t byteNumber = 0; byteNumber < c.GetLength(); ++byteNumber)
+        {
+            *(destLeft + byteNumber) = c[byteNumber];
+            *(destRight + byteNumber) = c[byteNumber];
+        }
+    }
+}
+
+void King::ImageBlock::Draw(const Circle2DF& cirIn, float4 colorIn, const float fractionIn)
+{
+    assert(fractionIn <= 1.0f && fractionIn > 0.f);
+
+    // clipping
+    Rectangle2DF clip(_w, _h);
+    // completely outside?
+    if (!clip.Intersects(cirIn)) return;
+
+    // color
+    MemoryBlock<unsigned char> c;
+    if (_stride > 0)
+        c.PushBack((uint8_t)(255.f * colorIn.GetX()));
+    if (_stride > 1)
+        c.PushBack((uint8_t)(255.f * colorIn.GetY()));
+    if (_stride > 2)
+        c.PushBack((uint8_t)(255.f * colorIn.GetZ()));
+    if (_stride > 3)
+        c.PushBack((uint8_t)(255.f * colorIn.GetW()));
+
+    // using the generalized ellipse midpoint algorithm
+    // reference: https://www.geeksforgeeks.org/midpoint-ellipse-drawing-algorithm/ 
+    int rx, ry;
+    rx = ry = (int)cirIn.GetRadius();
+    int xc, yc;
+    const int2& center = cirIn.GetCenter();
+    xc = (int)center.GetX();
+    yc = (int)center.GetY();
+
+    // fraction
+    int fractionStop = (int)((float)rx * fractionIn);
+    bool stop(false);
+
+    // algorithm
+    float dx, dy, d1, d2, x, y;
+    x = 0;
+    y = ry;
+
+    // Initial decision parameter of region 1
+    d1 = (ry * ry) - (rx * rx * ry) +
+        (0.25 * rx * rx);
+    dx = 2 * ry * ry * x;
+    dy = 2 * rx * rx * y;
+
+    std::lock_guard<std::mutex> guard(_mutex);
+
+    // For region 1
+    while (dx < dy && !stop)
+    {
+        // 4-way symmetry
+        int xp = x + xc;
+        int yp = y + yc;
+        int xn = -x + xc;
+        int yn = -y + yc;
+        if (clip.Intersects(xp, yp))
+            SetPixel(xp, yp, &c.GetData(), false);
+        if (clip.Intersects(xn, yp))
+            SetPixel(xn, yp, &c.GetData(), false);
+        if (clip.Intersects(xp, yn))
+            SetPixel(xp, yn, &c.GetData(), false);
+        if (clip.Intersects(xn, yn))
+            SetPixel(xn, yn, &c.GetData(), false);
+
+        // Checking and updating value of
+        // decision parameter based on algorithm
+        if (d1 < 0)
+        {
+            x++;
+            dx = dx + (2 * ry * ry);
+            d1 = d1 + dx + (ry * ry);
+        }
+        else
+        {
+            x++;
+            y--;
+            dx = dx + (2 * ry * ry);
+            dy = dy - (2 * rx * rx);
+            d1 = d1 + dx - dy + (ry * ry);
+        }
+
+        if (x > fractionStop)
+            stop = true;
+    }
+
+    // Decision parameter of region 2
+    d2 = ((ry * ry) * ((x + 0.5) * (x + 0.5))) +
+        ((rx * rx) * ((y - 1) * (y - 1))) -
+        (rx * rx * ry * ry);
+
+    // Plotting points of region 2
+    stop = false;
+    while (y >= 0 && !stop)
+    {
+        // 4-way symmetry
+        int xp = x + xc;
+        int yp = y + yc;
+        int xn = -x + xc;
+        int yn = -y + yc;
+        if (clip.Intersects(xp, yp))
+            SetPixel(xp, yp, &c.GetData(), false);
+        if (clip.Intersects(xn, yp))
+            SetPixel(xn, yp, &c.GetData(), false);
+        if (clip.Intersects(xp, yn))
+            SetPixel(xp, yn, &c.GetData(), false);
+        if (clip.Intersects(xn, yn))
+            SetPixel(xn, yn, &c.GetData(), false);
+
+        // Checking and updating parameter
+        // value based on algorithm
+        if (d2 > 0)
+        {
+            y--;
+            dy = dy - (2 * rx * rx);
+            d2 = d2 + (rx * rx) - dy;
+        }
+        else
+        {
+            y--;
+            x++;
+            dx = dx + (2 * ry * ry);
+            dy = dy - (2 * rx * rx);
+            d2 = d2 + dx - dy + (rx * rx);
+        }
+
+        if (x > fractionStop)
+            stop = true;
+    }
+}
+
+void King::ImageBlock::DrawFilled(const Triangle2DF& triIn, float4 colorIn)
+{
+    // Algorithm draws a triangle in two parts: 
+    //      1) Top half with the middle vertex, y1, forming a horizontal line over to the edge between y0 adn y2
+    //      2) Bottom half being the remainder of the triangle
+    // reference: http://tfpsly.free.fr/english/index.html?url=http://tfpsly.free.fr/Docs/3dIca/3dica.htm
+    Rectangle2DF me(_w, _h);
+    Triangle2DF tri(triIn);
+
+    // color
+    MemoryBlock<unsigned char> c;
+    if (_stride > 0)
+        c.PushBack((uint8_t)(255.f * colorIn.GetX()));
+    if (_stride > 1)
+        c.PushBack((uint8_t)(255.f * colorIn.GetY()));
+    if (_stride > 2)
+        c.PushBack((uint8_t)(255.f * colorIn.GetZ()));
+    if (_stride > 3)
+        c.PushBack((uint8_t)(255.f * colorIn.GetW()));
+
+    // helpers
+    auto SwapPt = [](float2& a, float2& b) { const float2 temp(a); a = b; b = temp; };
+
+    // sort verticies in the y direction such that y0 < y1 < y2
+    if (tri.pt[1].GetY() < tri.pt[0].GetY())
+        SwapPt(tri.pt[1], tri.pt[0]);
+    if (tri.pt[2].GetY() < tri.pt[1].GetY())
+        SwapPt(tri.pt[2], tri.pt[1]);
+    if (tri.pt[2].GetY() < tri.pt[0].GetY())
+        SwapPt(tri.pt[2], tri.pt[0]);
+
+    // distance of each edge
+    int2 delta[3];
+    delta[0] = tri.pt[1] - tri.pt[0];
+    delta[1] = tri.pt[2] - tri.pt[1];
+    delta[2] = tri.pt[0] - tri.pt[2];
+    // inverse slope of each edge (as we will be incrementing y)
+    float inv_m[3];
+    for (uint8_t i = 0; i < 3; ++i)
+    {
+        if (delta[i])
+            inv_m[i] = (float)delta[i].GetX() / (float)delta[i].GetY();
+        else
+            inv_m[i] = 0.f;
+    }
+    // draw
+    std::lock_guard<std::mutex> guard(_mutex);
+
+    const auto& x0 = (uint32_t)tri.pt[0].GetX();
+    const auto& x1 = (uint32_t)tri.pt[1].GetX();
+    const auto& y0 = (uint32_t)tri.pt[0].GetY();
+    const auto& y1 = (uint32_t)tri.pt[1].GetY();
+    const auto& y2 = (uint32_t)tri.pt[2].GetY();
+
+    //const auto x = min(x0, x1);
+    // top of triangle
+    for (auto y = y0; y <= y1; ++y)
+        DrawFilledScanLine((uint32_t)(x0 + (y - y0) * inv_m[0]), (uint32_t)(x0 + (y - y0) * inv_m[2]), y, &c.GetData(), false);
+
+    // bottom of triangle
+    for (auto y = y1; y <= y2; ++y)
+        DrawFilledScanLine((uint32_t)(x1 + (y - y1) * inv_m[1]), (uint32_t)(x0 + (y - y0) * inv_m[2]), y, &c.GetData(), false);
+}
+
+void King::ImageBlock::DrawFilled(const Rectangle2DF& rectIn, float4 colorIn)
+{
+    std::lock_guard<std::mutex> guard(_mutex);
+
+    Rectangle2DF me(_w, _h);
+    const auto rect = me.Clip(rectIn);
+    const auto x = (uint32_t)rect.GetLeft();
+    const auto y = (uint32_t)rect.GetTop();
+    const auto w = (uint32_t)rect.GetWidth();
+    const auto h = (uint32_t)rect.GetHeight();
+
+    // color
+    MemoryBlock<unsigned char> c;
+    if (_stride > 0)
+        c.PushBack((uint8_t)(255.f * colorIn.GetX()));
+    if (_stride > 1)
+        c.PushBack((uint8_t)(255.f * colorIn.GetY()));
+    if (_stride > 2)
+        c.PushBack((uint8_t)(255.f * colorIn.GetZ()));
+    if (_stride > 3)
+        c.PushBack((uint8_t)(255.f * colorIn.GetW()));
+
+    for (uint32_t j = y; j < y + h; ++j)
+    {
+        auto destStart = (uint8_t *)&Get((size_t)j * _w + x);
+
+        for (uint32_t i = 0; i < w * _stride; i += _stride)
+        {
+            for (uint32_t byteNumber = 0; byteNumber < c.GetLength(); ++byteNumber)
+            {
+                destStart[i + byteNumber] = c[byteNumber];
+            }
+        }
+    }
+}
+
+void King::ImageBlock::DrawFilled(const Circle2DF& cirIn, float4 colorIn)
+{
+    // clipping
+    Rectangle2DF clip(_w, _h);
+    // completely outside?
+    if (!clip.Intersects(cirIn)) return;
+
+    // color
+    MemoryBlock<unsigned char> c;
+    if (_stride > 0)
+        c.PushBack((uint8_t)(255.f * colorIn.GetX()));
+    if (_stride > 1)
+        c.PushBack((uint8_t)(255.f * colorIn.GetY()));
+    if (_stride > 2)
+        c.PushBack((uint8_t)(255.f * colorIn.GetZ()));
+    if (_stride > 3)
+        c.PushBack((uint8_t)(255.f * colorIn.GetW()));
+
+    // using the generalized ellipse midpoint algorithm
+    // reference: https://www.geeksforgeeks.org/midpoint-ellipse-drawing-algorithm/ 
+    int rx, ry;
+    rx = ry = (int)cirIn.GetRadius();
+    int xc, yc;
+    const int2& center = cirIn.GetCenter();
+    xc = (int)center.GetX();
+    yc = (int)center.GetY();
+
+    // fraction
+
+    // algorithm
+    float dx, dy, d1, d2, x, y;
+    x = 0;
+    y = ry;
+
+    // Initial decision parameter of region 1
+    d1 = (ry * ry) - (rx * rx * ry) +
+        (0.25 * rx * rx);
+    dx = 2 * ry * ry * x;
+    dy = 2 * rx * rx * y;
+
+    std::lock_guard<std::mutex> guard(_mutex);
+
+    // For region 1
+    int old_yn(-1), old_yp(-1);
+    while (dx < dy)
+    {
+        // 4-way symmetry
+        int xp = x + xc;
+        int yp = y + yc;
+        int xn = -x + xc;
+        int yn = -y + yc;
+
+        if (clip.Intersects(xn, yn))
+            SetPixel(xn, yn, &c.GetData(), false);
+        if (clip.Intersects(xp, yn))
+            SetPixel(xp, yn, &c.GetData(), false);
+
+        if (clip.Intersects(xn, yp))
+            SetPixel(xn, yp, &c.GetData(), false);
+        if (clip.Intersects(xp, yp))
+            SetPixel(xp, yp, &c.GetData(), false);
+
+        // fill interior
+        if (yn != old_yn)
+        {
+            old_yn = yn;
+            for (int i = xn + 1; i < xp; ++i)
+                SetPixel(i, yn, &c.GetData(), false);
+        }
+        if (yp != old_yp)
+        {
+            old_yp = yp;
+            for (int i = xn + 1; i < xp; ++i)
+                SetPixel(i, yp, &c.GetData(), false);
+        }
+        
+        // Checking and updating value of
+        // decision parameter based on algorithm
+        if (d1 < 0)
+        {
+            x++;
+            dx = dx + (2 * ry * ry);
+            d1 = d1 + dx + (ry * ry);
+        }
+        else
+        {
+            x++;
+            y--;
+            dx = dx + (2 * ry * ry);
+            dy = dy - (2 * rx * rx);
+            d1 = d1 + dx - dy + (ry * ry);
+        }
+    }
+
+    // Decision parameter of region 2
+    d2 = ((ry * ry) * ((x + 0.5) * (x + 0.5))) +
+        ((rx * rx) * ((y - 1) * (y - 1))) -
+        (rx * rx * ry * ry);
+
+    // Plotting points of region 2
+    old_yn = old_yp = -1;
+    while (y >= 0)
+    {
+        // 4-way symmetry
+        int xp = x + xc;
+        int yp = y + yc;
+        int xn = -x + xc;
+        int yn = -y + yc;
+        if (clip.Intersects(xp, yp))
+            SetPixel(xp, yp, &c.GetData(), false);
+        if (clip.Intersects(xn, yp))
+            SetPixel(xn, yp, &c.GetData(), false);
+        if (clip.Intersects(xp, yn))
+            SetPixel(xp, yn, &c.GetData(), false);
+        if (clip.Intersects(xn, yn))
+            SetPixel(xn, yn, &c.GetData(), false);
+
+        // fill interior
+        if (yn != old_yn)
+        {
+            old_yn = yn;
+            for (int i = xn + 1; i < xp; ++i)
+                SetPixel(i, yn, &c.GetData(), false);
+        }
+        if (yp != old_yp)
+        {
+            old_yp = yp;
+            for (int i = xn + 1; i < xp; ++i)
+                SetPixel(i, yp, &c.GetData(), false);
+        }
+
+        // Checking and updating parameter
+        // value based on algorithm
+        if (d2 > 0)
+        {
+            y--;
+            dy = dy - (2 * rx * rx);
+            d2 = d2 + (rx * rx) - dy;
+        }
+        else
+        {
+            y--;
+            x++;
+            dx = dx + (2 * ry * ry);
+            dy = dy - (2 * rx * rx);
+            d2 = d2 + dx - dy + (rx * rx);
+        }
+    }
+}
+
+void King::ImageBlock::DrawFilledScanLine(const uint32_t& xFrom, const uint32_t& xTo, const uint32_t& y_HorzScanLine, unsigned char* colorBufferIn, const bool guardIn)
+{
+    // note colorIn size must match _stride
+    assert((xFrom < _w) && (xTo < _w) && (y_HorzScanLine < _h));
+    unsigned char* dest = &Get((size_t)y_HorzScanLine * _w);
+
+    uint32_t start;
+    uint32_t stop;
+    if (xFrom < xTo)
+    {
+        start = _stride * xFrom;
+        stop = _stride * xTo;
+    }
+    else
+    {
+        start = _stride * xFrom;
+        stop = _stride * xTo;
+    }
+
+    if (stop >= _w * _stride)
+        stop = (_w - 1) * _stride;
+
+    if (guardIn)
+        std::lock_guard<std::mutex> guard(_mutex);
+
+    for (auto x = start; x <= stop; x += _stride)
+        std::copy(colorBufferIn, colorBufferIn + _stride, dest + x);
+}
+
+void King::ImageBlock::CopyRectOut(const Rectangle2DF& srcRectIn, ImageBlock* destOut)
+{
+    Rectangle2DF me(_w, _h);
+    const auto srcRect = me.Clip(srcRectIn);
+    const auto x = (uint32_t)srcRect.GetLeft();
+    const auto y = (uint32_t)srcRect.GetTop();
+    const auto w = (uint32_t)srcRect.GetWidth();
+    const auto h = (uint32_t)srcRect.GetHeight();
+
+    if (destOut != nullptr && w > 0 && h > 0)
+    {
+        destOut->Initialize(w, h, GetStride());
+    }
+    else
+        return;
+
+    auto dest = &destOut->GetData();
+
+    std::lock_guard<std::mutex> guard(_mutex);
+    for (uint32_t j = y; j < y + h; ++j)
+    {
+        auto srcStart = &Get((size_t)j * _w + (size_t)x);
+        auto srcEnd = srcStart + w * _stride;
+        std::copy(srcStart, srcEnd, dest);
+
+        dest += w * _stride;
+    }
+}
+
+void King::ImageBlock::CopyImageBlockIn(const ImageBlock& srcIn, const float& xIn, const float& yIn)
+{
+    const auto xDest = (uint32_t)xIn;
+    const auto yDest = (uint32_t)yIn;
+    assert(xDest < _w && yDest < _h);
+
+    auto srcStride = srcIn.GetStride();
+    auto destStride = GetStride();
+
+    Rectangle2DF me(_w, _h);
+    Rectangle2DF srcRectFromBlock(srcIn.GetWidth(), srcIn.GetHeight());
+    auto srcRect = me.Clip(srcRectFromBlock);
+    const auto x = (uint32_t)srcRect.GetLeft();
+    const auto y = (uint32_t)srcRect.GetTop();
+    const auto w = (uint32_t)srcRect.GetWidth();
+    const auto h = (uint32_t)srcRect.GetHeight();
+
+    unsigned char* dest = &Get((size_t)yDest * _w + (size_t)xDest);
+
+    if (w > 0 && h > 0)
+    {
+        std::lock_guard<std::mutex> guard(_mutex);
+        for (uint32_t j = y; j < y + h; ++j)
+        {
+            auto srcStart = &srcIn.Get((size_t)j * w + (size_t)x);
+            auto srcEnd = srcStart + w * srcStride;
+
+            if (srcStride == destStride)
+                std::copy(srcStart, srcEnd, dest);
+            else
+            {
+                // copy row
+                for (uint32_t i = 0; i < w; ++i)
+                {
+                    if (srcStride > destStride)
+                    {
+                        auto offset = (size_t)(j - y) * _w + (size_t)i * destStride;
+                        auto src = srcStart + i * srcStride;
+                        // copy bytewise and skipping source bytes per iteration
+                        for (uint32_t ea = 0; ea < destStride; ++ea)
+                        {
+                            dest[offset + ea] = src[ea];
+                        }
+                    }
+                    else
+                    {
+                        auto offset = (size_t)(j - y) * _w + (size_t)i * destStride;
+                        auto src = srcStart + i * srcStride;
+                        // copy bytewise
+                        for (uint32_t ea = 0; ea < srcStride; ++ea)
+                        {
+                            dest[offset + ea] = src[ea];
+                        }
+                        // srcStride is small than destStride, so atleast one byte needs filled to opaque by default
+                        dest[offset + srcStride] = 255;
+                        if (destStride - srcStride > 1)
+                            dest[offset + srcStride + 1] = 255;
+                        if (destStride - srcStride > 2)
+                            dest[offset + srcStride + 2] = 255;
+                    }
+                }
+            }
+
+            dest += _w * destStride;
+        }
+    }
+}
+
+void King::ImageBlock::FlipVertically()
+{
+    MemoryBlock<uint8_t> buffer(_w, _stride);
+    auto temp = &buffer.GetData();
+    const auto rowBytes = buffer.GetByteSize();
+
+    for (size_t j = 0; j < _h / 2; ++j)
+    {
+        // start of last row
+        auto lastrow = &Get(((size_t)_h - j - 1) * _w);
+        auto firstrow = &Get(j * _w);
+
+        // buffer
+        std::copy(lastrow, lastrow + rowBytes, temp);
+        std::copy(firstrow, firstrow + rowBytes, lastrow);
+        std::copy(temp, temp + rowBytes, firstrow);
+    }
+}
+
+// Accessors
+
+void King::ImageBlock::GetPixel(const uint32_t& x, const uint32_t& y, unsigned char* colorOut)
+{
+    // note colorOut size must match _stride
+    assert(x < _w && y < _h);
+    unsigned char* src = &Get((size_t)y * _w + (size_t)x);
+
+    std::copy(src, src + _stride, colorOut);
+}
+
+void King::ImageBlock::SetPixel(const uint32_t& x, const uint32_t& y, unsigned char* colorIn, const bool guardIn)
+{
+    // note colorIn size must match _stride
+    assert(x < _w && y < _h);
+    unsigned char* dest = &Get((size_t)y * _w + (size_t)x);
+    if (guardIn)
+        std::lock_guard<std::mutex> guard(_mutex);
+
+    std::copy(colorIn, colorIn + _stride, dest);
+}
+
+/******************************************************************************
+*    ImageTGA
+*       Reference: http://www.paulbourke.net/dataformats/tga/
+******************************************************************************/
+
+// Uncompressed, RGB images
+// Runlength encoded, RGB images.
+bool King::ImageTGA::ReadTGA(std::ifstream& dataFileIn)
+{
+    if (!dataFileIn.is_open()) return false;
+    if (!dataFileIn.good()) return false;
+
+    // read the header
+    {
+        header.idlength = Read1Byte(dataFileIn);
+        header.colormaptype = Read1Byte(dataFileIn);
+        header.datatypecode = Read1Byte(dataFileIn);
+        header.colormaporigin = Read2ByteWord(dataFileIn);
+        header.colormaplength = Read2ByteWord(dataFileIn);
+        header.colormapdepth = Read1Byte(dataFileIn);
+        header.x_origin = Read2ByteWord(dataFileIn);
+        header.y_origin = Read2ByteWord(dataFileIn);
+        header.width = Read2ByteWord(dataFileIn);
+        header.height = Read2ByteWord(dataFileIn);
+        header.bitsperpixel = Read1Byte(dataFileIn);
+        header.imagedescriptor = Read1Byte(dataFileIn);
+    }
+
+    if (header.colormaptype != 0 && header.colormaptype != 1)
+        return false;
+    if (header.datatypecode != 2 && header.datatypecode != 10)
+        return false;
+    if ((header.width < 1) || (header.height < 1))
+        return false;
+    if (header.bitsperpixel != 24 &&
+        header.bitsperpixel != 32)
+        return false;
+
+    ImageBlock::Initialize(header.width, header.height, 4);
+    // when we right less than 4 bytes in little endian we fill with zero so 
+    // we do not have to right the remainder out of 4 as zeros later on
+    ImageBlock::Fill(0);
+
+    char* dest = reinterpret_cast<char*>(&GetData());
+
+    // original format
+    if (header.idlength > 0)
+    {
+        string buffer(header.idlength, ' ');
+        dataFileIn.read(&buffer[0], header.idlength);
+        IdentificationFieldString = buffer;
+    }
+
+     int skipover(0);
+     skipover += header.colormaptype * header.colormaplength;
+     if (skipover) dataFileIn.seekg(skipover, SEEK_CUR);
+
+     int n = 0;
+     //const int bytesToRead(header.bitsperpixel / 8);
+
+     {
+         std::lock_guard<std::mutex> guard(_mutex);
+
+         // read each texel one at a time
+         while (n < header.width * header.height)
+         {
+             if (header.datatypecode == 2)
+             {
+                 // uncompressed, RGB images
+                 // easy to implement
+                 auto texel = Read4ByteBGRAasRGBA(dataFileIn);
+                 if (dataFileIn.fail()) return false;
+                 // reverse BGRA format to our RGBA format
+                 //auto dword = HelperBuildTexel32(buffer, bytesToRead);
+                 auto src = reinterpret_cast<char*>(&texel);
+                 std::copy(src, src + _stride, dest);
+                 dest += _stride;
+                 ++n;
+             }
+             else if (header.datatypecode == 10)
+             {
+                 // RLE compression, RGB images
+                 auto id = Read1Byte(dataFileIn);
+                 auto texel = Read4ByteBGRAasRGBA(dataFileIn);
+                 if (dataFileIn.fail()) return false;
+
+                 // number of texels produced from this packet
+                 int j = id & 0x7f;
+                 // first texel
+                 auto src = reinterpret_cast<char*>(&texel);
+                 std::copy(src, src + _stride, dest);
+                 dest += _stride;
+                 ++n;
+
+                 if (id & 0x80)
+                 {
+                     // run length encoded packet, one color repeated
+                     for (int i = 0; i < j; ++i)
+                     {
+                         std::copy(src, src + _stride, dest);
+                         dest += _stride;
+                         ++n;
+                     }
+                 }
+                 else
+                 {
+                     // raw packet (each pixel unique)
+                     for (int i = 0; i < j; ++i)
+                     {
+                         auto texel = Read4ByteBGRAasRGBA(dataFileIn);
+                         if (dataFileIn.fail()) return false;
+
+                         auto src = reinterpret_cast<char*>(&texel);
+                         std::copy(src, src + _stride, dest);
+                         dest += _stride;
+                         ++n;
+                     }
+                 }
+             }
+         }
+     }
+     if (dataFileIn.fail()) return false;
+
+     if (!(header.imagedescriptor & (1 << 5)))
+         FlipVertically();
+
+     return true;
+ }
+ // Uncompressed, RGB images
+ bool King::ImageTGA::WriteTGA(std::ofstream& outfileIn)
+ {
+     if (!outfileIn.is_open()) return false;
+     if (!GetLength()) return false;
+
+     IdentificationFieldString = "File writer from 2DGeometryKing with code on GitHub.com";
+     // original format
+     header.idlength = IdentificationFieldString.size();
+     header.colormaptype = 0;
+     header.datatypecode = 2;
+     assert(header.datatypecode == 2);// || header.datatypecode == 10); *** TO DO *** RLE writer
+     header.colormaporigin = 0;
+     header.colormaplength = 0;
+     header.colormapdepth = 0;
+     assert(header.x_origin >= 0 && header.x_origin <= header.width);
+     assert(header.y_origin >= 0 && header.y_origin <= header.height);
+     header.width = _w;
+     header.height = _h;
+     assert(header.bitsperpixel == 24 || header.bitsperpixel == 32);
+     header.imagedescriptor = 1 << 5; // top to bottom pixel ordering
+
+     // due to alignment, we cannot write all at once and need to do bytewise and therefore encode 2 byte words in little endian order
+     //outfileIn.write(reinterpret_cast<const char*>(&header), sizeof(header));
+     Write1Byte(outfileIn, header.idlength);                    
+     Write1Byte(outfileIn, header.colormaptype);
+     Write1Byte(outfileIn, header.datatypecode);
+     Write2ByteWord(outfileIn, header.colormaporigin);
+     Write2ByteWord(outfileIn, header.colormaplength);
+     Write1Byte(outfileIn, header.colormapdepth);
+     Write2ByteWord(outfileIn, header.x_origin);
+     Write2ByteWord(outfileIn, header.y_origin);
+     Write2ByteWord(outfileIn, header.width);
+     Write2ByteWord(outfileIn, header.height);
+     Write1Byte(outfileIn, header.bitsperpixel);
+     Write1Byte(outfileIn, header.imagedescriptor);
+     
+     // id text
+     outfileIn.write(IdentificationFieldString.c_str(), header.idlength);
+
+     // color map
+     int blankSize(0);
+     blankSize += header.colormaptype * header.colormaplength;
+     char zero(0);
+     outfileIn.write(&zero, blankSize);
+
+     // data
+     // RGBA needs to be converted to BGRA
+     const auto& bpp = header.bitsperpixel; // allow compiler to optimize the for loop below
+     ImageBlock BGRA(_w, _h, bpp / 8);
+     const auto bytes = GetByteSize();
+     for (size_t i = 0; i < bytes; i += _stride)
+     {
+         if (bpp >= 24)
+             *(&BGRA.GetData() + i + 0) = *(&GetData() + i + 2);
+             *(&BGRA.GetData() + i + 1) = *(&GetData() + i + 1);
+             *(&BGRA.GetData() + i + 2) = *(&GetData() + i + 0);
+         if (bpp >= 32)
+            *(&BGRA.GetData() + i + 3) = *(&GetData() + i + 3);
+     }
+
+     // bottom to top pixel ordering
+     if (!(header.imagedescriptor & (1 << 5)))
+         BGRA.FlipVertically();
+
+     if (header.datatypecode == 2)
+         outfileIn.write(reinterpret_cast<const char*>(&BGRA.GetData()), BGRA.GetByteSize());
+     // RLE *** TO DO ***
+     else if (header.datatypecode == 10)
+     {
+         uint8_t id(0); // packet type
+         uint8_t j(0); // packet length
+         bool writePacket(false);
+         for (size_t i = 0; i < BGRA.GetElements(); ++i)
+         {
+             // get next color value
+             auto colorPtr = &(BGRA[i]);
+             // check for repeating run
+
+             // have run, build RLE packet
+             {
+                 id = 0x80;
+                 ++j;
+             }
+
+             // no run, build raw packet
+             {
+                 uint8_t id = 0;
+
+             }
+             // check for limit of repeat or raw packet size
+             if (j == 127)
+             {
+                // end the packet size, start a new
+                 writePacket = true;
+             }
+
+             // write RLE packet
+             if (writePacket)
+             {
+                 // write the packet id & length byte
+                 id += j;
+                 Write1Byte(outfileIn, id);
+                 // write the color value
+                 if (bpp >= 24)
+                 {
+                     // write as BGR
+                     // source is ((a << 24) | (b << 16) | (g << 8) | r), DO WE NEED TO REVERSE THE ORDER??? test
+                     assert(bpp == 32);
+                     BGRA.Write1Byte(outfileIn, colorPtr[0]); // b
+                     BGRA.Write1Byte(outfileIn, colorPtr[1]); // g
+                     BGRA.Write1Byte(outfileIn, colorPtr[2]); // r
+                 }
+                 else if (bpp >= 32)
+                 {
+                     // write as BGRA
+                     BGRA.Write1Byte(outfileIn, colorPtr[3]); // a
+                 }
+                 // reset the RLE length to 0
+                 j = 0;
+                 writePacket = false;
+             }
+             // write RAW packet
+             if (writePacket)
+             {
+                 // write the packet id & length byte
+                 id += j;
+                 Write1Byte(outfileIn, id);
+                 // write first color value, then j more color values (use pointer start to pointer end of BGRA)
+                 // write the color value
+                 if (bpp >= 24)
+                     ; // std::copy
+                 if (bpp >= 32)
+                     ; // std::copy
+                 // reset the RAW length to 0
+                 j = 0;
+                 writePacket = false;
+             }
+         }
+     }
+
+     if (outfileIn.fail()) return false;
+     return true;
+ }
+
+ uint32_t King::ImageTGA::Read4ByteBGRAasRGBA(std::ifstream& dataFileIn)
+ {
+     // little endian ordering
+     auto b = Read1Byte(dataFileIn);
+     auto g = Read1Byte(dataFileIn);
+     auto r = Read1Byte(dataFileIn);
+     auto a = Read1Byte(dataFileIn);
+     if (dataFileIn.fail()) return 0;
+     return ((a << 24) | (b << 16) | (g << 8) | r);
+ }
+
+ uint32_t King::ImageTGA::Read3ByteBGRasRGBA(std::ifstream& dataFileIn)
+ {
+     // little endian ordering
+     auto b = Read1Byte(dataFileIn);
+     auto g = Read1Byte(dataFileIn);
+     auto r = Read1Byte(dataFileIn);
+     auto a = 255;
+     if (dataFileIn.fail()) return 0;
+     return ((a << 24) | (b << 16) | (g << 8) | r);
+ }

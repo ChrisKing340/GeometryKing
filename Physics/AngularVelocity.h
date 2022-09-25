@@ -1,7 +1,8 @@
 ﻿/*%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 Title:          AngularVelocity    
 
-Description:    Euler angles around each axis kept in a float3 in radians.
+Description:    Euler angles around each axis kept in a float3 in radians. Stored
+                with a scalar magnitude and a normalized rotation vector.
 Symbol:         𝜔 in pitch, yaw, roll 𝜔(𝒾, 𝒿, 𝓀)
 
 Usage:          AngularVelocity(const UnitOfMeasure::Time &t, const AngularAcceleration & accIn)             
@@ -101,12 +102,8 @@ namespace King {
         AngularVelocity() = default;
         explicit AngularVelocity(const float &magIn, const float3 &axisIn) { _magnitude = abs(magIn); _unit_direction = float3::Normal(axisIn); if (_magnitude != magIn) { _unit_direction = -_unit_direction; }; }
         explicit AngularVelocity(const UnitOfMeasure::AngularSpeed&s, const float3 & axisIn) { _magnitude = abs(s); _unit_direction = float3::Normal(axisIn); if (_magnitude != s) { _unit_direction = -_unit_direction; }; }
-        AngularVelocity(const float3 vectorIn) 
-        { _magnitude = float3::Magnitude(vectorIn); 
-        _unit_direction = float3::Normal(vectorIn); 
-        int asdfdsf = 345345;
-        }
-        AngularVelocity(const Quaternion aVelIn) { _magnitude = aVelIn.GetAngle(); _unit_direction = aVelIn.GetAxis(); } // must be less than one rotation / sec (or Quaternion overflows)
+        AngularVelocity(const float3 vectorIn) { _magnitude = float3::Magnitude(vectorIn); _unit_direction = float3::Normal(vectorIn); }
+        AngularVelocity(const Quaternion aVelIn) { _magnitude = aVelIn.GetAngleEuler(); _unit_direction = aVelIn.GetAxis(); } // must be less than one rotation / sec (or Quaternion overflows)
         explicit AngularVelocity(const AngularAcceleration& accIn, const UnitOfMeasure::Time &t) { _magnitude = accIn.Get_magnitude() * t; _unit_direction = accIn.Get_unit_direction(); }
         explicit AngularVelocity(const std::vector<AngularAcceleration> & accelIn, const UnitOfMeasure::Time &t) { float3 sum; for (const auto & e : accelIn) sum += e.GetVector(); *this = AngularAcceleration(sum) * t; }
         explicit AngularVelocity(const float& x, const float& y, const float& z) : AngularVelocity(float3(x, y, z)) { ; }
