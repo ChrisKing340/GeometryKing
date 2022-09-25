@@ -1,3 +1,7 @@
+## New 2.0 Release of 2D Geometry King
+
+class ImageBlock : public MemoryBlock introduced to provide methods to Draw(...) privitives to memory buffers.  Derived class ImageTga : public ImageBlock allows file export to almost any image editing software for viewing. This maintains our render independent status as well as visualization of usage cases (path finding, intersection tests, transforms, clipping, etc.) of geometry.
+
 # GeometryKing
 
 Generic, render independent, geometric game engine foundation. Intended as the foundation for "made from scratch" game engines with all the basics of 2D/3D geometry, model loading and saving, and physics body simulation with intrinsic SIMD acceleration.  C\+\+ classes support json for data transport, 2DGeometryKing has ImageBlock with Draw(...) methods from primitives to a memory buffer, and 3DGeometryKing has Model with constructors to convert 3D primitives to Models with vertex and index buffers ready for rendering. Physics classes represent real world motion while the geometry classes handling collision detection. Use all or mix and match to your needs with code inlined to a high degree for readability and compiled only if used.
