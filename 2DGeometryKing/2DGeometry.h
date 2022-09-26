@@ -564,8 +564,8 @@ namespace King {
         virtual ~ImageBlock() = default;
 
         // Operators 
-        void*  operator new (std::size_t size) { return _aligned_malloc(size, 16); }
-        void   operator delete (void* p) { _aligned_free(static_cast<ImageBlock*>(p)); }
+        void* operator new (std::size_t size) noexcept(false) { auto ptr = _aligned_malloc(size, 16); if (!ptr) throw std::bad_alloc(); return ptr; }
+        void  operator delete (void* p) noexcept { _aligned_free(static_cast<ImageBlock*>(p)); }
         inline ImageBlock& operator= (const ImageBlock& in) { Set(in); } // copy assignment
         inline ImageBlock& operator= (ImageBlock&& in) = default; // move assignment
         // Functionality
@@ -653,8 +653,8 @@ namespace King {
         virtual ~ImageTGA() = default;
 
         // Operators 
-        void* operator new (std::size_t size) { return _aligned_malloc(size, 16); }
-        void   operator delete (void* p) { _aligned_free(static_cast<ImageTGA*>(p)); }
+        void* operator new (std::size_t size) noexcept(false) { auto ptr = _aligned_malloc(size, 16); if (!ptr) throw std::bad_alloc(); return ptr; }
+        void  operator delete (void* p) noexcept { _aligned_free(static_cast<ImageTGA*>(p)); }
         inline ImageTGA& operator= (const ImageTGA& in) { Set(in); } // copy assignment
         inline ImageTGA& operator= (ImageTGA&& in) = default; // move assignment
         // Functionality

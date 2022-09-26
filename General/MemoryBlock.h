@@ -97,8 +97,8 @@ public:
     ~MemoryBlock() noexcept { Destroy(); }
 
     // operators
-    void * operator new (size_t size) { return _aligned_malloc(size, align); }
-    void   operator delete (void *p) { _aligned_free(static_cast<MemoryBlock*>(p)); }
+    void* operator new (std::size_t size) noexcept(false) { auto ptr = _aligned_malloc(size, 16); if (!ptr) throw std::bad_alloc(); return ptr; }
+    void  operator delete (void* p) noexcept { _aligned_free(static_cast<MemoryBlock*>(p)); }
     
     const T& operator [](size_t i) const { assert(i*_stride<_length); return _data[i*_stride]; } // accessor 
     T& operator [](size_t i) { assert(i*_stride<_capacity); return _data[i*_stride]; } // assignment
