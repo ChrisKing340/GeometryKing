@@ -1844,7 +1844,7 @@ namespace King {
         std::shared_ptr<LineMesh>           CreateMesh(uint32_t numLinesIn, uint32_t vbStartIn = 0, uint32_t ibStartIn = 0);
         int                                 CreateMeshFrom(const King::Line& lineIn, float4 colorIn = float4(0.f, 1.0f, 1.0f, 1.0f));
     protected:
-        void                                HelperSetAllMeshesVBandIBtoMaster() { for (auto& m : _meshes) { m->SetVB(&_vertexBufferMaster.GetData()); m->SetIB(&_indexBufferMaster.GetData()); } }
+        void                                HelperSetAllMeshesVBandIBtoMaster() { for (auto& m : _meshes) { m->SetVB(_vertexBufferMaster.GetData()); m->SetIB(_indexBufferMaster.GetData()); } }
     };
     /******************************************************************************
     *    Model
@@ -1927,8 +1927,8 @@ namespace King {
         // Assignments
         void                                AddMaterial(std::shared_ptr<Material> mtl_IN);
 
-        virtual void                        AddMasterVertexData(const MemoryBlock<uint8_t>& vdIn) override { _vertexBufferMaster.Append(vdIn); for (auto& m : _meshes) m->SetVB(&_vertexBufferMaster.GetData()); }
-        virtual void                        AddMasterIndexData(const MemoryBlock<uint32_t>& idIn) override { _indexBufferMaster.Append(idIn); for (auto& m : _meshes) m->SetIB(&_indexBufferMaster.GetData()); }
+        virtual void                        AddMasterVertexData(const MemoryBlock<uint8_t>& vdIn) override { _vertexBufferMaster.Append(vdIn); for (auto& m : _meshes) m->SetVB(_vertexBufferMaster.GetData()); }
+        virtual void                        AddMasterIndexData(const MemoryBlock<uint32_t>& idIn) override { _indexBufferMaster.Append(idIn); for (auto& m : _meshes) m->SetIB(_indexBufferMaster.GetData()); }
 
         void                                AddMesh(const TriangleMesh& meshIn) { auto m = TriangleMesh::Create(); *m = meshIn; _meshes.push_back(m); }
         void                                AddMesh(std::shared_ptr <TriangleMesh> meshIn) { _meshes.push_back(meshIn); }
@@ -1955,7 +1955,7 @@ namespace King {
                                                 mtlProp.color.diffuse[2] = cIn.GetZ();
                                                 mtl->Set_properties(mtlProp); }
     protected:
-        void                                HelperSetAllMeshesVBandIBtoMaster() { for (auto& m : _meshes) { m->SetVB(&_vertexBufferMaster.GetData()); m->SetIB(&_indexBufferMaster.GetData()); } }
+        void                                HelperSetAllMeshesVBandIBtoMaster() { for (auto& m : _meshes) { m->SetVB(_vertexBufferMaster.GetData()); m->SetIB(_indexBufferMaster.GetData()); } }
         int                                 HelperCreateMeshFrom(const vector<float3>& positionsIn, const vector<uint32_t>& indiciesIn, const vector<float2>& uvIn, const vector<float3>& normalsIn);
         std::vector<King::float2>           HelperCreateTextureCoordinatesForTriOrQuad(const std::vector<King::float3>& pt, uint32_t ptsWide);
         void                                HelperCreateTextureCoordinatesForSphere();

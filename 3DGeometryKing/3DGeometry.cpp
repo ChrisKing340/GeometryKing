@@ -1834,8 +1834,8 @@ King::LineModel& King::LineModel::operator= (const King::Box& boxIn)
     // just incase we create more than one mesh or append data to our master we will reset the pointer addresses in each mesh
     for (auto& m : _meshes)
     {
-        m->SetVB(&_vertexBufferMaster.GetData());
-        m->SetIB(&_indexBufferMaster.GetData());
+        m->SetVB(_vertexBufferMaster.GetData());
+        m->SetIB(_indexBufferMaster.GetData());
     }
     return *this;
 }
@@ -2381,7 +2381,7 @@ int King::Model::CreateMeshFrom(const King::Box& boxIn)
     OptimizeVertexBuffer();
 
     // Store the mesh
-    auto mesh = TriangleMesh::Create(12, _vertexFormat, 0, 0, &_vertexBufferMaster.GetData(), &_indexBufferMaster.GetData());
+    auto mesh = TriangleMesh::Create(12, _vertexFormat, 0, 0, _vertexBufferMaster.GetData(), _indexBufferMaster.GetData());
     mesh->Set_name("triangleMesh");
     mesh->CalculateBoundingBox();
     _meshes.push_back(mesh);
@@ -2389,8 +2389,8 @@ int King::Model::CreateMeshFrom(const King::Box& boxIn)
     // just incase we create more than one mesh or append data to our master we will reset the pointer addresses in each mesh
     for (auto& m : _meshes)
     {
-        m->SetVB(&_vertexBufferMaster.GetData());
-        m->SetIB(&_indexBufferMaster.GetData());
+        m->SetVB(_vertexBufferMaster.GetData());
+        m->SetIB(_indexBufferMaster.GetData());
     }
 
     return (int)_meshes.size() - 1;
@@ -2508,8 +2508,8 @@ inline King::Model & King::Model::operator= (const King::Model &in)
 
     for (auto & m : _meshes)
     {
-        m->SetVB(&_vertexBufferMaster.GetData());
-        m->SetIB(&_indexBufferMaster.GetData());
+        m->SetVB(_vertexBufferMaster.GetData());
+        m->SetIB(_indexBufferMaster.GetData());
     }
     return *this;
 }
@@ -2727,8 +2727,8 @@ bool King::Model::Read_v1(ifstream& dataFileIn)
 
         // set reference data
         mesh->SetVertexFormat(GetVertexFormat());
-        mesh->SetVB(&GetVertexBufferMaster().GetData());
-        mesh->SetIB(&GetIndexBufferMaster().GetData());
+        mesh->SetVB(GetVertexBufferMaster().GetData());
+        mesh->SetIB(GetIndexBufferMaster().GetData());
         // store
         _meshes.push_back(mesh);
 
@@ -2807,7 +2807,7 @@ inline std::shared_ptr<LineMesh> King::LineModel::CreateMesh(uint32_t numLinesIn
 {
     assert((bool)GetVertexBufferMaster);
     assert((bool)GetIndexBufferMaster);
-    auto ptr = LineMesh::Create(numLinesIn, GetVertexFormat(), vbStartIn, ibStartIn, &GetVertexBufferMaster().GetData(), &GetIndexBufferMaster().GetData());
+    auto ptr = LineMesh::Create(numLinesIn, GetVertexFormat(), vbStartIn, ibStartIn, GetVertexBufferMaster().GetData(), GetIndexBufferMaster().GetData());
     _meshes.push_back(ptr);
     return _meshes.back();
 }
@@ -3193,7 +3193,7 @@ void King::Model::MergeMeshes(const size_t meshIndex1, const size_t meshIndex2)
                 splitSizeRHS += _meshes[i]->GetNumIndicies();
 
             MemoryBlock<uint32_t> tempBuffer1(splitSizeRHS);
-            tempBuffer1.Copy(0, &split.GetData() + meshF->GetNumIndicies(), splitSizeRHS); // copy into tempBuffer1
+            tempBuffer1.Copy(0, split.GetData() + meshF->GetNumIndicies(), splitSizeRHS); // copy into tempBuffer1
 
             // how many elements are between meshF and meshS? 
             const uint32_t meshesToSkip = secondMesh - firstMesh - 1;
@@ -3202,11 +3202,11 @@ void King::Model::MergeMeshes(const size_t meshIndex1, const size_t meshIndex2)
                 elementsToSkipIntempBuffer1 += _meshes[firstMesh + 1 + i]->GetNumIndicies();
 
             // copy from tempBuffer1 into split to move meshS next to meshF
-            split.Copy(meshF->GetNumIndicies(), &tempBuffer1.GetData() + elementsToSkipIntempBuffer1, meshS->GetNumIndicies());
+            split.Copy(meshF->GetNumIndicies(), tempBuffer1.GetData() + elementsToSkipIntempBuffer1, meshS->GetNumIndicies());
 
             // copy from tempBuffer1 the skipped meshs to after meshS
             if (elementsToSkipIntempBuffer1)
-                split.Copy((size_t)meshF->GetNumIndicies() + (size_t)meshS->GetNumIndicies(), &tempBuffer1.GetData(), elementsToSkipIntempBuffer1);
+                split.Copy((size_t)meshF->GetNumIndicies() + (size_t)meshS->GetNumIndicies(), tempBuffer1.GetData(), elementsToSkipIntempBuffer1);
             
             _indexBufferMaster.Merge(split);
             // the merge reallocates, adjust mesh references
@@ -3293,7 +3293,7 @@ void King::LineModel::MergeMeshes(const size_t meshIndex1, const size_t meshInde
                 splitSizeRHS += _meshes[i]->GetNumIndicies();
 
             MemoryBlock<uint32_t> tempBuffer1(splitSizeRHS);
-            tempBuffer1.Copy(0, &split.GetData() + meshF->GetNumIndicies(), splitSizeRHS);
+            tempBuffer1.Copy(0, split.GetData() + meshF->GetNumIndicies(), splitSizeRHS);
 
             // how many elements are between meshF and meshS? 
             const uint32_t meshesToSkip = secondMesh - firstMesh - 1;
@@ -3302,18 +3302,18 @@ void King::LineModel::MergeMeshes(const size_t meshIndex1, const size_t meshInde
                 elementsToSkipIntempBuffer1 += _meshes[firstMesh + 1 + i]->GetNumIndicies();
 
             // copy from tempBuffer1 into split to move meshS next to meshF
-            split.Copy(meshF->GetNumIndicies(), &tempBuffer1.GetData() + elementsToSkipIntempBuffer1, meshS->GetNumIndicies());
+            split.Copy(meshF->GetNumIndicies(), tempBuffer1.GetData() + elementsToSkipIntempBuffer1, meshS->GetNumIndicies());
 
             // copy from tempBuffer1 the skipped meshs to after meshS
             if (elementsToSkipIntempBuffer1)
-                split.Copy(meshF->GetNumIndicies() + meshS->GetNumIndicies(), &tempBuffer1.GetData(), elementsToSkipIntempBuffer1);
+                split.Copy(meshF->GetNumIndicies() + meshS->GetNumIndicies(), tempBuffer1.GetData(), elementsToSkipIntempBuffer1);
 
             _indexBufferMaster.Merge(split);
             // the merge reallocates, adjust mesh references
             for (auto ea : _meshes)
             {
-                ea->SetIB(&_indexBufferMaster.GetData());
-                ea->SetVB(&_vertexBufferMaster.GetData());
+                ea->SetIB(_indexBufferMaster.GetData());
+                ea->SetVB(_vertexBufferMaster.GetData());
             }
         }
     }
@@ -3509,7 +3509,7 @@ void King::Model::ReverseNormals()
     size_t numElements = GetVertexBufferMaster().GetElements();
 
     auto start = GetVertexFormat().GetAttributeByteStart(GetVertexFormat().GetAttributeIndexFromDescription(VertexAttrib::enumDesc::normal));
-    auto* n = reinterpret_cast<XMFLOAT3*>(reinterpret_cast<char*>(&GetVertexBufferMaster().GetData()) + start);
+    auto* n = reinterpret_cast<XMFLOAT3*>(reinterpret_cast<char*>(GetVertexBufferMaster().GetData()) + start);
 
     float3 intrinsic;
     for (size_t i = 0; i < numElements; i++)
@@ -3532,10 +3532,10 @@ void King::Model::ReverseWindingsToMatchNormals()
     auto startN = GetVertexFormat().GetAttributeByteStart(GetVertexFormat().GetAttributeIndexFromDescription(VertexAttrib::enumDesc::normal));
         
     auto stride = GetVertexBufferMaster().GetStride();
-    auto* p = (reinterpret_cast<char*>(&GetVertexBufferMaster().GetData()) + startP);
-    auto* n = (reinterpret_cast<char*>(&GetVertexBufferMaster().GetData()) + startN);
+    auto* p = (reinterpret_cast<char*>(GetVertexBufferMaster().GetData()) + startP);
+    auto* n = (reinterpret_cast<char*>(GetVertexBufferMaster().GetData()) + startN);
 
-    auto* indicies = reinterpret_cast<uint32_t*>(reinterpret_cast<char*>(&GetIndexBufferMaster().GetData()));
+    auto* indicies = reinterpret_cast<uint32_t*>(reinterpret_cast<char*>(GetIndexBufferMaster().GetData()));
     const uint32_t numElements = (uint32_t)GetIndexBufferMaster().GetElements();
 
     uint32_t numReversed = 0;
@@ -3573,7 +3573,7 @@ void King::Model::ReverseWindings()
 {
     if (HasPositions())
     {
-        auto* indicies = &GetIndexBufferMaster().GetData();
+        auto* indicies = GetIndexBufferMaster().GetData();
         const auto numElements = (uint32_t)GetIndexBufferMaster().GetElements();
 
         // Triangles
@@ -3664,16 +3664,16 @@ size_t King::Model::RemoveDuplicateVerticies()
     auto startC = GetVertexFormat().GetAttributeByteStart(GetVertexFormat().GetAttributeIndexFromDescription(VertexAttrib::enumDesc::color));
 
     auto stride = _vertexBufferMaster.GetStride();
-    auto p = &_vertexBufferMaster.GetData() + startP;
-    auto t = &_vertexBufferMaster.GetData() + startT;
-    auto c = &_vertexBufferMaster.GetData() + startC;
+    auto p = _vertexBufferMaster.GetData() + startP;
+    auto t = _vertexBufferMaster.GetData() + startT;
+    auto c = _vertexBufferMaster.GetData() + startC;
 
     // create a list of unique verticies
     MemoryBlock<uint8_t> uniqueVB(_vertexBufferMaster.GetElements(), stride);
 
-    auto pu = &uniqueVB.GetData() + startP;
-    auto tu = &uniqueVB.GetData() + startT;
-    auto cu = &uniqueVB.GetData() + startC;
+    auto pu = uniqueVB.GetData() + startP;
+    auto tu = uniqueVB.GetData() + startT;
+    auto cu = uniqueVB.GetData() + startC;
 
     // build a matching lamda
     auto VerticiesMatch = [&uniqueVB, &p, &t, &c, &pu, &tu, &cu, &stride, &hasP, &hasT, &hasC](uint32_t i1, uint32_t i2)
@@ -3741,7 +3741,7 @@ size_t King::Model::RemoveDuplicateVerticies()
 
     // first always unique and no remap as index zero is still zero
     uint32_t numUniqueVerts(0);
-    uniqueVB.Copy(numUniqueVerts, &_vertexBufferMaster.GetData());
+    uniqueVB.Copy(numUniqueVerts, _vertexBufferMaster.GetData());
     ++numUniqueVerts;
 
     // main comparison pass
@@ -3836,7 +3836,7 @@ void King::ModelScaffold::Translate(const float3 transIn)
 {
     if (!_vertexFormat.IsFirst(King::VertexAttrib::enumDesc::position)) return;
 
-    auto in = reinterpret_cast<XMFLOAT3*>(&GetVertexBufferMaster().GetData());
+    auto in = reinterpret_cast<XMFLOAT3*>(GetVertexBufferMaster().GetData());
     auto stride = GetVertexBufferMaster().GetStride();
     size_t numElements = GetVertexBufferMaster().GetElements();
 
@@ -4005,7 +4005,7 @@ void King::ModelScaffold::Transform(const DirectX::XMMATRIX transformIn)
 {
     if (!_vertexFormat.IsFirst(King::VertexAttrib::enumDesc::position)) return;
 
-    auto in = reinterpret_cast<XMFLOAT3*>(&GetVertexBufferMaster().GetData());
+    auto in = reinterpret_cast<XMFLOAT3*>(GetVertexBufferMaster().GetData());
     auto out = in;
     auto stride = GetVertexBufferMaster().GetStride();
     size_t numElements = GetVertexBufferMaster().GetElements();
@@ -4030,9 +4030,9 @@ uint8_t* King::ModelScaffold::GetVertexAddr(const uint32_t indexIn, uint32_t vbS
     assert(indexIn < _indexBufferMaster.GetElements());
 
     auto bs = _vertexFormat.GetByteSize(); 
-    uint8_t* vb = &_vertexBufferMaster.GetData() + (size_t)vbStartIn * bs;
-    //uint8_t* vb = &_vertexBufferMaster.GetData() + (size_t)vbStartIn; // changed on 6/26/2022 CHK such that vbStartIn is in uint8_t, not element number (this needs to be changed in many places as well!!)
-    uint32_t* ib = &_indexBufferMaster.GetData() + ibStartIn;
+    uint8_t* vb = _vertexBufferMaster.GetData() + (size_t)vbStartIn * bs;
+    //uint8_t* vb = _vertexBufferMaster.GetData() + (size_t)vbStartIn; // changed on 6/26/2022 CHK such that vbStartIn is in uint8_t, not element number (this needs to be changed in many places as well!!)
+    uint32_t* ib = _indexBufferMaster.GetData() + ibStartIn;
     uint32_t vertNum = *(ib + indexIn);
     //assert(vertNum < _vertexBufferMaster.GetElements() - vbStartIn);
 
@@ -4066,7 +4066,7 @@ inline std::shared_ptr<TriangleMesh> King::Model::CreateMesh(const uint32_t numT
 {
     assert((bool)GetVertexBufferMaster);
     assert((bool)GetIndexBufferMaster);
-    auto ptr = TriangleMesh::Create(numTrianglesIn, GetVertexFormat(), vbStartIn, ibStartIn, &GetVertexBufferMaster().GetData(), &GetIndexBufferMaster().GetData());
+    auto ptr = TriangleMesh::Create(numTrianglesIn, GetVertexFormat(), vbStartIn, ibStartIn, GetVertexBufferMaster().GetData(), GetIndexBufferMaster().GetData());
     _meshes.push_back(ptr);
     return _meshes.back();
 }
@@ -4144,7 +4144,7 @@ int King::Model::CreateMeshFrom(const Line& l, Distance d)
         MemoryBlock<uint32_t> ib; // (3 * numTriangles);
         ib = { 0, 1, 2, 2, 1, 3 };
         assert((_indexBufferMaster.GetElements() - ibStart) >= ib.GetElements());
-        _indexBufferMaster.Copy(ibStart, &ib.GetData(), ib.GetElements());
+        _indexBufferMaster.Copy(ibStart, ib.GetData(), ib.GetElements());
     }
 
     Quad q = l * d;
@@ -4593,7 +4593,7 @@ int King::Model::CreateMeshFrom(const Path& p, Distance d)
         ib[0] = c + 0ull; ib[1] = c + 1ull; ib[2] = c + 2ull;
         ib[3] = c + 2ull; ib[4] = c + 1ull; ib[5] = c + 3ull;
 
-        _indexBufferMaster.Copy(ibStart + i * 6, &ib.GetData(), ib.GetElements());
+        _indexBufferMaster.Copy(ibStart + i * 6, ib.GetData(), ib.GetElements());
     }
     //cout << "_indexBufferMaster { length:" << to_string(_indexBufferMaster.GetLength()) << " stride:" << to_string(_indexBufferMaster.GetStride()) << " data: ";
     //for (size_t i = 0; i < _indexBufferMaster.GetLength(); ++i)
@@ -4962,7 +4962,7 @@ int King::Model::CreateMeshFrom(const Path& pFrom, const Path& pTo)
                 // four verticies, six indicies
                 ib[0] = c; ib[1] = c + 2; ib[2] = c + 1;
                 ib[3] = c + 1; ib[4] = c + 2; ib[5] = c + 3;
-                _indexBufferMaster.Copy(ibStart + indicies, &ib.GetData(), 6);
+                _indexBufferMaster.Copy(ibStart + indicies, ib.GetData(), 6);
                 indicies += 6;
                 // quad strip, we reused our first two and two more new
                 c += 2;
@@ -4971,7 +4971,7 @@ int King::Model::CreateMeshFrom(const Path& pFrom, const Path& pTo)
             {
                 // three verticies, three indicies
                 ib[0] = c; ib[1] = c + 2; ib[2] = c + 1;
-                _indexBufferMaster.Copy(ibStart + indicies, &ib.GetData(), 3);
+                _indexBufferMaster.Copy(ibStart + indicies, ib.GetData(), 3);
                 indicies += 3;
                 // triangle strip, we reused our first two and one more new
                 c += 1;
@@ -5900,7 +5900,7 @@ vector<vector<float>> King::ModelScaffold::GetDataAttribute(VertexAttrib::enumDe
 
     vector<vector<float>> v;
     auto & vb = GetVertexBufferMaster(); // uint8_t but with stride indexing
-    uint8_t * vbAddr = &vb.GetData();
+    uint8_t * vbAddr = vb.GetData();
     auto vbStride = vb.GetStride();
     const auto & ib = GetIndexBufferMaster(); // uint32_t
     const auto attribIndex = _vertexFormat.GetAttributeIndexFromDescription(attributeEnum);
@@ -5983,7 +5983,7 @@ void King::ModelScaffold::SetDataAttribute(vector<vector<float>>& dataIn, Vertex
 
     vector<vector<float>> v;
     auto& vb = GetVertexBufferMaster(); // uint8_t but with stride indexing
-    uint8_t* vbAddr = &vb.GetData();
+    uint8_t* vbAddr = vb.GetData();
     auto vbStride = vb.GetStride();
     const auto& ib = GetIndexBufferMaster(); // uint32_t
     const auto attribIndex = _vertexFormat.GetAttributeIndexFromDescription(attributeEnum);

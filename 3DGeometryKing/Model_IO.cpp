@@ -269,7 +269,7 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
 
             // create the mesh
             // we don't know all of this yet, but that is ok as we will change it later
-            TriangleMesh triMesh(0, model->GetVertexFormat(), 0, 0, &model->GetVertexBufferMaster().GetData(), &model->GetIndexBufferMaster().GetData());
+            TriangleMesh triMesh(0, model->GetVertexFormat(), 0, 0, model->GetVertexBufferMaster().GetData(), model->GetIndexBufferMaster().GetData());
             triMesh.Set_name(meshName);
             triMesh.Set_materialName(mtlName);
             model->AddMesh(triMesh);
@@ -1196,7 +1196,7 @@ bool King::Model_IO::Save_OBJ(const std::string fileNameIN, const std::vector<sh
 
                 auto numTris = modelS->GetIndexCount();
                 of << "#" << " " << "Triangle faces: " << std::to_string(numTris) << '\n';
-                uint32_t* base = &(modelS->GetIndexBufferMaster().GetData());
+                uint32_t* base = (modelS->GetIndexBufferMaster().GetData());
                 for (uint32_t i = 0; i < numTris; ++i)
                 {
                     uint32_t* o = base + i * 3;

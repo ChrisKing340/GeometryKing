@@ -736,7 +736,7 @@ void King::ImageBlock::Draw(const Line2DF& lineIn, float4 colorIn, const float f
     if (_stride > 3)
         c.PushBack((uint8_t)(255.f * colorIn.GetW()));
 
-    uint8_t* src = &c.GetData();
+    uint8_t* src = c.GetData();
     std::function<void(IntPoint2 ptOut)> callBack = [&](IntPoint2 ptOut) { SetPixel(ptOut.GetX(), ptOut.GetY(), src, false); };
 
     //std::lock_guard<std::mutex> guard(_mutex);
@@ -883,13 +883,13 @@ void King::ImageBlock::Draw(const Circle2DF& cirIn, float4 colorIn, const float 
         int xn = -x + xc;
         int yn = -y + yc;
         if (clip.Intersects(xp, yp))
-            SetPixel(xp, yp, &c.GetData(), false);
+            SetPixel(xp, yp, c.GetData(), false);
         if (clip.Intersects(xn, yp))
-            SetPixel(xn, yp, &c.GetData(), false);
+            SetPixel(xn, yp, c.GetData(), false);
         if (clip.Intersects(xp, yn))
-            SetPixel(xp, yn, &c.GetData(), false);
+            SetPixel(xp, yn, c.GetData(), false);
         if (clip.Intersects(xn, yn))
-            SetPixel(xn, yn, &c.GetData(), false);
+            SetPixel(xn, yn, c.GetData(), false);
 
         // Checking and updating value of
         // decision parameter based on algorithm
@@ -927,13 +927,13 @@ void King::ImageBlock::Draw(const Circle2DF& cirIn, float4 colorIn, const float 
         int xn = -x + xc;
         int yn = -y + yc;
         if (clip.Intersects(xp, yp))
-            SetPixel(xp, yp, &c.GetData(), false);
+            SetPixel(xp, yp, c.GetData(), false);
         if (clip.Intersects(xn, yp))
-            SetPixel(xn, yp, &c.GetData(), false);
+            SetPixel(xn, yp, c.GetData(), false);
         if (clip.Intersects(xp, yn))
-            SetPixel(xp, yn, &c.GetData(), false);
+            SetPixel(xp, yn, c.GetData(), false);
         if (clip.Intersects(xn, yn))
-            SetPixel(xn, yn, &c.GetData(), false);
+            SetPixel(xn, yn, c.GetData(), false);
 
         // Checking and updating parameter
         // value based on algorithm
@@ -1014,11 +1014,11 @@ void King::ImageBlock::DrawFilled(const Triangle2DF& triIn, float4 colorIn)
     //const auto x = min(x0, x1);
     // top of triangle
     for (auto y = y0; y <= y1; ++y)
-        DrawFilledScanLine((uint32_t)(x0 + (y - y0) * inv_m[0]), (uint32_t)(x0 + (y - y0) * inv_m[2]), y, &c.GetData(), false);
+        DrawFilledScanLine((uint32_t)(x0 + (y - y0) * inv_m[0]), (uint32_t)(x0 + (y - y0) * inv_m[2]), y, c.GetData(), false);
 
     // bottom of triangle
     for (auto y = y1; y <= y2; ++y)
-        DrawFilledScanLine((uint32_t)(x1 + (y - y1) * inv_m[1]), (uint32_t)(x0 + (y - y0) * inv_m[2]), y, &c.GetData(), false);
+        DrawFilledScanLine((uint32_t)(x1 + (y - y1) * inv_m[1]), (uint32_t)(x0 + (y - y0) * inv_m[2]), y, c.GetData(), false);
 }
 
 void King::ImageBlock::DrawFilled(const Rectangle2DF& rectIn, float4 colorIn)
@@ -1110,27 +1110,27 @@ void King::ImageBlock::DrawFilled(const Circle2DF& cirIn, float4 colorIn)
         int yn = -y + yc;
 
         if (clip.Intersects(xn, yn))
-            SetPixel(xn, yn, &c.GetData(), false);
+            SetPixel(xn, yn, c.GetData(), false);
         if (clip.Intersects(xp, yn))
-            SetPixel(xp, yn, &c.GetData(), false);
+            SetPixel(xp, yn, c.GetData(), false);
 
         if (clip.Intersects(xn, yp))
-            SetPixel(xn, yp, &c.GetData(), false);
+            SetPixel(xn, yp, c.GetData(), false);
         if (clip.Intersects(xp, yp))
-            SetPixel(xp, yp, &c.GetData(), false);
+            SetPixel(xp, yp, c.GetData(), false);
 
         // fill interior
         if (yn != old_yn)
         {
             old_yn = yn;
             for (int i = xn + 1; i < xp; ++i)
-                SetPixel(i, yn, &c.GetData(), false);
+                SetPixel(i, yn, c.GetData(), false);
         }
         if (yp != old_yp)
         {
             old_yp = yp;
             for (int i = xn + 1; i < xp; ++i)
-                SetPixel(i, yp, &c.GetData(), false);
+                SetPixel(i, yp, c.GetData(), false);
         }
         
         // Checking and updating value of
@@ -1166,26 +1166,26 @@ void King::ImageBlock::DrawFilled(const Circle2DF& cirIn, float4 colorIn)
         int xn = -x + xc;
         int yn = -y + yc;
         if (clip.Intersects(xp, yp))
-            SetPixel(xp, yp, &c.GetData(), false);
+            SetPixel(xp, yp, c.GetData(), false);
         if (clip.Intersects(xn, yp))
-            SetPixel(xn, yp, &c.GetData(), false);
+            SetPixel(xn, yp, c.GetData(), false);
         if (clip.Intersects(xp, yn))
-            SetPixel(xp, yn, &c.GetData(), false);
+            SetPixel(xp, yn, c.GetData(), false);
         if (clip.Intersects(xn, yn))
-            SetPixel(xn, yn, &c.GetData(), false);
+            SetPixel(xn, yn, c.GetData(), false);
 
         // fill interior
         if (yn != old_yn)
         {
             old_yn = yn;
             for (int i = xn + 1; i < xp; ++i)
-                SetPixel(i, yn, &c.GetData(), false);
+                SetPixel(i, yn, c.GetData(), false);
         }
         if (yp != old_yp)
         {
             old_yp = yp;
             for (int i = xn + 1; i < xp; ++i)
-                SetPixel(i, yp, &c.GetData(), false);
+                SetPixel(i, yp, c.GetData(), false);
         }
 
         // Checking and updating parameter
@@ -1252,7 +1252,7 @@ void King::ImageBlock::CopyRectOut(const Rectangle2DF& srcRectIn, ImageBlock* de
     else
         return;
 
-    auto dest = &destOut->GetData();
+    auto dest = destOut->GetData();
 
     std::lock_guard<std::mutex> guard(_mutex);
     for (uint32_t j = y; j < y + h; ++j)
@@ -1336,7 +1336,7 @@ void King::ImageBlock::CopyImageBlockIn(const ImageBlock& srcIn, const float& xI
 void King::ImageBlock::FlipVertically()
 {
     MemoryBlock<uint8_t> buffer(_w, _stride);
-    auto temp = &buffer.GetData();
+    auto temp = buffer.GetData();
     const auto rowBytes = buffer.GetByteSize();
 
     for (size_t j = 0; j < _h / 2; ++j)
@@ -1417,7 +1417,7 @@ bool King::ImageTGA::ReadTGA(std::ifstream& dataFileIn)
     // we do not have to right the remainder out of 4 as zeros later on
     ImageBlock::Fill(0);
 
-    char* dest = reinterpret_cast<char*>(&GetData());
+    char* dest = reinterpret_cast<char*>(GetData());
 
     // original format
     if (header.idlength > 0)
@@ -1556,11 +1556,11 @@ bool King::ImageTGA::ReadTGA(std::ifstream& dataFileIn)
      for (size_t i = 0; i < bytes; i += _stride)
      {
          if (bpp >= 24)
-             *(&BGRA.GetData() + i + 0) = *(&GetData() + i + 2);
-             *(&BGRA.GetData() + i + 1) = *(&GetData() + i + 1);
-             *(&BGRA.GetData() + i + 2) = *(&GetData() + i + 0);
+             *(BGRA.GetData() + i + 0) = *(GetData() + i + 2);
+             *(BGRA.GetData() + i + 1) = *(GetData() + i + 1);
+             *(BGRA.GetData() + i + 2) = *(GetData() + i + 0);
          if (bpp >= 32)
-            *(&BGRA.GetData() + i + 3) = *(&GetData() + i + 3);
+            *(BGRA.GetData() + i + 3) = *(GetData() + i + 3);
      }
 
      // bottom to top pixel ordering
@@ -1568,7 +1568,7 @@ bool King::ImageTGA::ReadTGA(std::ifstream& dataFileIn)
          BGRA.FlipVertically();
 
      if (header.datatypecode == 2)
-         outfileIn.write(reinterpret_cast<const char*>(&BGRA.GetData()), BGRA.GetByteSize());
+         outfileIn.write(reinterpret_cast<const char*>(BGRA.GetData()), BGRA.GetByteSize());
      // RLE *** TO DO ***
      else if (header.datatypecode == 10)
      {

@@ -30,8 +30,10 @@ Revisions:      7/23/2021: Implemented MinMax(...), Min(), and Max() for efficie
                     and cap resizing growth rate above 256 to increments of 256. Also changed initial allocation to null
                     inlieu of two as the initial often was never enough and almost always results in a reallocation which is
                     costly.
-                9/19/2022: Added file read and write for 8, 16, and 32 bits that keeps 8 as uint8_t and performs little indian 
-                    conversion to uint16_t and uint32_t for 16 and 32.
+                9/19/2022: Added file read and write for 8, 16, 32, and 64 bits
+                9/25/2022: Improved exception safety for bad memory allocations. Some allowed to fail and continue, others throw
+                    if it cannot continue. Constructors and Destructor do not throw. After Initializing a MemoryBlock, check 
+                    GetLength() != 0 for successful data space.
 
 Contact:        ChrisKing340@gmail.com
 
@@ -68,6 +70,7 @@ SOFTWARE.
 #include <fstream>
 #include <string>
 #include <mutex>
+#include <exception>
 
 namespace King 
 {
@@ -84,14 +87,14 @@ protected:
     /* methods */
 public:
     // construction/life cycle
-    explicit MemoryBlock() : _capacity(0) {}// { Allocate(2); } // Allocates empty, PushBack() handles dynamic increases
-    MemoryBlock(nullptr_t) : MemoryBlock() {} // allow nullptr construct since that is the default
-    explicit MemoryBlock(size_t elementCount, size_t byteStridePerElement = 1) : _stride(byteStridePerElement) { Allocate(elementCount * _stride); Fill(); }
-    explicit MemoryBlock(const MemoryBlock& other) { *this = other; } // Copy constructor
+    explicit MemoryBlock() noexcept : _capacity(0) {} // Allocates empty, PushBack() handles dynamic increases
+    MemoryBlock(nullptr_t) noexcept : MemoryBlock() {} // allow nullptr construct since that is the default
+    explicit MemoryBlock(size_t elementCount, size_t byteStridePerElement = 1) noexcept : _stride(byteStridePerElement) { Allocate(elementCount * _stride); Fill(); }
+    explicit MemoryBlock(const MemoryBlock& other) noexcept { *this = other; } // Copy constructor
     explicit MemoryBlock(MemoryBlock&& other) noexcept { *this = std::move(other); } // Move constructor
-    MemoryBlock(std::initializer_list<T> il) : _length(il.size()) { Allocate(_length); std::copy(std::begin(il), std::end(il), _data); }
+    MemoryBlock(std::initializer_list<T> il) noexcept : _length(il.size()) { Allocate(_length); if (_data) std::copy(std::begin(il), std::end(il), _data); }
     
-    ~MemoryBlock() { Destroy(); }
+    ~MemoryBlock() noexcept { Destroy(); }
 
     // operators
     void * operator new (size_t size) { return _aligned_malloc(size, align); }
@@ -105,18 +108,18 @@ public:
     const T* operator->() const { return _data; } // const data pointer access
     explicit operator bool() const { return (bool)_length; } // valid
     bool operator !() const { return !(bool)_data || !(bool)_length; } // invalid
-
+    // Appends will throw, original data lost
     inline MemoryBlock& operator+=(const MemoryBlock& other);
     inline MemoryBlock operator+(const MemoryBlock& other);
-
-    inline MemoryBlock& operator=(const T* other); // copy in our length worth of data from the pointer passed of type
-    inline MemoryBlock& operator=(const MemoryBlock& other);
+    // Assignment operators no not throw, original data lost, as the intent was to replace the data anyways
+    inline MemoryBlock& operator=(const T* other) noexcept; // if fails, _length = 0, _capacity = 0, and _data = nullptr;
+    inline MemoryBlock& operator=(const MemoryBlock& other) noexcept; // if fails, _length = 0, _capacity = 0, and _data = nullptr;
     inline MemoryBlock& operator=(MemoryBlock&& other) noexcept;
 
     // Functionality
-    inline void                 Initialize(size_t lengthIn) { Allocate(lengthIn); Fill(); }
-    inline void                 Reserve(size_t capacityIn) { ReAllocate(capacityIn); }
-    inline void                 Destroy();
+    inline void                 Initialize(size_t lengthIn) noexcept { Allocate(lengthIn); Fill(); }
+    inline void                 Reserve(size_t capacityIn) noexcept { ReAllocate(capacityIn); }
+    inline void                 Destroy() noexcept;
     
     // dynamic allocations
     inline void                 PushBack(const T& valueIn);
@@ -125,7 +128,7 @@ public:
     inline void                 PopBack();
 
     // block methods
-    inline void                 Clear(); // calls destructor of each object
+    inline void                 Clear() noexcept; // calls destructor of each object
     inline void                 Fill(); // fill entire capacity with default contructor value of T type
     inline void                 Fill(T valueIn); // fill entire capacity with valueIn
     inline void                 Split(size_t elementIndex, MemoryBlock<T>* out); // *this range becomes [begin to elementIndex-1] and *out range becomes [elementIndex to end]
@@ -155,8 +158,8 @@ public:
     // Accessors
     T&                          Get(size_t i) { assert(i * _stride < _length); return _data[i * _stride]; }
     const T&                    Get(size_t i) const { assert(i * _stride < _length); return _data[i * _stride]; }
-    T&                          GetData() { return *_data; }
-    const T&                    GetData() const { return *_data; }
+    T*                          GetData() { return _data; }
+    const T*                    GetData() const { return _data; }
     const auto&                 GetLength() const { return _length; } // number of T data
     const auto&                 GetCapacity() const { return _capacity; } // number of T data
     const auto&                 GetStride() const { return _stride; } // number of T elements to skip with operator[] indexing
@@ -193,8 +196,8 @@ public:
     void                        Write8ByteDDword(std::ofstream& dataFileOut, uint64_t ddwordIn);
 
 private:
-    void                        Allocate(const std::size_t capacityIn);
-    void                        ReAllocate(const std::size_t capacityIn);
+    void                        Allocate(const std::size_t capacityIn) noexcept; // if fails, _length = 0, _capacity = 0, and _data = nullptr;
+    void                        ReAllocate(const std::size_t capacityIn) noexcept; // if fails, _length = 0, _capacity = 0, and _data = nullptr;
 };
 
 template<typename T, std::size_t align>
@@ -212,9 +215,11 @@ inline MemoryBlock<T, align> MemoryBlock<T, align>::operator+(const MemoryBlock&
 }
 // must already be initialized
 template<typename T, std::size_t align>
-inline MemoryBlock<T, align>& MemoryBlock<T, align>::operator=(const T* other)
+inline MemoryBlock<T, align>& MemoryBlock<T, align>::operator=(const T* other) noexcept
 {
-    assert(_length);
+    if (!_length)
+        return *this;
+
     auto l = _length;
     Clear();
 
@@ -228,16 +233,21 @@ inline MemoryBlock<T, align>& MemoryBlock<T, align>::operator=(const T* other)
 }
 // copy assignment
 template<typename T, std::size_t align>
-inline MemoryBlock<T, align>& MemoryBlock<T, align>::operator=(const MemoryBlock& other)
+inline MemoryBlock<T, align>& MemoryBlock<T, align>::operator=(const MemoryBlock& other) noexcept
 {
-    // keeps our _capacity if > other._length
     if (this != &other)
     {
+        // keeps our _capacity if > other._length
         if (_capacity < other._length)
         {
             Destroy();
             Allocate(other._length);
         }
+
+        // bad allocation? we cannot complete the copy
+        if (!_data)
+            return *this;
+
         std::lock_guard<std::mutex> guard(_mutex);
         // Clear then emplace new
         for (size_t i = 0; i < other.GetLength(); ++i)
@@ -300,8 +310,11 @@ inline void MemoryBlock<T, align>::SetLength(const size_t& lengthIn)
     // grows?
     else if (lengthIn > _capacity)
         ReAllocate(lengthIn);
-    
-    _length = lengthIn; 
+    // bad ReAllocation?
+    if (!_data)
+        _length = 0;
+    else
+        _length = lengthIn; 
 
     if (_length > oldLength)
     {
@@ -315,28 +328,29 @@ inline void MemoryBlock<T, align>::SetLength(const size_t& lengthIn)
 }
 
 template<typename T, std::size_t align>
-inline void MemoryBlock<T, align>::Allocate(const std::size_t capacityIn)
+inline void MemoryBlock<T, align>::Allocate(const std::size_t capacityIn) noexcept
 {
     Destroy();
     std::lock_guard<std::mutex> guard(_mutex);
     _capacity = capacityIn;
     // only aligned if T's new operator also aligns
-    //try 
-    //{
-        _data = (T*) ::operator new(_capacity * sizeof(T));
-    //}
-    //catch (const std::bad_alloc& e) 
-    //{
-    //    std::cout << "MemoryBlock::Allocation failed: " << e.what() << '\n';
-    //    assert(0); // temp, we really should handle this with a callback
-    //}
+    try
+    {
+        _data = (T*)(::operator new (_capacity * sizeof(T)));
+    }
+    catch (const std::bad_alloc& e)
+    {
+        _capacity = 0;
+        _length = 0;
+        _data = nullptr;
+    }
 
     if (_capacity < _length)
         _length = _capacity;
 }
 
 template<typename T, std::size_t align>
-inline void MemoryBlock<T, align>::ReAllocate(const std::size_t capacityIn)
+inline void MemoryBlock<T, align>::ReAllocate(const std::size_t capacityIn) noexcept
 {
     if (_capacity == capacityIn)
     {
@@ -345,15 +359,16 @@ inline void MemoryBlock<T, align>::ReAllocate(const std::size_t capacityIn)
 
     // only aligned if T's new operator also aligns
     T* data = nullptr;
-    //try
-    //{
+    try
+    {
         data = (T*)::operator new(capacityIn * sizeof(T));
-    //}
-    //catch (const std::bad_alloc& e)
-    //{
-    //    std::cout << "MemoryBlock::ReAllocate failed: " << e.what() << '\n';
-    //    assert(0); // temp, we really should handle this with a callback or just let the app fail
-    //}
+    }
+    catch (const std::bad_alloc& e)
+    {
+        _capacity = 0;
+        _length = 0;
+        data = nullptr;
+    }
 
     // shrink?
     std::size_t newLength(_length);
@@ -381,14 +396,15 @@ inline void MemoryBlock<T, align>::ReAllocate(const std::size_t capacityIn)
 }
 
 template<typename T, std::size_t align>
-inline void MemoryBlock<T, align>::Destroy() 
+inline void MemoryBlock<T, align>::Destroy() noexcept
 { 
     if (_capacity) 
     { 
         // remove all elements
         Clear();
-        // delete our memory reserve
+
         std::lock_guard<std::mutex> guard(_mutex);
+        // delete our memory reserve
         if (_data != nullptr)
             ::operator delete(_data, _capacity * sizeof(T));
 
@@ -456,18 +472,24 @@ inline T& MemoryBlock<T, align>::EmplaceBack(Args && ...args)
             ReAllocate(_capacity + _capacity / 2); // 16, 24, 36, 48, 72,...
     }
 
+    if (!_data)
+    {
+        // we cannot return a bad address
+        throw std::bad_alloc("BAD MEMORY ALLOCATION in MemoryBlock::EmplaceBack(...)");
+    }
+
     new(&_data[_length]) T(std::forward<Args>(args)...);
     return _data[_length++];
 }
 // remove all elements
 template<typename T, std::size_t align>
-inline void MemoryBlock<T, align>::Clear()
+inline void MemoryBlock<T, align>::Clear() noexcept
 {
     std::lock_guard<std::mutex> guard(_mutex);
     while (_length > 0)
     {
         --_length;
-        _data[_length].~T();
+        _data[_length].~T(); // all destructors of standard types are noexcept
     }
     _length = 0;
 }
@@ -523,6 +545,10 @@ inline void MemoryBlock<T, align>::Split(size_t elementIndex, MemoryBlock<T>* ou
     const size_t length2 = _length - length1;
     // copy the end of our buffer into the out buffer
     out->ReAllocate(length2);
+    if (!_data)
+    {
+        throw std::bad_alloc();
+    }
     std::copy(_data + length1, _data + _length, out->_data);
     // unnecessary, just for safety
     std::memset(_data + length1, 0, length2);
@@ -553,8 +579,13 @@ inline void MemoryBlock<T, align>::Append(const MemoryBlock<T>& other) // by cop
         if (newLength > _capacity)
             ReAllocate(newLength);
 
+        if (!_data)
+        {
+            throw std::bad_alloc();
+        }
+
         std::lock_guard<std::mutex> guard(_mutex);
-        //std::copy(other._data, other._data + other._length, _data + _length);
+        
         // emplace new
         for (size_t i = 0; i < other._length; ++i)
             new (_data + _length + i) T(other._data[i]);
