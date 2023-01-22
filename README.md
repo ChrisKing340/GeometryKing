@@ -1,12 +1,18 @@
-## New 2.0 Release of 2D Geometry King
+## New 2.6 Release of 3D Geometry King
 
 class ImageBlock : public MemoryBlock introduced to provide methods to Draw(...) privitives to memory buffers.  Derived class ImageTga : public ImageBlock allows file export to almost any image editing software for viewing. This maintains our render independent status as well as visualization of usage cases (path finding, intersection tests, transforms, clipping, etc.) of geometry.
 
 # 2D & 3D GeometryKing
 
-Generic, render independent, geometric game engine foundation. Intended as the foundation for "made from scratch" game engines with all the basics of 2D/3D geometry, model loading and saving, and physics body simulation with intrinsic SIMD acceleration.  C\+\+ classes support json for data transport, 2DGeometryKing has ImageBlock with Draw(...) methods from primitives to a memory buffer, and 3DGeometryKing has Model with constructors to convert 3D primitives to Models with vertex and index buffers ready for rendering. Physics classes represent real world motion while the geometry classes handling collision detection. Use all or mix and match to your needs with code inlined to a high degree for readability and compiled only if used.
+Generic, render independent, geometric game engine foundation. Intended as the foundation for "made from scratch" game engines.
+Physics body simulation with intrinsic SIMD acceleration imports our other projects:
+   Math:    https://github.com/ChrisKing340/MathSIMD
+   Physics: 
+C\+\+ classes support json for data transport, 2DGeometryKing has ImageBlock with Draw(...) methods from primitives to a memory buffer, and 3DGeometryKing has Model with constructors to convert 3D primitives to Models with vertex and index buffers ready for rendering. 
+Physics classes represent real world motion while the geometry classes handling collision detection. High degree of inline code for readability and compiled only if used in your projects.
 
 Export from class ImageTga after being drawn from 2D primities of Triangle2DF, Circle2DF, and Rectangle2DF:
+
 ![image](https://user-images.githubusercontent.com/15188055/192162868-6b863a96-c34d-49b2-83d2-d2f9f18e1af1.png)
 
 Compiled with Visual Studio 2019, C\+\+17, 64 Bit Windows 10
@@ -72,7 +78,8 @@ Complex models require more than just simple geometry shapes.  Multiple meshes o
 ## Math foundation
 
     #include "MathSIMD\MathSIMD.h"
-    // unique data types built on Single Instruction Multiple Data, SIMD, DirectXMath library of intrinsics for speed and simple implementation
+    https://github.com/ChrisKing340/MathSIMD 
+    unique data types built on Single Instruction Multiple Data, SIMD, DirectXMath library of intrinsics for speed and simple implementation
     class FloatPoint2; // SIMD
     class FloatPoint3; // SIMD
     class FloatPoint4; // SIMD
