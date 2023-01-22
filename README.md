@@ -1,6 +1,6 @@
 ## New 2.6 Release of 3D Geometry King
 
-class ImageBlock : public MemoryBlock introduced to provide methods to Draw(...) privitives to memory buffers.  Derived class ImageTga : public ImageBlock allows file export to almost any image editing software for viewing. 
+Math and Physics have been separated from GeometryKing for use and tutorial from the main code base.
 
 # 2D & 3D GeometryKing
 
