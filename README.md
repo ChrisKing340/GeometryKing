@@ -103,47 +103,6 @@ Complex models require more than just simple geometry shapes.  Multiple meshes o
     #include "General\TextFileParse.h"
     class TextFileParse
 
-## Physics foundation
-https://github.com/ChrisKing340/PhysicsKing
-Foundation classes represent a unit of measure with a scalar.  The classes just keeps one value with internal storage as a SI unit of measure.  String literals implemented to allow definition with the unit of measure desired.  Operator overloading to act as a base type and also supports streams and json from/to;
-Ex: Length(10_m)
-Ex: Length(10_ft)
-
-    #include "Physics\UnitOfMeasure.h"
-    namespace UnitOfMeasure;
-    class Mass; // scalar
-    class Length; // scalar
-    class Area; // scalar
-    class Volume; // scalar
-    class Energy; // scalar
-    class Power; // scalar
-    class Strength; // scalar part of a Force vector
-    class Accel; // scalar part of an Acceleration vector
-    class Speed; // scalar part of a Velocity vector
-    class Temperature; // scalar
-    class Time; // scalar
-    const Accel gravity;
-    const Speed speedOfSoundInAir;
-    
-## Physics simulation
-
-Modeling of force, acceleration, and velocity of dynamic bodies. Combined with GeometryKing primitives of models (and conversion on Model class to vertext and index buffers for rendering) you can simulate almost anything from the real world and render it.
-
-    #include "Physics\Physics.h"
-
-    // Linear
-    class Force ; // keeps a UnitOfMeasure::Strength scalar and a unit direction vector
-    class Acceleration ; // keeps a UnitOfMeasure::Accel scalar and a unit direction vector; operator for Acceleration = Force / Mass
-    class Velocity ; // keeps a UnitOfMeasure::Speed scalar and a unit direction vector; operator for Velocity = Acceleration * Time
-    class Distance ; // keeps a UnitOfMeasure::Length scalar and a unit direction vector (essentially a distance to); operator for Distance = Velocity * Time
-    class Position ; // keeps 3 floats for x,y,z and operators for arithmetic with Distance
-    
-    // Angular
-    class Torque ; // keeps a UnitOfMeasure::AngularStrength scalar and a unit direction vector representing the axis of force is acting about
-    class AngularAcceleration ; // keeps a UnitOfMeasure::AngularAccel scalar and a unit direction vector representing the normalized axis angles, 𝛼, in pitch, yaw, roll 𝛼(𝒾, 𝒿, 𝓀)
-    class AngularVelocity ; // keeps a UnitOfMeasure::AngularSpeed scalar and a unit direction vector representing the normalized axis angles, 𝛼, in pitch, yaw, roll 𝛼(𝒾, 𝒿, 𝓀)
-    class Rotation ; // keeps a UnitOfMeasure::Angle scalar and a unit direction vector representing the normalized axis angles, 𝛼, in pitch, yaw, roll 𝛼(𝒾, 𝒿, 𝓀). Also keeps a Quaternion. Advantage is that rotation can be > 2 PI and the quaternion will be calculated correctly (domain of a quaternion is -2 PI to +2 PI) and also the unit rotation vector is the axis of rotation in x,y,z
-
 ## Physics collision resolution 
 
 TO DO: working on collision points of contact and solvers for varying geometries. When complete, finishes the features list for a generic render independent geometric game engine.
