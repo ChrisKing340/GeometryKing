@@ -91,7 +91,7 @@ Complex models require more than just simple geometry shapes.  Multiple meshes o
     class TextFileParse
 
 ## Physics foundation
-
+https://github.com/ChrisKing340/PhysicsKing
 Foundation classes represent a unit of measure with a scalar.  The classes just keeps one value with internal storage as a SI unit of measure.  String literals implemented to allow definition with the unit of measure desired.  Operator overloading to act as a base type and also supports streams and json from/to;
 Ex: Length(10_m)
 Ex: Length(10_ft)
