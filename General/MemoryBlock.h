@@ -5,7 +5,7 @@ Description:    Dynamic CPU memory buffer that can be aligned and has proper
                 move and copy assignment semantics. Supports file read and 
                 write access to/from the block. Supports strides of the data
                 type to work with vertex buffers of dynamic structures. 
-                Supports custum data types by properly calling destructors on
+                Supports custom data types by properly calling destructors on
                 delete and constructors when emplace new. This class wraps a 
                 memory pointer and tracks _length in use and _capacity 
                 available. Methods to merge, append, or split MemoryBlocks and
@@ -33,7 +33,7 @@ Revisions:      7/23/2021: Implemented MinMax(...), Min(), and Max() for efficie
                 9/19/2022: Added file read and write for 8, 16, 32, and 64 bits
                 9/25/2022: Improved exception safety for bad memory allocations. Some allowed to fail and continue, others throw
                     if it cannot continue. Constructors and Destructor do not throw. After Initializing a MemoryBlock, check 
-                    GetLength() != 0 for successful data space.
+                    GetLength() != 0 for successful data space. Can also check over loaded ! operator (ex: MemoryBlock mb; if (!mb) cout << "Empty memory block";)
 
 Contact:        ChrisKing340@gmail.com
 
@@ -94,7 +94,7 @@ public:
     explicit MemoryBlock(MemoryBlock&& other) noexcept { *this = std::move(other); } // Move constructor
     MemoryBlock(std::initializer_list<T> il) noexcept : _length(il.size()) { Allocate(_length); if (_data) std::copy(std::begin(il), std::end(il), _data); }
     
-    ~MemoryBlock() noexcept { Destroy(); }
+    virtual ~MemoryBlock() noexcept { Destroy(); }
 
     // operators
     void* operator new (std::size_t size) noexcept(false) { auto ptr = _aligned_malloc(size, 16); if (!ptr) throw std::bad_alloc(); return ptr; }
@@ -131,7 +131,7 @@ public:
     inline void                 Clear() noexcept; // calls destructor of each object
     inline void                 Fill(); // fill entire capacity with default contructor value of T type
     inline void                 Fill(T valueIn); // fill entire capacity with valueIn
-    inline void                 Split(size_t elementIndex, MemoryBlock<T>* out); // *this range becomes [begin to elementIndex-1] and *out range becomes [elementIndex to end]
+    inline void                 Split(size_t elementIndexAt, MemoryBlock<T>* out); // *this range becomes [begin to elementIndex-1] and *out range becomes [elementIndexAt to end]
     inline void                 Merge(MemoryBlock<T>& other); // other is de-initalized after merge
     inline void                 Append(const MemoryBlock<T>& other); // copies other
 
@@ -148,10 +148,10 @@ public:
     inline bool                 Read(std::ifstream& dataFileIn); // pass stream so we could pack multiple MemoryBlocks into one file
     inline bool                 Write(std::ofstream& outfileIn);
 
-    inline bool                 ReadRawBinary(std::string& fileNameIn); // length unknown, so read entire file and use file length as byte size
-    inline bool                 WriteRawBinary(std::string fileNameIn);
+    inline bool                 ReadRawBinary(const std::string& fileNameIn); // length unknown, so read entire file and use file length as byte size
+    inline bool                 WriteRawBinary(const std::string& fileNameIn);
 
-    inline bool                 WriteText(std::string fileNameIn); // for easy debugging of data
+    inline bool                 WriteText(const std::string& fileNameIn); // for easy debugging of data
 
     [[deprecated("Use GetLength() or GetElements() depending on use instead.")]]
     auto Size() { return _length; } // note, use GetElements() for stride lengths
@@ -197,7 +197,7 @@ public:
 
 private:
     void                        Allocate(const std::size_t capacityIn) noexcept; // if fails, _length = 0, _capacity = 0, and _data = nullptr;
-    void                        ReAllocate(const std::size_t capacityIn) noexcept; // if fails, _length = 0, _capacity = 0, and _data = nullptr;
+    void                        ReAllocate(std::size_t capacity) noexcept; // if fails, _length = 0, _capacity = 0, and _data = nullptr;
 };
 
 template<typename T, std::size_t align>
@@ -332,7 +332,7 @@ inline void MemoryBlock<T, align>::Allocate(const std::size_t capacityIn) noexce
 {
     Destroy();
     std::lock_guard<std::mutex> guard(_mutex);
-    _capacity = capacityIn;
+    _capacity = capacityIn / _stride * _stride;
     // only aligned if T's new operator also aligns
     try
     {
@@ -350,18 +350,18 @@ inline void MemoryBlock<T, align>::Allocate(const std::size_t capacityIn) noexce
 }
 
 template<typename T, std::size_t align>
-inline void MemoryBlock<T, align>::ReAllocate(const std::size_t capacityIn) noexcept
+inline void MemoryBlock<T, align>::ReAllocate(std::size_t capacity) noexcept
 {
-    if (_capacity == capacityIn)
-    {
+    if (_capacity == capacity)
         return;
-    }
+
+    capacity = capacity / _stride * _stride;
 
     // only aligned if T's new operator also aligns
     T* data = nullptr;
     try
     {
-        data = (T*)::operator new(capacityIn * sizeof(T));
+        data = (T*)::operator new(capacity * sizeof(T));
     }
     catch (const std::bad_alloc& e)
     {
@@ -372,9 +372,9 @@ inline void MemoryBlock<T, align>::ReAllocate(const std::size_t capacityIn) noex
 
     // shrink?
     std::size_t newLength(_length);
-    if (capacityIn < newLength)
+    if (capacity < newLength)
     {
-        newLength = capacityIn;
+        newLength = capacity;
     }
 
     // emplace new, move to data
@@ -392,7 +392,7 @@ inline void MemoryBlock<T, align>::ReAllocate(const std::size_t capacityIn) noex
 
     _data = data;
     _length = newLength;
-    _capacity = capacityIn;
+    _capacity = capacity;
 }
 
 template<typename T, std::size_t align>
@@ -402,8 +402,8 @@ inline void MemoryBlock<T, align>::Destroy() noexcept
     { 
         // remove all elements
         Clear();
-
-        std::lock_guard<std::mutex> guard(_mutex);
+        // a guard is not exception safe
+        // std::lock_guard<std::mutex> guard(_mutex);
         // delete our memory reserve
         if (_data != nullptr)
             ::operator delete(_data, _capacity * sizeof(T));
@@ -418,8 +418,18 @@ inline void MemoryBlock<T, align>::Destroy() noexcept
 template<typename T, std::size_t align>
 inline void MemoryBlock<T, align>::PushBack(const T& valueIn)
 {
+    // dynamic to 4, 16, 24, 32, 48, 72, ..., 256, 512, 768, ... when starting from zero
+    if (!_capacity)
+        Allocate(4);
     if (_length >= _capacity)
-        ReAllocate(_capacity + _capacity / 2);
+    {
+        if (_capacity >= 4 && _capacity < 16)
+            ReAllocate(16);
+        else if (_capacity > 256)
+            ReAllocate((_capacity / 256 + 1) * 256);
+        else
+            ReAllocate(_capacity + _capacity / 2); // 16, 24, 36, 48, 72,...
+    }
 
     _data[_length] = valueIn;
     ++_length;
@@ -428,7 +438,7 @@ inline void MemoryBlock<T, align>::PushBack(const T& valueIn)
 template<typename T, std::size_t align>
 inline void MemoryBlock<T, align>::PushBack(const T&& valueIn)
 {
-    // dynamic to 4, 8, 12, 18, 27, 40, 60, 90, 135... when starting from zero
+    // dynamic to 4, 16, 24, 32, 48, 72, ..., 256, 512, 768, ... when starting from zero
     if (!_capacity)
         Allocate(4);
     if (_length >= _capacity)
@@ -598,7 +608,6 @@ template<typename T, std::size_t align>
 inline bool MemoryBlock<T, align>::Read(std::ifstream& dataFileIn) // Memory block binary (length coded first, then stride, data last)
 {
     if (!dataFileIn.is_open()) return false;
-    if (!dataFileIn.good()) return false;
 
     size_t readLength;
     size_t readStride;
@@ -647,7 +656,7 @@ inline bool MemoryBlock<T, align>::Write(std::ofstream& outfileIn) // Memory blo
 }
 
 template<typename T, std::size_t align>
-inline bool MemoryBlock<T, align>::ReadRawBinary(std::string& fileNameIn) // data only, no stride.  Reads entire contents of file
+inline bool MemoryBlock<T, align>::ReadRawBinary(const std::string& fileNameIn) // data only, no stride.  Reads entire contents of file
 {
     std::ifstream infile(fileNameIn, std::ifstream::binary);
     if (infile.fail()) return false;
@@ -686,7 +695,7 @@ inline bool MemoryBlock<T, align>::ReadRawBinary(std::string& fileNameIn) // dat
 }
 
 template<typename T, std::size_t align>
-inline bool MemoryBlock<T, align>::WriteRawBinary(std::string fileNameIn) // data only, no length or stride
+inline bool MemoryBlock<T, align>::WriteRawBinary(const std::string& fileNameIn) // data only, no length or stride
 {
     const auto& bytes = GetByteSize();
 
@@ -702,7 +711,7 @@ inline bool MemoryBlock<T, align>::WriteRawBinary(std::string fileNameIn) // dat
 }
 
 template<typename T, std::size_t align>
-inline bool MemoryBlock<T, align>::WriteText(std::string fileNameIn) // readable format
+inline bool MemoryBlock<T, align>::WriteText(const std::string& fileNameIn) // readable format
 {
     std::ofstream outfile(fileNameIn, std::ofstream::trunc);
     outfile << "Length: " << std::to_string(_length) << '\n';

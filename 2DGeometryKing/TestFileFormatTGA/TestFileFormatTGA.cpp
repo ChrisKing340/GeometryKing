@@ -132,9 +132,10 @@ int main(int argc, char** argv)
     {
         // Drawing tests
         // 
-        // Start with an ImageBlock (our MemoryBlock class inherited with some extra functionality)
         // File encoders/decoders inherit ImageBlock to override Read/Write methods and keep their extra header information
-        ImageTGA im(512, 512 / 3, 4);
+        ImageTGA im(512, 512 / 3);
+        // white and opaque using MemoryBlock Fill of every byte
+        im.Fill(255);
 
         auto white = float4(1.f, 1.f, 1.f, 1.f);
         auto black = float4(0.f, 0.f, 0.f, 1.f);
@@ -144,17 +145,34 @@ int main(int argc, char** argv)
         auto yellow = float4(1.f, 0.9f, 0.50f, 1.f);
         auto ltblue = float4(0.67f, 0.85f, 0.90f, 1.f);
 
-        // white and opaque using MemoryBlock Fill of every byte
-        im.Fill(255);
-        // trianlges use initializer constructors for float2 groupings to define 3 points
-        Triangle2DF t = { { 512.f / 3.f - 10.f - (512.f / 3.f - 20.f) * 0.866f, 512.f / 6.f }, { 512.f / 3.f - 10.f, 10.f}, {  512.f / 3.f - 10.f, 512.f / 3.f - 10.f} };
-        im.DrawFilled(t, red);
-        // rectangle use initialize constructors for float3 groupings of LT and RB points
-        Rectangle2DF r = { { 512.f * 2.0f / 3.f + 10.f, 10.f }, { 512.f - 10.f, 512.f / 3.f - 10.f} };
-        im.DrawFilled(r, green);
-        // use default constructor for center and radius
-        Circle2DF cr(float2(512.f / 2.f, 512.f / 6.f), 512.f / 6.f - 10.f);
-        im.DrawFilled(cr, blue);
+        //// trianlges use initializer constructors for float2 groupings to define 3 points
+        //Triangle2DF t = { { 512.f / 3.f - 10.f - (512.f / 3.f - 20.f) * 0.866f, 512.f / 6.f }, { 512.f / 3.f - 10.f, 10.f}, {  512.f / 3.f - 10.f, 512.f / 3.f - 10.f} };
+        //im.DrawFilled(t, red);
+        //// rectangle use initialize constructors for float3 groupings of LT and RB points
+        //Rectangle2DF r = { { 512.f * 2.0f / 3.f + 10.f, 10.f }, { 512.f - 10.f, 512.f / 3.f - 10.f} };
+        //im.DrawFilled(r, green);
+        //// use default constructor for center and radius
+        //Circle2DF cr(float2(512.f / 2.f, 512.f / 6.f), 512.f / 6.f - 10.f);
+        //im.DrawFilled(cr, blue);
+
+        Rectangle2DF r = { { 10.f, 10.f }, { 100.f, 100.f} };
+        im.Draw(r, green);
+        auto poly = r.Rotate(r.GetCenter(), 1.0f);
+        im.Draw(poly, red);
+
+        auto center = r.GetCenter();
+        im.Draw(center, blue);
+
+        auto rPt = center;
+        rPt.SetY(70);
+        rPt.SetX(111);
+        auto c = blue;
+        if (poly.Intersects(rPt))
+            c = red;
+        else if (r.Intersects(rPt))
+            c = green;
+
+        im.Draw(rPt, c);
 
         // default is an uncompressed truevision file that is portable to about every paint program in existence
         std::ofstream outfile("testdraw.tga", std::ifstream::binary);

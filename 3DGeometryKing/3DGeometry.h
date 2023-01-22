@@ -40,7 +40,7 @@ References:     Code not original or substantially created by me will be cited h
 
 Contact:        https://chrisking340.github.io/GeometryKing/
 
-Copyright (c) 2020, 2021 Christopher H. King
+Copyright (c) 2020, 2021, 2022 Christopher H. King
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -96,8 +96,11 @@ SOFTWARE.
     03/05/2022 - Version 2.4 - Class Sphere gained methods for inertia, surface area and volume
     05/21/2022 - Version 2.5 - Classes Path and Line gained methods for offset, transforming them by the distance specified 
         along an "outward" normal to CCW. A plane must be specified that the normal lays within.
+    01/21/2023 - Version 2.6 - Separated physics basic classes into their own library. This makes it possible to adopt the physics
+        library if you are not using geometry and your projects. Collision of 2D and 3D objects will be integrated in the
+        Geometry library still to combine it all together for real workd application. Added class Momentum to physics library.
 
-    Version 3.0 Planned release - oriented box on oriented box and sphere collision tests. Previously extended our axis 
+    Version 3.0 Planned release - Oriented box on oriented box and sphere collision tests. Previously extended our axis 
         aligned bounding box in version 1 to oriented by passing in a orientation quaterion. WIP code to implement
         separating axis theorem. Goal is to finish the physics engine by taking the OB on OB contacts and penetration
         and implementing a momentum based response to resolve the collisions. Plan is to support OB and Sphere collisions
@@ -109,7 +112,7 @@ SOFTWARE.
 */
 
 constexpr auto KING_3DGEOMETRY_VERSION_MAJOR = 2;
-constexpr auto KING_3DGEOMETRY_VERSION_MINOR = 5;
+constexpr auto KING_3DGEOMETRY_VERSION_MINOR = 6;
 constexpr auto KING_3DGEOMETRY_VERSION_PATCH = 0;
 
 #include <DirectXCollision.h>
@@ -118,25 +121,25 @@ constexpr auto KING_3DGEOMETRY_VERSION_PATCH = 0;
 #include <filesystem>
 #include <time.h>
 
+// Communication format
 #include "..\3rdParty\json.hpp"
 using json = nlohmann::json;
-
-// SIMD acceleration
-#include "..\MathSIMD\MathSIMD.h"
 
 // Simple memory handling
 #include "..\General\MemoryBlock.h"
 
-// Basis of physical properties
-#include "..\Physics\UnitOfMeasure.h"
-#include "..\Physics\Physics.h"
+// Simple SIMD acceleration
+#include "..\MathSIMD\MathSIMD.h"
+
+// Physics building blocks
+#include "..\PhysicsKing\Physics.h"
 
 // Geometry building blocks
 #include "..\2DGeometryKing\2DGeometry.h"
 
-// WIP: Collsision testing, these are TEMPORARIES for experimentation
-#include "..\Physics\CK_Cube.h"
-#include "..\Physics\CK_CubeCollision.h"
+//// WIP: Collsision testing, these are TEMPORARIES for experimentation
+//#include "..\PhysicsKing\Physics\CK_Cube.h"
+//#include "..\PhysicsKing\Physics\CK_CubeCollision.h"
 
 // Compile with code files 3DGeometry.cpp and CK_CubeCollision.cpp
 
@@ -251,7 +254,7 @@ namespace King {
     ******************************************************************************/
     enum IndexFormat
     {
-        uint32 = 1
+        euint32 = 1
     };
     /******************************************************************************
     *    Pose - a pose transformation used in animations of verticies
@@ -287,6 +290,7 @@ namespace King {
         void   operator delete (void *p) { _aligned_free(static_cast<Pose*>(p)); }
         inline Pose & operator= (const Pose &in) // copy assign
         {
+            _rotationOrigin = in._rotationOrigin;
             _rotation = in._rotation;
             _scale = in._scale;
             _translation = in._translation;
@@ -296,6 +300,7 @@ namespace King {
         {
             if (this != &in)
             {
+                _rotationOrigin = std::move(_rotationOrigin);
                 _rotation = std::move(in._rotation);
                 _scale = std::move(in._scale);
                 _translation = std::move(in._translation);
@@ -308,6 +313,7 @@ namespace King {
         inline Pose operator+ (const Pose &in) const
         {
             Pose rtn;
+            rtn.SetRotationOrigin(in._rotationOrigin + _rotationOrigin);
             rtn.SetScale(King::Lerp(_scale,in._scale, float3(0.5f))); // average
             rtn.SetRotation(in._rotation + _rotation); // non-communtative, order matters
             rtn.SetTranslation(_translation + in._translation);
@@ -316,6 +322,7 @@ namespace King {
         inline Pose operator- (const Pose &in) const
         {
             Pose rtn;
+            rtn.SetRotationOrigin(_rotationOrigin - in._rotationOrigin);
             rtn.SetScale(King::Lerp(_scale, in._scale, float3(0.5f))); // average
             rtn.SetRotation(in._rotation - _rotation); // non-communtative, order matters
             rtn.SetTranslation(_translation - in._translation);
@@ -324,6 +331,7 @@ namespace King {
         inline Pose operator* (const Pose &in) const
         {
             Pose rtn;
+            rtn.SetRotationOrigin(_rotation * in._rotationOrigin + _rotationOrigin);
             rtn.SetScale(_scale * in._scale);
             rtn.SetRotation(in._rotation * _rotation); // non-communtative, order matters
             rtn.SetTranslation(_rotation * in._translation + _translation);
@@ -1177,7 +1185,7 @@ namespace King {
         void   operator delete (void *p) { _aligned_free(static_cast<Box*>(p)); }
         Box & operator= (const Box &in) { Set(in.GetMin(), in.GetMax()); return *this; } // copy assignment
         Box & operator= (Box &&in) = default; // move assignment
-        inline Box & operator*= (const DirectX::XMMATRIX &m) { pt_min = DirectX::XMVector4Transform(FloatPoint4(pt_min, 1.0f), m); pt_max = DirectX::XMVector4Transform(FloatPoint4(pt_max, 1.0f), m); return *this; } // does not support scaling since non-uniformed
+        inline Box& operator*= (const DirectX::XMMATRIX& m) { assert(false); }/*this is broken, collapes boxes on rotation !!!!, must use full box  SetAABBfromThisTransformedBox(FXMMATRIX M);*/ //pt_min = DirectX::XMVector4Transform(FloatPoint4(pt_min, 1.0f), m); pt_max = DirectX::XMVector4Transform(FloatPoint4(pt_max, 1.0f), m); return *this; } // does not support scaling since non-uniformed
         friend Box operator* (Box lhs, const DirectX::XMMATRIX &m) { lhs *= m; return lhs; } // invokes std::move(lhs)
         inline Box& operator+= (const float3 d) { MoveBy(d); return *this; }
         inline Box& operator-= (const float3 d) { MoveBy(-d); return *this; }
@@ -1242,9 +1250,8 @@ namespace King {
         inline float                        GetSurfaceArea() const { auto d = GetDiagonal(); return 2.f * (d.f[0] * d.f[1] + d.f[0] * d.f[2] + d.f[1] * d.f[2]); }
         inline float                        GetVolume() const { auto d = GetDiagonal(); return 2.f * (d.f[0] * d.f[1] * d.f[2]); }
 
-        vector<pair<FloatPoint3, CornerDescription>> IdentifyCorners(const vector<FloatPoint3>& pointsIn, const Quaternion* quaternionIn = nullptr) const;
-        //std::vector<FloatPoint3>            
-        DirectX::XMFLOAT4* GetCorners8Transformed(const DirectX::FXMMATRIX& M); // scaled, rotate and translate a "unit" Box to a model bounding box
+        std::vector<std::pair<FloatPoint3, CornerDescription>>  IdentifyCorners(const vector<FloatPoint3>& pointsIn, const Quaternion* quaternionIn = nullptr) const;          
+        DirectX::XMFLOAT4*                  GetCorners8Transformed(const DirectX::FXMMATRIX& M); // scaled, rotate and translate a "unit" Box to a model bounding box
         std::vector<FloatPoint3>            GetCorners8(const Quaternion * quaternionIn = nullptr) const; // return all 8 corners with enum CornerDescription indexing
         std::vector<FloatPoint3>            GetCornersTop4(const Quaternion * quaternionIn = nullptr) const; 
         std::vector<FloatPoint3>            GetCornersBottom4(const Quaternion * quaternionIn = nullptr) const;
@@ -1260,7 +1267,7 @@ namespace King {
         inline Quad                         GetQuadLeft(const Quaternion * quaternionIn = nullptr) { DirectX::XMFLOAT3 a[8]; GetCorners8(a, quaternionIn); return Quad(a[ltb], a[lbb], a[lbf], a[ltf]); }
         inline Quad                         GetQuadTop(const Quaternion * quaternionIn = nullptr) { DirectX::XMFLOAT3 a[4]; GetCornersTop4(a, quaternionIn); return Quad(a); }
         inline Quad                         GetQuadBottom(const Quaternion * quaternionIn = nullptr) { DirectX::XMFLOAT3 a[4]; GetCornersBottom4(a, quaternionIn); return Quad(a); }
-        // Assignments                      
+        //// Assignments                      
         inline void                         SetZero() { pt_min.SetZero(); pt_max.SetZero(); }
         inline void __vectorcall            Set(const FloatPoint3 pt_minIn, const FloatPoint3 pt_maxIn) { pt_min = pt_minIn; pt_max = pt_maxIn; } // defines the box with min (pt_min) and max (pt_max) points in RHS
         inline void                         Set(const DirectX::BoundingBox &in) { auto c = DirectX::XMLoadFloat3(&in.Center); auto e = DirectX::XMLoadFloat3(&in.Extents); pt_min = c - e; pt_max = c + e; }
@@ -1697,7 +1704,7 @@ namespace King {
         std::string                         _modelName;
 
         VertexFormat                        _vertexFormat; // byte size of format is stride size for _vertexBufferMaster
-        IndexFormat                         _indexFormat = IndexFormat::uint32;
+        IndexFormat                         _indexFormat = IndexFormat::euint32;
 
         Box                                 _boundingBox;
 
@@ -1767,7 +1774,7 @@ namespace King {
         virtual const size_t                GetNumMeshes() { return 0; } // just our master data as one mesh
 
         auto                                GetIndexCount() const { return _indexBufferMaster.GetElements(); }
-        uint32_t                            GetIndexStride() const { return IndexFormat::uint32 ? 4 : 2;} // in bytes
+        uint32_t                            GetIndexStride() const { return IndexFormat::euint32 ? 4 : 2;} // in bytes
         auto &                              GetIndexBufferMaster() { return _indexBufferMaster; }
 
         // unique will return vertex in order (eg. 0, 1, 2, 3) and unique = false will return in index buffer order with duplicates (eg. indicies = {0,1,2, 1,3,2} return is 0, 1, 2, 1, 3, 2 and not 0, 1, 2, 3
@@ -2065,4 +2072,5 @@ namespace King {
         virtual std::size_t                 GetBoneCount() const { if (_boneHierarchy) return _boneHierarchy->GetBoneCount(); else return 0; }
         // Assignments
     };
-}
+
+} // King namespace

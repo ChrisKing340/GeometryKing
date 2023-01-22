@@ -55,7 +55,7 @@ SOFTWARE.
 #endif
 
 #define KING_2DGEOMETRY_VERSION_MAJOR 2
-#define KING_2DGEOMETRY_VERSION_MINOR 0
+#define KING_2DGEOMETRY_VERSION_MINOR 2
 #define KING_2DGEOMETRY_VERSION_PATCH 0
 /*
     History:
@@ -76,15 +76,33 @@ SOFTWARE.
             Authored IsPerpendicular function to Line2DF
 
         KING_2DGEOMETRY_VERSION_MAJOR 2 Release 9/25/2022:
-            Authored Class ImageBlock for raw texture storage and methods to draw to the texture. This major release is intended to showcase the use of the 2D primitives in drawing to
-                a generic memory buffer. High level functionality is obtained by making use of the 2D primitives clip functions that convert to polygons and then draw each line of the
-                polygon. We also allow fractional draws, whereby the lines are drawn partially from the first point outward. Clipping prevents memory overrights and image wrapping. 
-                With version 2.0.0 the library forms the basis for a simple 2D CAD application and a simple paint application.
-            Authored Class ImageTGA for saving and loading ImageBlock data in an exportable file format. TGA was chosen for it simplicity and age, meaning it is widely supported. Also
-                has a simple but effective compression scheme of run length encoding. This scheme is useful for data blocks for maps and path finding algorithims. By using MemoryBlock
-                to store information you may then easily visuallize your data by exporting it to an image viewing application.
+            Authored Class ImageBlock for raw texture storage and methods to draw primites to a buffer that can be used for texture uploads by a graphics API.
+            Authored Class ImageTGA for saving and loading ImageBlock data in an exportable file format. TGA was chosen for it simplicity and age, meaning it is widely supported. 
+        KING_2DGEOMETRY_VERSION_MINOR 1 Release 10/13/2022:
+            Authored Rectangle2DF::FindNearestPoint(float2, Matrix) to Rectangle2DF to transform the rectangle given a rotation transform
+        KING_2DGEOMETRY_VERSION_MINOR 2 Release 12/14/2022:
+            Comment: Now that we can use ImageTGA im; im.WriteTGA("fileName.tga"); to export graphics to test the library efficiently, implementing collision tests for basic geometry beyound just a point.
+            Authored Triangle2DF::Intersects(Triangle2DF) using the separating axis theorem
+            Authored Triangle2DF Conversion operator to Polygon2DF to allow for use of Polygon2DF::Intersects(Polygon2DF polyIn)
+            Authored Circle2DF::Transform(DirectX::XMMATRIX m) to modify data by an external transformation
+            Authored Circle2DF::Intersects(Line2DF lIn) specialized tests unique to a circle and a line
+            Authored Polygon2DF::Intersects(Polygon2DF polyIn) using the separating axis theorem generalized for two different arbitrary size polygons
+            Authored Polygon2DF::Intersects(Line2DF other) to test end points and then arbitrary number of edges on line intersection
+            Authored Polygon2DF::Intersects(Circle2DF other) specialized tests unique to a circle and arbitrary number of lines
+            Authored Rectangle2DF Conversion operator to Polygon2DF to allow for use of Polygon2DF::Intersects(Polygon2DF polyIn)
+            Authored Rectangle2DF::Transformation(DirectX::XMMATRIX m) to return a non-axis aligned rectangle from a matrix that was updated externally when transform to world space needed updating
+            Authored Rectangle2DF::Transformation(FloatPoint2 scaleIn, FloatPoint2 rotOrigin, DirectX::XMVECTOR rotQuat, FloatPoint2 trans) for use by a class that keeps a transform to world space
+            Authored Rectangle2DF::Rotate(FloatPoint2 originIn, float radians) to return a non-axis aligned rectangle rotated about an origin. Can pass in Rectangle2DF::Center();
+            Authored Rectangle2DF::Intersects(const FloatPoint2 pt2In, const float rectRotationInRadians) for rotated rectangles. Useful for UI implementations of rotated hit boxes
+            Authored Rectangle2DF::Transformation(DirectX::XMMATRIX m) to return a Polygon2DF to a non-axis aligned rectangle.
 */
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 
+#include <memory>
+#include <utility>
+#include <limits>
 #include "..\MathSIMD\MathSIMD.h"
 #include "..\General\MemoryBlock.h"
 
@@ -138,10 +156,14 @@ namespace King {
         void   operator delete (void *p) { _aligned_free(static_cast<Line2DF*>(p)); }
         inline Line2DF & operator= (const Line2DF &in) { Set(in); return *this; } // copy assignment
         inline Line2DF & operator= (Line2DF &&in) = default; // move assignment
-
+        // Conversions
+        inline explicit operator bool() const { return pt[0] != pt[1]; } // valid
+        inline bool operator !() const { return pt[0] == pt[1]; } // invalid
         // Functionality
         bool __vectorcall                   Intersects(const Line2DF &lineIn, FloatPoint2 *intersectPointOut = nullptr);
         FloatPoint2 __vectorcall            FindNearestPointOnLineSegment(const FloatPoint2 &pointIn);
+
+        void __vectorcall                   Transform(DirectX::XMMATRIX m);
 
         void                                Traverse(std::function<void(IntPoint2 ptOut)> callBack) const; // rasterize the line and callback for each point along the line
         
@@ -195,9 +217,18 @@ namespace King {
         void   operator delete (void *p) { _aligned_free(static_cast<Triangle2DF*>(p)); }
         inline Triangle2DF& operator= (const Triangle2DF& in) { Set(in); return *this; } // copy assignment
         inline Triangle2DF& operator= (Triangle2DF &&in) = default; // move assignment
+        // Comparators
+        bool operator==(const Triangle2DF& other) { return (pt[0] == other.pt[0]) && (pt[1] == other.pt[1]) && (pt[2] == other.pt[2]); }
+        bool operator!=(const Triangle2DF& other) { return (pt[0] != other.pt[0]) || (pt[1] != other.pt[1]) || (pt[2] != other.pt[2]); }
+        // Conversions
+        inline explicit operator bool() const { return pt[0] != pt[1] && pt[0] != pt[2] && pt[1] != pt[2]; } // valid
+        inline bool operator !() const { return pt[0] == pt[1] || pt[0] == pt[2] || pt[1] == pt[2]; } // invalid
         // Functionality
-        bool                                Intersects(Triangle2DF &triIn);
-        bool                                Contains(const FloatPoint2 &ptIn);
+        Triangle2DF __vectorcall            Rotate(FloatPoint2 originIn, float radians) const;
+        void __vectorcall                   Transform(DirectX::XMMATRIX m);
+
+        bool __vectorcall                   Intersects(const Triangle2DF triIn) const;
+        bool __vectorcall                   Intersects(const FloatPoint2 ptIn) const;
         // Accessors
         auto                                GetFaceNormal() const { return Cross(GetEdge2(), GetEdge1()); } // CCW right handed
         inline FloatPoint2                  GetEdge1() const { return pt[1] - pt[0]; }
@@ -270,6 +301,7 @@ namespace King {
         // Conversions
         inline operator RECT() const { return Get_RECT(); }
         inline operator const RECT() const { return Get_RECT(); }
+        inline operator const Polygon2DF();
         // Functionality
         inline void __vectorcall            MoveBy(const FloatPoint2 deltaIn) { lt += deltaIn; rb += deltaIn; }
         inline void                         MoveBy(const long &dxIn, const long &dyIn) { lt.Set(lt.GetX() + dxIn, lt.GetY() + dyIn); rb.Set(rb.GetX() + dxIn, rb.GetY() + dyIn); }
@@ -277,12 +309,17 @@ namespace King {
         inline void                         MoveDY(const long &dyIn) { lt.SetY(lt.GetY() + dyIn); rb.SetY(rb.GetY() + dyIn); }
         inline void __vectorcall            MoveTo(const FloatPoint2 ptLTIn) { auto wh = GetSize(); lt = ptLTIn; rb = lt + wh; }
         inline bool                         MoveTo(const long &xIn, const long &yIn) { MoveTo(FloatPoint2(xIn, yIn)); }
-
+        
+        Polygon2DF __vectorcall             Transformation(DirectX::XMMATRIX m);
+        Polygon2DF __vectorcall             Transformation(FloatPoint2 scaleIn, FloatPoint2 rotOrigin, DirectX::XMVECTOR rotQuat, FloatPoint2 trans);
+        Polygon2DF __vectorcall             Rotate(FloatPoint2 originIn, float radians) const; // Ex: auto poly = rect.Rotate(rect.Center(), 3.14159f);
+        
         inline void __vectorcall            Grow(const FloatPoint2 scale3In) { auto s = scale3In * GetSize(); SetWH(s); }
 
         bool                                Intersects(const Rectangle2DF &rectIn) const;
         bool                                Intersects(const RECT &rectIn) const;
-        bool __vectorcall                   Intersects(const FloatPoint2 pt2In) const { return (lt.GetX() <= pt2In.GetX()) && (pt2In.GetX() < rb.GetX()) && (lt.GetY() <= pt2In.GetY()) && (pt2In.GetY() < rb.GetY()); };
+        bool __vectorcall                   Intersects(const FloatPoint2 pt2In) const { return (lt.GetX() <= pt2In.GetX()) && (pt2In.GetX() <= rb.GetX()) && (lt.GetY() <= pt2In.GetY()) && (pt2In.GetY() <= rb.GetY()); };
+        //bool __vectorcall                   Intersects(const FloatPoint2 pt2In, const float rectRotationInRadians) const; // rotated about center
         bool                                Intersects(const float &xIn, const float &yIn) const;
         bool                                Intersects(const Circle2DF & circleIn) const;
 
@@ -292,7 +329,8 @@ namespace King {
         Polygon2DF                          Clip(const Triangle2DF& src);
         Polygon2DF                          Clip(const Polygon2DF& pts);
 
-        inline FloatPoint2                  FindNearestPoint(const FloatPoint2 &pt2In) const;
+        FloatPoint2 __vectorcall            FindNearestPoint(const FloatPoint2 pt2In) const;
+        FloatPoint2 __vectorcall            FindNearestPoint(const FloatPoint2 pt2In, const DirectX::XMMATRIX M) const; // rectangle transformed by M
         // Accessors
         inline FloatPoint2                  GetSize() const { FloatPoint2 a(rb - lt); a.MakeAbsolute(); return a; } // width & height
         inline FloatPoint2                  GetCenter() const { return FloatPoint2(lt + (rb - lt) / 2.f); }
@@ -307,6 +345,7 @@ namespace King {
         inline const auto                   GetLB() const { return FloatPoint2(lt.GetX(), rb.GetY()); }
         inline const auto                   GetRT() const { return FloatPoint2(rb.GetX(), lt.GetY()); }
         inline RECT                         Get_RECT() const { RECT r; r.left = (long)GetLeft(); r.top = (long)GetTop(); r.right = (long)GetRight(); r.bottom = (long)GetBottom(); return r; }
+        Polygon2DF                          Get_Polygon2DF() const;
         inline auto                         Get_Triangle2DF_LB_CCW() const { return Triangle2DF(GetLT(), GetLB(), GetRB()); } // CCW winding
         inline auto                         Get_Triangle2DF_RT_CCW() const { return Triangle2DF(GetRB(), GetRT(), GetLT()); } // CCW winding
         inline auto                         Get_Triangle2DF_LT_CW() const { return Triangle2DF(GetLB(), GetLT(), GetRT()); } // CW winding
@@ -433,7 +472,7 @@ namespace King {
         inline void                         SetLT(const IntPoint2 &ltIn) { lt = ltIn; }
         inline void                         SetRB(const IntPoint2 &rbIn) { rb = rbIn; }
         inline void                         SetSize(const UIntPoint2 &sz) { rb = lt + sz; }
-        inline void                         SetWH(const UIntPoint2 &whIn) { UIntPoint2 offset = Abs(whIn) / 2ul; UIntPoint2 c = GetCenter(); lt = c - offset; rb = c + offset; }
+        inline void                         SetWH(const UIntPoint2 &whIn) { UIntPoint2 offset = (whIn) / 2ul; UIntPoint2 c = GetCenter(); lt = c - offset; rb = c + offset; }
         inline void                         SetWidth(const long &w) { rb.SetX(lt.GetX() + w); }
         inline void                         SetHeight(const long &h) { rb.SetY(lt.GetY() + h); }
         inline void                         SetLeft(const long &x) { lt.SetX(x); }
@@ -472,9 +511,12 @@ namespace King {
         inline Circle2DF & operator= (const Circle2DF &in) { Set(in); } // copy assignment
         inline Circle2DF & operator= (Circle2DF &&in) = default; // move assignment
         // Functionality
+        void __vectorcall                   Transform(DirectX::XMMATRIX m);
+
         bool __vectorcall                   Intersects(const FloatPoint2 pt2In) const;
         bool                                Intersects(const float &xIn, const float &yIn) const;
-        bool                                Intersects(const Rectangle2DF &rectIn) const;
+        bool __vectorcall                   Intersects(const Line2DF lIn) const;
+        bool                                Intersects(const Rectangle2DF& rectIn) const;
         
         inline FloatPoint2                  FindNearestPoint(const FloatPoint2 &pt2In) const;
         // Accessors
@@ -522,11 +564,18 @@ namespace King {
         inline Polygon2DF& operator= (const Polygon2DF& in) { Set(in); } // copy assignment
         inline Polygon2DF& operator= (Polygon2DF&& in) = default; // move assignment
         // Functionality
-        bool __vectorcall                   Contains(const FloatPoint2 ptIn) const;
+        void __vectorcall                   Transform(DirectX::XMMATRIX m);
+
+        // Rectangle2DF and Triangle2DF convert to Polygon2DF
+        bool __vectorcall                   Intersects(const Polygon2DF polyIn) const;
+        bool __vectorcall                   Intersects(const FloatPoint2 ptIn) const;
+        bool __vectorcall                   Intersects(const Line2DF other) const;
+        bool __vectorcall                   Intersects(const Circle2DF other) const;
+
         void                                Offset(const float dist);
 
-        inline void __vectorcall            Add_pt(const FloatPoint3 val) { _pt.push_back(val); }
-        inline void __vectorcall            Remove_pt(const FloatPoint3 val) { auto it = std::find(std::begin(_pt), std::end(_pt), val); if (it != std::end(_pt)) _pt.erase(it); }
+        inline void __vectorcall            Add_pt(const FloatPoint2 val) { _pt.push_back(val); }
+        inline void __vectorcall            Remove_pt(const FloatPoint2 val) { auto it = std::find(std::begin(_pt), std::end(_pt), val); if (it != std::end(_pt)) _pt.erase(it); }
         inline void                         Remove_pt(const size_t index) { assert(index < _pt.size()); _pt.erase(std::next(_pt.begin(), index)); }
         // Accessors
          // Assignments
@@ -573,6 +622,7 @@ namespace King {
         bool                            Read(std::ifstream& dataFileIn); // custom binary file, very simple
         bool                            Write(std::ofstream& outfileIn);
 
+        void __vectorcall               Draw(const float2 lineIn, float4 colorIn);
         void                            Draw(const Line2DF& lineIn, float4 colorIn, const float fractionIn = 1.0f);
         void                            Draw(const Triangle2DF& triIn, float4 colorIn, const float fractionIn = 1.0f);
         void                            Draw(const Polygon2DF& polyIn, float4 colorIn, const float fractionIn = 1.0f);
@@ -587,15 +637,19 @@ namespace King {
         void                            CopyRectOut(const Rectangle2DF& srcRect, ImageBlock* destOut);
         void                            CopyImageBlockIn(const ImageBlock& srcIn, const float& x, const float& y);
 
+        void __vectorcall               FillColor(float4 colorIn);
+
         void                            FlipVertically();
+
+        void                            FilterBlur(const uint32_t radius, Rectangle2DF srcRect = Rectangle2DF());
         // Accessors
         const auto&                     GetWidth() const { return _w; }
         const auto&                     GetHeight() const { return _h; }
         void                            GetPixel(const uint32_t& x, const uint32_t& y, unsigned char* out);
          // Assignments
         void                            Set(const ImageBlock& in) { MemoryBlock<unsigned char>::operator=(in); _w = in._w; _h = in._h; }
-        void                            SetWidth(const uint32_t wIn, uint32_t* heightOut) { _w = wIn; if (_length > 0) _h = _length / _w; *heightOut = _h; }
-        void                            SetHeight(const uint32_t hIn, uint32_t* widthOut) { _h = hIn; if (_length > 0) _w = _length / _h; *widthOut = _w; }
+        void                            SetWidth(const uint32_t wIn, uint32_t* heightOut) { _w = wIn; if (_length > 0) _h = (uint32_t)(_length / _w); *heightOut = _h; }
+        void                            SetHeight(const uint32_t hIn, uint32_t* widthOut) { _h = hIn; if (_length > 0) _w = (uint32_t)(_length / _h); *widthOut = _w; }
         void                            SetPixel(const uint32_t& x, const uint32_t& y, unsigned char* colorBufferIn, const bool guardIn = false);
     };
     /******************************************************************************
@@ -667,6 +721,8 @@ namespace King {
         uint32_t                        Read4ByteBGRAasRGBA(std::ifstream& dataFileIn);
         uint32_t                        Read3ByteBGRasRGBA(std::ifstream& dataFileIn);
     };
+
+
     /******************************************************************************
     *   streams to enable std::cout and std::cin
     ******************************************************************************/
@@ -696,4 +752,44 @@ namespace King {
     void from_json(const json & j, Rectangle2DF & to);
     void from_json(const json & j, Rectangle2D & to);
     void from_json(const json& j, Circle2DF& to);
+
+} // King namespace
+
+/*
+Example use of Geometry class for a game object of an arbitrary rectangle(not axis aligned) in world space optimized to store the transformations to world space.
+Rectangle2DF keeps "object space" data and Rectangle keeps "world space" data.When rendering, call GetPolygon() and draw lines between each point.Animate each frame
+by calling MoveBy(float2 deltaIn) and RotateBy(float deltaRadiansIn).For more pre - built code to perform transforms, refer to class Pose in the Geometry3D namespace
+which can replace _scale, _originRot, _position, and _rotationand properly handle compound transforms through math overloads.
+
+class Rectangle : public Rectangle2DF
+{
+protected:
+    float2 _scale = { 1.f, 1.f };
+    float2 _originRot = { 0.f, 0.f };
+    float2 _position = { 0.f, 0.f };
+    float _rotation = 0;
+    bool _dirty = true;
+    DirectX::XMMATRIX _worldMatrix;
+    Polygon2DF _worldPolygon;
+
+public:
+    Rectangle() { _worldMatrix = GetWorldMatrix(); }
+    void Set(const float2 scaleIn) { _scale = scaleIn; _dirty = true; }
+    void Set(const float2 originIn) { _originRot = originIn; _dirty = true; }
+    void Set(const float rotationIn) { _rotation = rotationIn; _dirty = true; }
+    void Set(const float2 positionIn) { _position = positionIn; _dirty = true; }
+
+    void MoveBy(float2 deltaIn) { _position += deltaIn; _dirty = true; }
+    void RotateBy(float deltaRadiansIn) { _rotation += deltaRadiansIn; _dirty = true; }
+
+    DirectX::XMMATRIX GetWorldMatrix() { if (_dirty) _worldMatrix = XMMatrixAffineTransformation(_scale, _originRot, Quaternion(0.f, 0.f, _rotation), _position); _dirty = false; return _worldMatrix; }
+    Polygon2DF __vectorcall Transformation(FloatPoint2 scaleIn, FloatPoint2 rotOrigin, DirectX::XMVECTOR rotQuat, FloatPoint2 trans); // overload base class
+    Polygon2DF GetPolygon() { if (_dirty) _worldPolygon = Transformation(_scale, _originRot, Quaternion(0.f, 0.f, _rotation), _position); _dirty = false; return _worldPolygon; }
+};
+Polygon2DF __vectorcall King::Rectangle::Transformation(FloatPoint2 scaleIn, FloatPoint2 rotOrigin, DirectX::XMVECTOR rotQuat, FloatPoint2 trans)
+{
+    _worldMatrix = DirectX::XMMatrixAffineTransformation(scaleIn, rotOrigin, rotQuat, trans);
+    _dirty = false;
+    return Rectangle2DF::Transformation(_worldMatrix);
 }
+*/

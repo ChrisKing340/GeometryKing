@@ -1,9 +1,13 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.28307.645
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.32901.82
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "GeometryKing", "GeometryKing\GeometryKing.vcxproj", "{5701BBCD-ADB5-47DB-9202-0556560272D4}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PhysicsKing", "..\PhysicsKing\PhysicsKing.vcxproj", "{29E58DA0-56B4-45B9-B5A5-2F964FA79A27}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MathSIMD", "..\MathSIMD\MathSIMD.vcxproj", "{32BFCBAD-4C3C-455D-B45D-0B00742333EB}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -21,6 +25,22 @@ Global
 		{5701BBCD-ADB5-47DB-9202-0556560272D4}.Release|x64.Build.0 = Release|x64
 		{5701BBCD-ADB5-47DB-9202-0556560272D4}.Release|x86.ActiveCfg = Release|Win32
 		{5701BBCD-ADB5-47DB-9202-0556560272D4}.Release|x86.Build.0 = Release|Win32
+		{29E58DA0-56B4-45B9-B5A5-2F964FA79A27}.Debug|x64.ActiveCfg = Debug|x64
+		{29E58DA0-56B4-45B9-B5A5-2F964FA79A27}.Debug|x64.Build.0 = Debug|x64
+		{29E58DA0-56B4-45B9-B5A5-2F964FA79A27}.Debug|x86.ActiveCfg = Debug|Win32
+		{29E58DA0-56B4-45B9-B5A5-2F964FA79A27}.Debug|x86.Build.0 = Debug|Win32
+		{29E58DA0-56B4-45B9-B5A5-2F964FA79A27}.Release|x64.ActiveCfg = Release|x64
+		{29E58DA0-56B4-45B9-B5A5-2F964FA79A27}.Release|x64.Build.0 = Release|x64
+		{29E58DA0-56B4-45B9-B5A5-2F964FA79A27}.Release|x86.ActiveCfg = Release|Win32
+		{29E58DA0-56B4-45B9-B5A5-2F964FA79A27}.Release|x86.Build.0 = Release|Win32
+		{32BFCBAD-4C3C-455D-B45D-0B00742333EB}.Debug|x64.ActiveCfg = Debug|x64
+		{32BFCBAD-4C3C-455D-B45D-0B00742333EB}.Debug|x64.Build.0 = Debug|x64
+		{32BFCBAD-4C3C-455D-B45D-0B00742333EB}.Debug|x86.ActiveCfg = Debug|Win32
+		{32BFCBAD-4C3C-455D-B45D-0B00742333EB}.Debug|x86.Build.0 = Debug|Win32
+		{32BFCBAD-4C3C-455D-B45D-0B00742333EB}.Release|x64.ActiveCfg = Release|x64
+		{32BFCBAD-4C3C-455D-B45D-0B00742333EB}.Release|x64.Build.0 = Release|x64
+		{32BFCBAD-4C3C-455D-B45D-0B00742333EB}.Release|x86.ActiveCfg = Release|Win32
+		{32BFCBAD-4C3C-455D-B45D-0B00742333EB}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

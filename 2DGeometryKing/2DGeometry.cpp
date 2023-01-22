@@ -3,7 +3,6 @@
 using namespace King;
 using namespace std;
 
-
 // Output streams
 std::ostream& King::operator<<(std::ostream& os, const King::Line2DF& in) { return os << "{ pt0" << in.pt[0] << " pt1" << in.pt[1] << " }"; }
 std::ostream& King::operator<<(std::ostream& os, const King::Triangle2DF& in) { return os << "{ pt0" << in.pt[0] << " pt1" << in.pt[1] << " pt2" << in.pt[2] << " }"; }
@@ -117,6 +116,26 @@ King::FloatPoint2 King::Line2DF::FindNearestPointOnLineSegment(const FloatPoint2
 
     return nearestPoint;
 }
+void King::Line2DF::Transform(DirectX::XMMATRIX m)
+{
+    pt[0] *= m;
+    pt[1] *= m;
+}
+/*
+{
+    // world to box space
+    FloatPoint3 localSpacePoint(pt3In);
+    localSpacePoint *= M;
+
+    auto npOnBox = FindNearestPointOnBox(localSpacePoint);
+
+    // box to world space
+    auto invM = DirectX::XMMatrixInverse(nullptr, M);
+    npOnBox *= invM;
+
+    return npOnBox;
+}
+*/
 /******************************************************************************
 *   Line2DF::LineTraverse
 *       Desc:       raterizes the line and traverses it point by point
@@ -128,8 +147,6 @@ King::FloatPoint2 King::Line2DF::FindNearestPointOnLineSegment(const FloatPoint2
 ******************************************************************************/
 void King::Line2DF::Traverse(std::function<void(IntPoint2 ptOut)> callBack) const
 {
-    // TO DO ********* make a 3D version for Line class, reference https://gist.github.com/yamamushi/5823518 and need an int3
-
     // points from float to int
     const IntPoint2 ptBegin(Round(pt[0]));
     const IntPoint2 ptEnd(Round(pt[1]));
@@ -346,24 +363,76 @@ bool King::Line2DF::IsPerpendicular(const Line2DF& lineIn) const
     return false;
 }
 
-bool King::Triangle2DF::Intersects(Triangle2DF & triIn)
+Triangle2DF __vectorcall King::Triangle2DF::Rotate(FloatPoint2 originIn, float radiansIn) const
 {
-    // exclusion principle first
-    Rectangle2DF bb(*this);
-    Rectangle2DF bbIn(triIn);
-    if (!bb.Intersects(bbIn)) return false;
-    // brute force
-    // does not cover all true cases
-    if (Contains(triIn.GetVertex(0))) return true;
-    if (Contains(triIn.GetVertex(1))) return true;
-    if (Contains(triIn.GetVertex(2))) return true;
-    if (triIn.Contains(GetVertex(0))) return true;
-    if (triIn.Contains(GetVertex(1))) return true;
-    if (triIn.Contains(GetVertex(2))) return true;
-    return false;
+    Triangle2DF out;
+    out.pt[0] = pt[0] - originIn;
+    out.pt[1] = pt[1] - originIn;
+    out.pt[2] = pt[2] - originIn;
+
+    DirectX::XMVECTOR rot = DirectX::XMQuaternionRotationRollPitchYaw(0, 0, radiansIn);
+    out.pt[0] = XMVector3Rotate(out.pt[0], rot);
+    out.pt[1] = XMVector3Rotate(out.pt[1], rot);
+    out.pt[2] = XMVector3Rotate(out.pt[2], rot);
+
+    out.pt[0] = out.pt[0] + originIn;
+    out.pt[1] = out.pt[1] + originIn;
+    out.pt[2] = out.pt[2] + originIn;
+
+    return out;
 }
 
-bool King::Triangle2DF::Contains(const FloatPoint2 & ptIn)
+void __vectorcall King::Triangle2DF::Transform(DirectX::XMMATRIX m)
+{
+    pt[0] *= m;
+    pt[1] *= m;
+    pt[2] *= m;
+}
+
+bool King::Triangle2DF::Intersects(const Triangle2DF triIn) const
+{
+    // separating axis theorem
+
+    DirectX::XMVECTOR axes[6];
+    axes[0] = DirectX::XMVectorSet(0.f, 0.f, 1.f, 0.f);
+    axes[1] = DirectX::XMVectorSet(0.f, 0.f, 1.f, 0.f);
+    axes[2] = pt[1] - pt[0];
+    axes[3] = pt[2] - pt[1];
+    axes[4] = triIn.pt[1] - triIn.pt[0];
+    axes[5] = triIn.pt[2] - triIn.pt[1];
+
+    for (int i = 0; i < 6; i++)
+    {
+        axes[i] = DirectX::XMVector3Normalize(axes[i]);
+
+        float minA = std::numeric_limits<float>::max();
+        float maxA = std::numeric_limits<float>::min();
+        float minB = std::numeric_limits<float>::max();
+        float maxB = std::numeric_limits<float>::min();
+
+        for (int j = 0; j < 3; j++)
+        {
+            float a = DirectX::XMVectorGetX(DirectX::XMVector2Dot(axes[i], pt[j]));
+            minA = a < minA ? a : minA;
+            maxA = a > maxA ? a : maxA;
+        }
+
+        for (int k = 0; k < 3; k++)
+        {
+            float b = DirectX::XMVectorGetX(DirectX::XMVector2Dot(axes[i], triIn.pt[k]));
+            minB = b < minB ? b : minB;
+            maxB = b > maxB ? b : maxB;
+        }
+
+        if (!(minA <= maxB && minB <= maxA))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool __vectorcall King::Triangle2DF::Intersects(const FloatPoint2 ptIn) const
 {
     auto p0 = ptIn - pt[0];
     auto p1 = ptIn - pt[1];
@@ -376,7 +445,13 @@ bool King::Triangle2DF::Contains(const FloatPoint2 & ptIn)
     if (Cross(p21, p1).GetX() > 0.f != s_ab) return false;
     return true;
 }
- bool __vectorcall King::Circle2DF::Intersects(const FloatPoint2 pt2In) const 
+void __vectorcall King::Circle2DF::Transform(DirectX::XMMATRIX m)
+{
+    auto c = GetCenter();
+    c *= m;
+    SetCenter(c);
+}
+bool __vectorcall King::Circle2DF::Intersects(const FloatPoint2 pt2In) const
 { 
     FloatPoint2 test(pt2In - GetCenter()); 
     test *= test;
@@ -395,7 +470,38 @@ bool King::Triangle2DF::Contains(const FloatPoint2 & ptIn)
     return test > r_sq ? false : true; 
 }
 
- bool King::Circle2DF::Intersects(const Rectangle2DF & rectIn) const
+ bool __vectorcall King::Circle2DF::Intersects(const Line2DF other) const
+ {
+     // Check if the start or end point of the line intersects with the circle
+     if (Intersects(other.pt[0]) || Intersects(other.pt[1]))
+         return true;
+
+     // Calculate the distance from the start of the line to the center of the circle
+     DirectX::XMVECTOR distVec = DirectX::XMVector2Length(GetCenter() - other.pt[0]);
+     float dist = DirectX::XMVectorGetX(distVec);
+
+     // If the distance is greater than the radius of the circle, they do not intersect
+     if (dist > GetRadius())
+         return false;
+
+     // Calculate the angle between the line and the vector from the start of the line to the center of the circle
+     DirectX::XMVECTOR dirVec = DirectX::XMVector2Normalize(GetCenter() - other.pt[0]);
+     float angle = DirectX::XMVectorGetX(DirectX::XMVector2Dot(dirVec, DirectX::XMVector2Normalize(other.pt[1] - other.pt[0])));
+
+     // If the angle is greater than 90 degrees, then the line does not intersect the circle
+     if (angle < 0.f)
+         return false;
+
+     // Calculate the distance between the line and the center of the circle
+     float distToCircle = DirectX::XMVectorGetX(DirectX::XMVector2Length(GetCenter() - other.pt[0]));
+
+     if (distToCircle > GetRadius())
+         return false;
+
+     return true;
+ }
+
+ bool King::Circle2DF::Intersects(const Rectangle2DF& rectIn) const
 {
     auto rectPointNearest = rectIn.FindNearestPoint(GetCenter());
     return Intersects(rectPointNearest);
@@ -427,6 +533,17 @@ bool King::Triangle2DF::Contains(const FloatPoint2 & ptIn)
      SetRadius(radius);
  }
 
+ King::Polygon2DF King::Rectangle2DF::Get_Polygon2DF() const
+ {
+     King::Polygon2DF out;
+
+     out.Add_pt(lt);
+     out.Add_pt(float2(lt.f[0], rb.f[1])); // lb
+     out.Add_pt(rb);
+     out.Add_pt(float2(rb.f[0], lt.f[1])); // rt
+     return out;
+ }
+
  void King::Rectangle2DF::Set(const Polygon2DF& polyIn)
  {
      float2 mn(FLT_MAX);
@@ -442,10 +559,72 @@ bool King::Triangle2DF::Contains(const FloatPoint2 & ptIn)
      SetRB(mx);
  }
 
+ inline King::Rectangle2DF::operator const Polygon2DF()
+ {
+     return Get_Polygon2DF();
+ }
+
+ Polygon2DF __vectorcall King::Rectangle2DF::Transformation(DirectX::XMMATRIX m)
+ {
+     Polygon2DF out = Get_Polygon2DF();
+     out.Transform(m);
+
+     return out;
+ }
+
+ Polygon2DF __vectorcall King::Rectangle2DF::Transformation(FloatPoint2 scaleIn, FloatPoint2 rotOrigin, DirectX::XMVECTOR rotQuat, FloatPoint2 trans)
+ {
+     Polygon2DF out = Get_Polygon2DF();
+     DirectX::XMMATRIX mat = XMMatrixAffineTransformation(scaleIn, rotOrigin, rotQuat, trans);
+
+     out.Transform(mat);
+
+     return out;
+ }
+
+ Polygon2DF __vectorcall King::Rectangle2DF::Rotate(FloatPoint2 originIn, float radiansIn) const
+ {
+    Polygon2DF out;
+
+    out.Add_pt(lt);
+    out.Add_pt(float2(lt.f[0], rb.f[1])); // lb
+    out.Add_pt(rb);
+    out.Add_pt(float2(rb.f[0], lt.f[1])); // rt
+
+    DirectX::XMVECTOR rot = DirectX::XMQuaternionRotationRollPitchYaw(0, 0, radiansIn);
+    DirectX::XMVECTOR Q = DirectX::XMQuaternionConjugate(rot);
+
+    for (int i = 0; i < 4; ++i)
+    {
+        out._pt[i] -= originIn;
+        DirectX::XMVECTOR A = XMVectorSelect(DirectX::g_XMSelect1100.v, out._pt[i], DirectX::g_XMSelect1100.v);
+        DirectX::XMVECTOR Result = DirectX::XMQuaternionMultiply(Q, A);
+        out._pt[i] = DirectX::XMQuaternionMultiply(Result, rot) + originIn;
+    }
+    return out;
+ }
+
+
  bool King::Rectangle2DF::Intersects(const Rectangle2DF & rectIn) const { return (rectIn.lt.GetX() < rb.GetX()) && (lt.GetX() < rectIn.rb.GetX()) && (rectIn.lt.GetY() < rb.GetY()) && (lt.GetY() < rectIn.rb.GetY()); }
 
  bool King::Rectangle2DF::Intersects(const RECT & rectIn) const { return (rectIn.left < rb.GetX()) && (lt.GetX() < rectIn.right) && (rectIn.top < rb.GetY()) && (lt.GetY() < rectIn.bottom); }
 
+
+ //bool __vectorcall King::Rectangle2DF::Intersects(const FloatPoint2 pt2In, const float rectRotationInRadians) const
+ //{
+ //   // Rotate point p about center to move the point from world space to model space
+ //   XMVECTOR transformedPt = XMVector3Rotate(p-rotPt, XMQuaternionRotationRollPitchYaw(0.f, 0.f, rectRotationInRadians)) + rotPt;
+
+ //   // Check if point is within rectangle
+ //   if (XMVectorGetX(transformedPt) >= XMVectorGetX(lt) &&
+ //       XMVectorGetX(transformedPt) <= XMVectorGetX(rb) &&
+ //       XMVectorGetY(transformedPt) >= XMVectorGetY(lt) &&
+ //       XMVectorGetY(transformedPt) <= XMVectorGetY(rb))
+ //   {
+ //       return true;
+ //   }
+ //   return false;
+ //}
 
  bool King::Rectangle2DF::Intersects(const float & xIn, const float & yIn) const { return (lt.GetX() <= xIn) && (xIn < rb.GetX()) && (lt.GetY() <= yIn) && (yIn < rb.GetY()); }
 
@@ -465,7 +644,7 @@ bool King::Triangle2DF::Contains(const FloatPoint2 & ptIn)
                      the rectangle.
 *        Remarks:    Based on the work of Liang-Barsky function by Daniel White @ http://www.skytopia.com/project/articles/compsci/clipping.html
 ******************************************************************************/
- Line2DF King::Rectangle2DF::Clip(const Line2DF &src)
+ Line2DF King::Rectangle2DF::Clip(const Line2DF& src)
  {
      // make sure our edges are set correctly
      //float left = min(lt.GetX(), rb.GetX());
@@ -480,7 +659,7 @@ bool King::Triangle2DF::Contains(const FloatPoint2 & ptIn)
 
      Line2DF clip;
 
-     float t0 = 0.0;    
+     float t0 = 0.0;
      float t1 = 1.0;
      float2 delta = src.pt[1] - src.pt[0];
      float dx = delta.GetX();
@@ -490,25 +669,25 @@ bool King::Triangle2DF::Contains(const FloatPoint2 & ptIn)
      auto pt0 = src.GetVertex(0).Get_XMFLOAT2();
      auto pt1 = src.GetVertex(1).Get_XMFLOAT2();
 
-     for (int edge = 0; edge < 4; edge++) 
-     {  
+     for (int edge = 0; edge < 4; edge++)
+     {
          if (edge == 0) { p = -dx; q = -(left - pt0.x); }
          else if (edge == 1) { p = dx; q = (right - pt0.x); }
          else if (edge == 2) { p = -dy; q = -(bottom - pt0.y); }
          else { p = dy; q = (top - pt0.y); }
-         
+
          // parallel line outside?
          if (p == 0 && q < 0) return Line2DF();
 
          r = q / p;
 
-         if (p < 0) 
+         if (p < 0)
          {
              // is it completely outside?
              if (r > t1) return Line2DF();
              else if (r > t0) t0 = r;
          }
-         else if (p > 0) 
+         else if (p > 0)
          {
              // is it completely outside?
              if (r < t0) return Line2DF();
@@ -522,16 +701,87 @@ bool King::Triangle2DF::Contains(const FloatPoint2 & ptIn)
      // we need to back reverse the top and bottom for y
      return clipped;
  }
+//*        Remarks:    
+//******************************************************************************/
+//Line2DF King::Rectangle2DF::Clip(const Line2DF &src)
+//{
+//    float left = lt.GetX();
+//    float top = lt.GetY();
+//    float right = rb.GetX();
+//    float bottom = rb.GetY();
+//
+//    float2 pt;
+//    Line2DF l, out;
+//    bool only1(false), only2(false), first(false), second(false), third(false);
+//
+//    if (only1 = Intersects(src.GetVertex(0)))
+//    {
+//        out.SetVertex(0, src.GetVertex(0));
+//    }
+//    if (only2 = Intersects(src.GetVertex(1)))
+//    {
+//        out.SetVertex(1, src.GetVertex(1));
+//    }
+//    if (only1 && only2)
+//    {
+//        // both are within rectangle, return unmodified
+//        return out;
+//    }
+//
+//    l = Line2DF(float2(left, top), float2(left, bottom));
+//    if (first = l.Intersects(src, &pt))
+//    {
+//        if (only1)
+//            out.SetVertex(1, pt);
+//        else
+//            out.SetVertex(0, pt);
+//    }
+//
+//    l = Line2DF(float2(right, top), float2(right, bottom));
+//    if (second = l.Intersects(src, &pt))
+//    {
+//        if (first || only1)
+//            out.SetVertex(1, pt);
+//        else
+//            out.SetVertex(0, pt);
+//    }
+//
+//    if (first && (second || only1 || only2))
+//        return out;
+//
+//    l = Line2DF(float2(left, top), float2(right, top));
+//    if (third = l.Intersects(src, &pt))
+//    {
+//        if (first || second || only1)
+//            out.SetVertex(1, pt);
+//        else
+//            out.SetVertex(0, pt);
+//    }
+//
+//    if ((first || second || only1 || only2) && third)
+//        return out;
+//
+//    l = Line2DF(float2(left, bottom), float2(right, bottom));
+//    if (l.Intersects(src, &pt))
+//    {
+//        if (first || second || third || only1)
+//            out.SetVertex(1, pt);
+//        else
+//            out.SetVertex(0, pt);
+//    }
+//
+//    return out;
+//}
 
- King::Polygon2DF King::Rectangle2DF::Clip(const King::Triangle2DF& src)
- {
-     Polygon2DF tri;
-     tri.Add_pt(src.GetVertex(0));
-     tri.Add_pt(src.GetVertex(1));
-     tri.Add_pt(src.GetVertex(2));
-     auto rtn = Clip(tri);
-     return rtn;
- }
+King::Polygon2DF King::Rectangle2DF::Clip(const King::Triangle2DF& src)
+{
+    Polygon2DF tri;
+    tri.Add_pt(src.GetVertex(0));
+    tri.Add_pt(src.GetVertex(1));
+    tri.Add_pt(src.GetVertex(2));
+    auto rtn = Clip(tri);
+    return rtn;
+}
 
  King::Rectangle2DF King::Rectangle2DF::Clip(const King::Rectangle2DF& rectIn)
 {
@@ -540,70 +790,63 @@ bool King::Triangle2DF::Contains(const FloatPoint2 & ptIn)
     rtn.SetRB(Min(GetRB(), rectIn.GetRB()));
     return rtn;
 }
- // *** TO DO *** one scenario not accounted for, when the polylines re-enter on a different edge, a diagonal will be drawn
- // rather than going to the rectangle corner first to start the new edge
+
  Polygon2DF King::Rectangle2DF::Clip(const Polygon2DF& ptsIn)
  {
-     Polygon2DF rtn;
-     bool outside(false);
-     float2 last;
+    const size_t numPts = ptsIn._pt.size();
 
-     for (size_t i = 0; i < ptsIn._pt.size(); ++i)
-     {
-         float2 ea = ptsIn._pt[i];
-         auto istore = i;
+    std::vector<pair<bool, float2>> pts;
+    pts.reserve(numPts);
 
-        if (Intersects(ea))
-            rtn.Add_pt(ea);
+    Polygon2DF clipped, unclipped;
+
+    Line2DF l(ptsIn._pt[0], ptsIn._pt[1]);
+    size_t i =1;
+    bool oneMoreTime(true);
+    unclipped.Add_pt(ptsIn._pt[0]);
+    while (oneMoreTime)
+    {
+        if (!i) oneMoreTime = false;
+
+        auto c = Clip(l);    
+        //cout << "Clipped: " << c.GetVertex(0) << '\n';
+        //cout << "Clipped: " << c.GetVertex(1) << '\n';
+
+        if (c)
+        {
+            unclipped.Add_pt(c.GetVertex(0));
+            unclipped.Add_pt(c.GetVertex(1));
+            unclipped.Add_pt(ptsIn._pt[i]);
+        }
         else
         {
-            // inside the rectangle and going outside
-            outside = true;
-            {
-                auto c = Clip(Line2DF(rtn._pt.back(), ea));
-                if (rtn._pt.back() != c.pt[1])
-                    rtn.Add_pt(c.pt[1]);
-                else if (rtn._pt.back() != c.pt[0])
-                    rtn.Add_pt(c.pt[0]);
-            }
+            // completely outside
+            unclipped.Add_pt(ptsIn._pt[i]);
         }
-        last = ea;
-        if (outside)
-        {
-            ++i;
-            while (outside && i < ptsIn._pt.size()+1)
-            {
-                // special case must wrap to the beginning
-                if (i >= ptsIn._pt.size())
-                    ea = rtn._pt.front();
-                else
-                    ea = ptsIn._pt[i];
-                
-                if (Intersects(ea))
-                {
-                    // outside of the rectangle and coming back in
-                    {
-                        outside = false;
-                        auto c = Clip(Line2DF(last, ea));
-                        if (ea == c.pt[0]) rtn.Add_pt(c.pt[1]);
-                        else rtn.Add_pt(c.pt[0]);
-                        rtn.Add_pt(ea);
-                    }
-                }
-                else
-                {
-                    // last and current are outside, keep skipping
-                    last = ea;
-                    ++i;
-                }
-            }
-        }
-     }
-     // confirm that the last and first do not duplicate in certain scenarios
-     if (rtn._pt.front() == rtn._pt.back())
-         rtn._pt.pop_back();
 
-     return rtn;
+        ++i;
+        if (i == numPts)
+            i = 0;
+
+        l = Line2DF(unclipped._pt.back(), ptsIn._pt[i]);
+    }
+
+    // remove duplicates & clip outside of rectangle
+    cout << "Bounds " << *this << '\n';
+    for (const auto& c : unclipped._pt)
+        if (Intersects(c))
+        {
+            //cout << "Intersects!\n";
+            if (!clipped._pt.size())
+                clipped._pt.push_back(c);
+            else if (clipped._pt.back() != c)
+                clipped._pt.push_back(c);
+        }
+
+    cout << "unclipped" << unclipped << '\n';
+    cout << "clipped" << clipped << '\n';
+
+    return clipped;
  }
 
  void King::Rectangle2DF::ClipTo(const King::Rectangle2DF& rectIn)
@@ -611,48 +854,186 @@ bool King::Triangle2DF::Contains(const FloatPoint2 & ptIn)
     SetLT( Max(GetLT(), rectIn.GetLT()) );
     SetRB( Min(GetRB(), rectIn.GetRB()) );
 }
-
- King::FloatPoint2 King::Rectangle2DF::FindNearestPoint(const King::FloatPoint2 & pt2In) const
+ /******************************************************************************
+*    Method:    Find Nearest Point On rectangle
+*   |------|
+*   |      |
+*   |      |*<--------------------* pt2In
+*   |      |return
+*   |------|
+******************************************************************************/
+ FloatPoint2 __vectorcall King::Rectangle2DF::FindNearestPoint(const King::FloatPoint2 pt2In) const
 {
     return Max(lt, Min(pt2In, rb));
 }
+ /******************************************************************************
+ *    Method:    Find Nearest Point On rectangle (transformed)
+ *   \-----\               ------*  pt2In (world)
+ *    \     \ return ------
+ *     \     \*<-----
+ *      \     \  *<---------------* localSpacePoint (box can be treated as a AABB)
+ *       \-----\ (npOnBox)
+ ******************************************************************************/
+ FloatPoint2 __vectorcall King::Rectangle2DF::FindNearestPoint(const FloatPoint2 pt2In, const DirectX::XMMATRIX M) const
+ {
+     // world to rectangle space
+     FloatPoint2 localSpacePoint(pt2In);
+     localSpacePoint *= M;
 
+     auto npOnBox = FindNearestPoint(localSpacePoint);
+
+     // rectangle to world space
+     auto invM = DirectX::XMMatrixInverse(nullptr, M);
+     npOnBox *= invM;
+
+     return npOnBox;
+ }
  King::IntPoint2 King::Rectangle2D::FindNearestPoint(const King::IntPoint2& pt2In) const
 {
     return Max(lt, Min(pt2In, rb));
 }
 
-/******************************************************************************
-*    Polygon2DF::Contains
+ void __vectorcall King::Polygon2DF::Transform(DirectX::XMMATRIX m)
+ {
+     for (auto& pt : _pt)
+        pt *= m;
+ }
+
+ /******************************************************************************
+*    Polygon2DF::Intersects
 *        Desc:       Is the point inside the polygon? For convex and concave polygons.
 *        Input:      a point in 2-dimensional space
 *        Output:     none
 *        Returns:    true or false
 *        Remarks:    Based on the work of https://wrf.ecse.rpi.edu/Research/Short_Notes/pnpoly.html
 ******************************************************************************/
-bool __vectorcall King::Polygon2DF::Contains(const FloatPoint2 ptIn) const
+bool __vectorcall King::Polygon2DF::Intersects(const FloatPoint2 ptIn) const
 {
     bool collision(false);
+
+    const DirectX::XMFLOAT2 pt = ptIn;
 
     for (auto it = _pt.begin(); it != _pt.end(); ++it)
     {
         auto next = std::next(it, 1);
 
-        if (it == _pt.end()) 
+        if (next == _pt.end())
             next = _pt.begin();
-    
-        const DirectX::XMFLOAT2 pt = ptIn;
-        const DirectX::XMFLOAT2 vc = *it;
-        const DirectX::XMFLOAT2 vn = *next;
 
-        if (((vc.y >= pt.y && vn.y < pt.y) || (vc.y < pt.y && vn.y >= pt.y)) &&
-            (pt.x < (vn.x - vc.x) * (pt.y - vc.y) / (vn.y - vc.y) + vc.x)) 
+        const float2 vc(*it);
+        const float2 vn(*next);
+
+        if (((vc.GetY() >= pt.y && vn.GetY() < pt.y) || (vc.GetY() < pt.y && vn.GetY() >= pt.y)) &&
+            (pt.x < (vn.GetX() - vc.GetX()) * (pt.y - vc.GetY()) / (vn.GetY() - vc.GetY()) + vc.GetX()))
         {
             collision = !collision;
         }
     }
 
     return collision;
+}
+/******************************************************************************
+*    Polygon2DF::Intersects
+*        Desc:       Line / Polygon intersection test
+*        Input:      a point in 2-dimensional space
+*        Output:     none
+*        Returns:    true or false
+*        Remarks:    non
+******************************************************************************/
+bool __vectorcall King::Polygon2DF::Intersects(const Line2DF other) const
+{
+    // points are inside the polygon?
+    if (Intersects(other.pt[0])) return true;
+    if (Intersects(other.pt[1])) return true;
+
+    // line segment crosses a polygon edge
+    for (int i = 0; i < _pt.size(); ++i)
+    {
+        Line2DF l(_pt[i], _pt[(i + 1) % _pt.size()]);
+        if (l.Intersects(other))
+            return true;
+    }
+
+    return false;
+}
+/******************************************************************************
+*    Polygon2DF::Intersects
+*        Desc:       Do the two convex and concave polygons overlap? Uses the
+*                       Separating axis theorem.
+*        Input:      An infinite sided polygon in 2-dimensional space
+*        Output:     none
+*        Returns:    true or false
+*        Remarks:    none
+******************************************************************************/
+bool __vectorcall King::Polygon2DF::Intersects(const Polygon2DF other) const
+{
+    std::vector<DirectX::XMVECTOR> axes;
+    axes.reserve(_pt.size() + other._pt.size());
+
+    DirectX::XMVECTOR normal = DirectX::XMVectorSet(0.f, 0.f, 1.f, 0.f);
+
+    // Sides are equal to the number of verticies. Evaluate an axis for each side of a polygon
+    for (int i = 0; i < _pt.size(); ++i)
+        axes.push_back(DirectX::XMVector2Normalize(XMVector2Cross(_pt[i] - _pt[(i + 1) % _pt.size()], normal)));
+
+    for (int i = 0; i < other._pt.size(); ++i)
+        axes.push_back(DirectX::XMVector2Normalize(XMVector2Cross(other._pt[i] - other._pt[(i + 1) % other._pt.size()], normal)));
+
+    // Project the verticies onto the axis and find the min and max of the total projection
+    for (const auto& axis : axes)
+    {
+        float minA = std::numeric_limits<float>::max();
+        float maxA = std::numeric_limits<float>::min();
+        float minB = std::numeric_limits<float>::max();
+        float maxB = std::numeric_limits<float>::min();
+
+        for (int j = 0; j < _pt.size(); j++)
+        {
+            float a = DirectX::XMVectorGetX(DirectX::XMVector2Dot(axis, _pt[j]));
+            minA = a < minA ? a : minA;
+            maxA = a > maxA ? a : maxA;
+        }
+
+        for (int k = 0; k < other._pt.size(); k++)
+        {
+            float b = DirectX::XMVectorGetX(DirectX::XMVector2Dot(axis, other._pt[k]));
+            minB = b < minB ? b : minB;
+            maxB = b > maxB ? b : maxB;
+        }
+
+        if (!(minA <= maxB && minB <= maxA))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+/******************************************************************************
+*    Polygon2DF::Intersects
+*        Desc:       Check first for point in circle for early completion then
+*                       more expensive edge intersection of circle.
+*        Input:      An infinite sided polygon in 2-dimensional space
+*        Output:     none
+*        Returns:    true or false
+*        Remarks:    none
+******************************************************************************/
+bool __vectorcall King::Polygon2DF::Intersects(const Circle2DF other) const
+{
+    for (int i = 0; i < _pt.size(); ++i)
+    {
+        if (other.Intersects(_pt[i]))
+            return true;
+    }
+
+    for (int i = 0; i < _pt.size(); ++i)
+    {
+        Line2DF l(_pt[i], _pt[(i + 1) % _pt.size()]);
+        if (other.Intersects(l))
+            return true;
+    }
+
+    return false;
 }
 /******************************************************************************
 *    Polygon2DF:    Offset
@@ -710,6 +1091,28 @@ inline bool King::ImageBlock::Write(std::ofstream& outfileIn)
 
     if (outfileIn.fail()) return false;
     return MemoryBlock<unsigned char>::Write(outfileIn);
+}
+
+void __vectorcall King::ImageBlock::Draw(const float2 ptIn, float4 colorIn)
+{
+    Rectangle2DF me(_w, _h);
+
+    if (!me.Intersects(ptIn))
+        return;
+
+    // color
+    MemoryBlock<unsigned char> c;
+    if (_stride > 0)
+        c.PushBack((uint8_t)(255.f * colorIn.GetX()));
+    if (_stride > 1)
+        c.PushBack((uint8_t)(255.f * colorIn.GetY()));
+    if (_stride > 2)
+        c.PushBack((uint8_t)(255.f * colorIn.GetZ()));
+    if (_stride > 3)
+        c.PushBack((uint8_t)(255.f * colorIn.GetW()));
+
+    auto src = c.GetData();
+    SetPixel(ptIn.GetX(), ptIn.GetY(), src, true);
 }
 
 void King::ImageBlock::Draw(const Line2DF& lineIn, float4 colorIn, const float fractionIn)
@@ -1332,7 +1735,36 @@ void King::ImageBlock::CopyImageBlockIn(const ImageBlock& srcIn, const float& xI
         }
     }
 }
+void __vectorcall King::ImageBlock::FillColor(float4 colorIn)
+{
+    // call destructors
+    Clear();
 
+    // color
+    MemoryBlock<unsigned char> c;
+    if (_stride > 0)
+        c.PushBack((uint8_t)(255.f * colorIn.GetX()));
+    if (_stride > 1)
+        c.PushBack((uint8_t)(255.f * colorIn.GetY()));
+    if (_stride > 2)
+        c.PushBack((uint8_t)(255.f * colorIn.GetZ()));
+    if (_stride > 3)
+        c.PushBack((uint8_t)(255.f * colorIn.GetW()));
+
+    // fill capacity
+    std::lock_guard<std::mutex> guard(_mutex);
+
+    auto dest = GetData();
+    const auto colorBuffer = c.GetData();
+    const auto stop = _capacity / _stride;
+    for (auto x = 0; x < stop; x += 1)
+    {
+        std::copy(colorBuffer, colorBuffer + _stride, dest);
+        dest += _stride;
+    }
+
+    _length = _capacity;
+}
 void King::ImageBlock::FlipVertically()
 {
     MemoryBlock<uint8_t> buffer(_w, _stride);
@@ -1352,6 +1784,97 @@ void King::ImageBlock::FlipVertically()
     }
 }
 
+void King::ImageBlock::FilterBlur(const uint32_t radiusIn, const Rectangle2DF rectIn)
+{
+    // reference https://stackoverflow.com/questions/67566430/gaussian-blur-in-c
+    const uint32_t radius = 3;
+    if (!GetLength()) return;
+    if (radiusIn < radius) return;
+    if (rectIn.GetSize().GetMagnitude() < sqrt(2 * radius * radius)) return;
+
+    // gaussian blur
+    std::shared_ptr<float[]> kernal;
+    {
+        float sigma = 1;
+        std::shared_ptr<float[]> kernel(new float[4 * radius * radius]);
+        int mean = radius;
+        float sum = 0.0;
+        for (int x = 0; x < 2 * radius; ++x)
+            for (int y = 0; y < 2 * radius; ++y) {
+                kernel[y * 2 * radius + x] = (float)(exp(-0.5f * (pow((x - mean) / sigma, 2.0f) + pow((y - mean) / sigma, 2.0f))) / (2.f * 3.1415926f * sigma * sigma));
+
+                // Accumulate the kernel values
+                sum += kernel[y * 2 * radius + x];
+            }
+
+        // Normalize the kernel
+        for (int x = 0; x < 2 * radius; ++x)
+            for (int y = 0; y < 2 * radius; ++y)
+                kernel[y * 2 * radius + x] /= sum;
+    }
+
+    // Blur
+
+    //auto copy = std::shared_ptr<unsigned char[]>(new unsigned char[height * stride]);
+
+    //for (int y = 0; y < height; y++)
+    //    memcpy(copy.get() + y * stride, bitmapData + y * stride, width * BYTES_PER_PIXEL);
+
+    //for (int y = 0; y < height; y++)
+    //    for (int x = 0; x < width; x++)
+    //    {
+    //        Color sum;
+    //        float weight = 0.0f;
+    //        int count = 0;
+
+    //        int xStart = x - radius;
+    //        int xEnd = x + radius;
+    //        int yStart = y - radius;
+    //        int yEnd = y + radius;
+
+    //        for (int x1 = xStart; x1 <= xEnd; x1++)
+    //            for (int y1 = yStart; y1 <= yEnd; y1++)
+    //            {
+    //                // Find weight
+
+    //                int kernelX = x1 - xStart;
+    //                int kernelY = y1 - yStart;
+    //                float kernelValue = kernel[kernelY * diameter + kernelX];
+
+    //                // Premultiply alpha
+
+    //                Color color;
+    //                if (x1 >= 0 && x1 < width && y1 >= 0 && y1 < height)
+    //                    color = getColor(copy.get(), stride, x1, y1);
+    //                else
+    //                    color = Color(0);
+
+    //                sum.R += (float)(color.R * color.A) * kernelValue;
+    //                sum.G += (float)(color.G * color.A) * kernelValue;
+    //                sum.B += (float)(color.B * color.A) * kernelValue;
+    //                sum.A += color.A * kernelValue;
+
+    //                weight += kernelValue;
+    //                count++;
+    //            }
+
+    //        if (count > 0)
+    //        {
+    //            Color result;
+    //            result.A = sum.A / weight;
+
+    //            if (result.A > 0)
+    //            {
+    //                result.R = ((sum.R / weight) / result.A);
+    //                result.G = ((sum.G / weight) / result.A);
+    //                result.B = ((sum.B / weight) / result.A);
+    //            }
+
+    //            setColor(bitmapData, stride, x, y, result);
+    //        }
+    //    }
+}
+
 // Accessors
 
 void King::ImageBlock::GetPixel(const uint32_t& x, const uint32_t& y, unsigned char* colorOut)
@@ -1366,12 +1889,14 @@ void King::ImageBlock::GetPixel(const uint32_t& x, const uint32_t& y, unsigned c
 void King::ImageBlock::SetPixel(const uint32_t& x, const uint32_t& y, unsigned char* colorIn, const bool guardIn)
 {
     // note colorIn size must match _stride
-    assert(x < _w && y < _h);
-    unsigned char* dest = &Get((size_t)y * _w + (size_t)x);
-    if (guardIn)
-        std::lock_guard<std::mutex> guard(_mutex);
+    if (x < _w && y < _h)
+    {
+        unsigned char* dest = &Get((size_t)y * _w + (size_t)x);
+        if (guardIn)
+            std::lock_guard<std::mutex> guard(_mutex);
 
-    std::copy(colorIn, colorIn + _stride, dest);
+        std::copy(colorIn, colorIn + _stride, dest);
+    }
 }
 
 /******************************************************************************
@@ -1415,7 +1940,7 @@ bool King::ImageTGA::ReadTGA(std::ifstream& dataFileIn)
     ImageBlock::Initialize(header.width, header.height, 4);
     // when we right less than 4 bytes in little endian we fill with zero so 
     // we do not have to right the remainder out of 4 as zeros later on
-    ImageBlock::Fill(0);
+    MemoryBlock::Fill(0);
 
     char* dest = reinterpret_cast<char*>(GetData());
 

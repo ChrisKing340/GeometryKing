@@ -173,22 +173,6 @@
     <ClInclude Include="..\General\TextFileParse.h" />
     <ClInclude Include="..\GeometryKing.h" />
     <ClInclude Include="..\MathSIMD\MathSIMD.h" />
-    <ClInclude Include="..\Physics\Acceleration.h" />
-    <ClInclude Include="..\Physics\AngularAcceleration.h" />
-    <ClInclude Include="..\Physics\AngularVelocity.h" />
-    <ClInclude Include="..\Physics\CK_Cube.h" />
-    <ClInclude Include="..\Physics\CK_CubeCollision.h" />
-    <ClInclude Include="..\Physics\Distance.h" />
-    <ClInclude Include="..\Physics\Force.h" />
-    <ClInclude Include="..\Physics\Physics.h" />
-    <ClInclude Include="..\Physics\PhysicsMaterial.h" />
-    <ClInclude Include="..\Physics\PhysicsObject.h" />
-    <ClInclude Include="..\Physics\PhysicsRigidBody.h" />
-    <ClInclude Include="..\Physics\PhysicsState.h" />
-    <ClInclude Include="..\Physics\Position.h" />
-    <ClInclude Include="..\Physics\Rotation.h" />
-    <ClInclude Include="..\Physics\UnitOfMeasure.h" />
-    <ClInclude Include="..\Physics\Velocity.h" />
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
@@ -196,11 +180,14 @@
     <ClCompile Include="..\3DGeometryKing\3DGeometry.cpp" />
     <ClCompile Include="..\3DGeometryKing\Model_IO.cpp" />
     <ClCompile Include="..\General\TextFileParse.cpp" />
-    <ClCompile Include="..\MathSIMD\MathSIMD.cpp" />
-    <ClCompile Include="..\Physics\CK_Cube.cpp" />
-    <ClCompile Include="..\Physics\CK_CubeCollision.cpp" />
-    <ClCompile Include="..\Physics\Physics.cpp" />
-    <ClCompile Include="..\Physics\UnitOfMeasure.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\MathSIMD\MathSIMD.vcxproj">
+      <Project>{32bfcbad-4c3c-455d-b45d-0b00742333eb}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\..\PhysicsKing\PhysicsKing.vcxproj">
+      <Project>{29e58da0-56b4-45b9-b5a5-2f964fa79a27}</Project>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

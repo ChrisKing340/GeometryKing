@@ -13,20 +13,11 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
-    <Filter Include="Header Files\Physics">
-      <UniqueIdentifier>{26772398-fcd9-4dca-8a84-219268ccd6d3}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source Files\Physics">
-      <UniqueIdentifier>{9d965112-c2db-4d8a-82bd-e4c8fa4982b2}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Header Files\General">
       <UniqueIdentifier>{5639f202-e921-4036-9ece-c65acb508f66}</UniqueIdentifier>
     </Filter>
     <Filter Include="Header Files\MathSIMD">
       <UniqueIdentifier>{77f21c6e-b9ea-459f-aab8-7def8643fb53}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source Files\MathSIMD">
-      <UniqueIdentifier>{ca44f9be-1387-467d-9b59-2c07e94eb085}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source Files\General">
       <UniqueIdentifier>{9b2c635b-f317-4ff5-ac4f-13f6ba473879}</UniqueIdentifier>
@@ -42,51 +33,6 @@
     <ClInclude Include="..\2DGeometryKing\2DGeometry.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\Physics\Acceleration.h">
-      <Filter>Header Files\Physics</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Physics\AngularAcceleration.h">
-      <Filter>Header Files\Physics</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Physics\AngularVelocity.h">
-      <Filter>Header Files\Physics</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Physics\Distance.h">
-      <Filter>Header Files\Physics</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Physics\Force.h">
-      <Filter>Header Files\Physics</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Physics\PhysicsMaterial.h">
-      <Filter>Header Files\Physics</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Physics\PhysicsObject.h">
-      <Filter>Header Files\Physics</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Physics\PhysicsRigidBody.h">
-      <Filter>Header Files\Physics</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Physics\PhysicsState.h">
-      <Filter>Header Files\Physics</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Physics\Position.h">
-      <Filter>Header Files\Physics</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Physics\Rotation.h">
-      <Filter>Header Files\Physics</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Physics\UnitOfMeasure.h">
-      <Filter>Header Files\Physics</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Physics\Velocity.h">
-      <Filter>Header Files\Physics</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Physics\CK_Cube.h">
-      <Filter>Header Files\Physics</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Physics\CK_CubeCollision.h">
-      <Filter>Header Files\Physics</Filter>
-    </ClInclude>
     <ClInclude Include="..\General\MemoryBlock.h">
       <Filter>Header Files\General</Filter>
     </ClInclude>
@@ -95,9 +41,6 @@
     </ClInclude>
     <ClInclude Include="..\MathSIMD\MathSIMD.h">
       <Filter>Header Files\MathSIMD</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Physics\Physics.h">
-      <Filter>Header Files\Physics</Filter>
     </ClInclude>
     <ClInclude Include="..\GeometryKing.h">
       <Filter>Header Files</Filter>
@@ -112,21 +55,6 @@
     </ClCompile>
     <ClCompile Include="..\3DGeometryKing\Model_IO.cpp">
       <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\Physics\Physics.cpp">
-      <Filter>Source Files\Physics</Filter>
-    </ClCompile>
-    <ClCompile Include="..\Physics\UnitOfMeasure.cpp">
-      <Filter>Source Files\Physics</Filter>
-    </ClCompile>
-    <ClCompile Include="..\Physics\CK_Cube.cpp">
-      <Filter>Source Files\Physics</Filter>
-    </ClCompile>
-    <ClCompile Include="..\Physics\CK_CubeCollision.cpp">
-      <Filter>Source Files\Physics</Filter>
-    </ClCompile>
-    <ClCompile Include="..\MathSIMD\MathSIMD.cpp">
-      <Filter>Source Files\MathSIMD</Filter>
     </ClCompile>
     <ClCompile Include="..\General\TextFileParse.cpp">
       <Filter>Source Files\General</Filter>

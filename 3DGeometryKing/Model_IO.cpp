@@ -663,12 +663,18 @@ std::vector<shared_ptr<King::Model>> King::Model_IO::Load_OBJ(const std::string 
                     if (++currentMesh < model->GetNumMeshes())
                         nMesh = model->GetMesh(currentMesh);
                     else
-                        assert(false, ".OBJ Load: Number of meshes established in preprocessor does not match number in file");
+                    {
+                        cout << ".OBJ Load: Number of meshes established in preprocessor does not match number in file\n";
+                        __debugbreak();
+                    }
 
                     if (numFaces > 0)
                         search = f.FindNext(obj.prop_face);
                     else 
-                        assert(false, ".OBJ Load: File is missing face data.");
+                    {
+                        cout << ".OBJ Load: File is missing face data.";
+                        __debugbreak();
+                    }
                 }
                 else
                 {

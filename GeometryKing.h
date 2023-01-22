@@ -28,12 +28,14 @@ Description:    File to easily include all library headers
 
 Contact:        ChrisKing340@gmail.com
 
-References:     json input and output utilize https://github.com/nlohmann/json
+References:     json https://github.com/nlohmann/json
                 SIMD math functions utilize https://github.com/microsoft/DirectXMath
+                Math class wrappers https://github.com/ChrisKing340/MathSIMD
+                Physics primitives https://github.com/ChrisKing340/PhysicsKing
 
 MIT License
 
-Copyright (c) 2020 Christopher H. King
+Copyright (c) 2020-2023 Christopher H. King
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -56,12 +58,13 @@ SOFTWARE.
 #pragma once
 
 // Math foundation
-#include "MathSIMD\MathSIMD.h"
+#include "..\MathSIMD\MathSIMD.h"
+// Physics
+#include "..\PhysicsKing\Physics.h"
+
 // General utilities
 #include "General\MemoryBlock.h"
 #include "General\TextFileParse.h"
-// Physics
-#include "Physics\Physics.h"
 // Geometry
 #include "2DGeometryKing\2DGeometry.h"
 #include "3DGeometryKing\3DGeometry.h"
