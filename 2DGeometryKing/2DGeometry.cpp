@@ -633,6 +633,143 @@ bool __vectorcall King::Circle2DF::Intersects(const FloatPoint2 pt2In) const
     auto rectPointNearest = FindNearestPoint(circleIn.GetCenter());
     return circleIn.Intersects(rectPointNearest);
 }
+ /******************************************************************************
+*    Rectangle2DF::CollisionWithRay
+*        Desc:       Our static rectangle (this) collision detection with a casted ray
+*        Input:      a ray in 2-dimensional space with an origin and direction vector
+*        Output:     collision contact point, contact normal, and hit time
+*        Returns:    bool if collision detected
+*        Remarks:    Based on the work of onelonecoder youtube: https://www.youtube.com/watch?v=8JJ-4JgR7Dg
+******************************************************************************/
+ bool King::Rectangle2DF::CollisionWithRay(const float2& ray_originIn, const float2& ray_dirIn, float2* contact_pointOut, float2* contact_normalOut, float* t_hit_nearOut)
+ {
+     contact_normalOut->SetZero();
+     contact_pointOut->SetZero();
+
+     // Cache division
+     auto invdir = float2(1.0f / ray_dirIn.GetX(), 1.0f / ray_dirIn.GetY());
+
+     // Calculate intersections with rectangle bounding axes
+     auto t_near = (GetLT() - ray_originIn) * invdir;
+     auto t_far = (GetLT() + GetSize() - ray_originIn) * invdir;
+
+     if (std::isnan(t_far.GetY()) || std::isnan(t_far.GetX())) return false;
+     if (std::isnan(t_near.GetY()) || std::isnan(t_near.GetX())) return false;
+
+     // Sort distances
+     if (t_near.GetX() > t_far.GetX()) { auto t = t_near.GetX(); t_near.SetX(t_far.GetX()); t_far.SetX(t); }
+     if (t_near.GetY() > t_far.GetY()) { auto t = t_near.GetY(); t_near.SetY(t_far.GetY()); t_far.SetY(t); }
+
+     // Early rejection		
+     if (t_near.GetX() > t_far.GetY() || t_near.GetY() > t_far.GetX()) return false;
+
+     // Closest 'time' will be the first contact
+     *t_hit_nearOut = std::max(t_near.GetX(), t_near.GetY());
+
+     // Furthest 'time' is contact on opposite side of target
+     float t_hit_far = std::min(t_far.GetX(), t_far.GetY());
+
+     // Reject if ray direction is pointing away from object
+     if (t_hit_far < 0)
+         return false;
+
+     // Contact point of collision from parametric line equation
+     *contact_pointOut = ray_originIn + *t_hit_nearOut * ray_dirIn;
+
+     if (t_near.GetX() > t_near.GetY())
+         if (invdir.GetX() < 0)
+             *contact_normalOut = float2(1.f, 0.f);
+         else
+             *contact_normalOut = float2(-1.f, 0.f);
+     else if (t_near.GetX() < t_near.GetY())
+         if (invdir.GetY() < 0)
+             *contact_normalOut = float2(0.f, 1.f);
+         else
+             *contact_normalOut = float2(0.f, -1.f);
+
+     // Note if t_near == t_far, collision is principly in a diagonal
+     // so pointless to resolve. By returning a CN={0,0} even though its
+     // considered a hit, the resolver wont change anything.
+     return true;
+ }
+ /******************************************************************************
+*    Rectangle2DF::CollisionWithDynamicRect
+*        Desc:       Our static rectangle (this) collision detection with a moving rectangle
+*        Input:      a rectangle in 2-dimensional space and its velocity vector
+*        Output:     collision contact point, contact normal, and contact time
+*        Returns:    bool if collision detected
+*        Remarks:    Based on the work of onelonecoder youtube: https://www.youtube.com/watch?v=8JJ-4JgR7Dg
+******************************************************************************/
+ bool King::Rectangle2DF::CollisionWithDynamicRect(const Rectangle2DF& movingRectIn, const float2& velIn, const float fTimeStepIn, float2* contact_pointOut, float2* contact_normalOut, float* contact_timeOut)
+ {
+     // Check if dynamic rectangle is actually moving - we assume rectangles are NOT in collision to start
+     if (velIn == 0.f) return false;
+
+     // Expand target rectangle by source dimensions
+     Rectangle2DF expanded_target;
+     expanded_target.SetLT(GetLT() - movingRectIn.GetSize() * 0.5f);
+     expanded_target.SetSize(GetSize() + movingRectIn.GetSize());
+
+     if (expanded_target.CollisionWithRay(movingRectIn.GetLT() + movingRectIn.GetSize() * 0.5f, velIn * fTimeStepIn, contact_pointOut, contact_normalOut, contact_timeOut))
+         return (*contact_timeOut >= 0.0f && *contact_timeOut < 1.0f);
+     else
+         return false;
+ }
+ /******************************************************************************
+*    Rectangle2DF::ResolveDynamicRectVsRect
+*        Desc:       Our static rectangle (this) resolved collision with a moving rectangle
+*        Input:      a rectangle in 2-dimensional space and its velocity vector
+*        Output:     its resolved velocity vector
+*        Returns:    bool if collision detected
+*        Remarks:    Based on the work of onelonecoder youtube: https://www.youtube.com/watch?v=8JJ-4JgR7Dg
+******************************************************************************/
+ bool King::Rectangle2DF::ResolveDynamicRectVsRect(const Rectangle2DF& movingRectIn, float2* velInOut, const float fTimeStepIn)
+ {
+     float2 contact_point, contact_normal;
+     float contact_time = 0.0f;
+
+     if (CollisionWithDynamicRect(movingRectIn, *velInOut, fTimeStepIn, &contact_point, &contact_normal, &contact_time))
+     {
+         // the normal indicates which side of the rectangle is in contact, test on return if you care
+         //if (contact_normal.GetY() > 0);
+         //if (contact_normal.GetX() < 0);
+         //if (contact_normal.GetY() < 0);
+         //if (contact_normal.GetX() > 0);
+         
+         *velInOut += contact_normal * Abs(*velInOut) * (1.f - contact_time);
+         return true;
+     }
+
+     return false;
+ /*
+    NOTE: There is a nasty bug in resolving collision this way against multiple static rectangles and moving backwards
+    and transitioning between them. So, rectangle collisions must be sorted. Onelonecoder gave this work around:
+
+         // Sort collisions in order of distance
+        olc::vf2d cp, cn;
+        float t = 0, min_t = INFINITY;
+        std::vector<std::pair<int, float>> z;
+
+        // Work out collision point, add it to vector along with rect ID
+        for (size_t i = 1; i < vRects.size(); i++)
+        {
+            if (olc::aabb::DynamicRectVsRect(&vRects[0], fElapsedTime, vRects[i], cp, cn, t))
+            {
+                z.push_back({ i, t });
+            }
+        }
+
+        // Do the sort
+        std::sort(z.begin(), z.end(), [](const std::pair<int, float>& a, const std::pair<int, float>& b)
+            {
+                return a.second < b.second;
+            });
+
+        // Now resolve the collision in correct order
+        for (auto j : z)
+            olc::aabb::ResolveDynamicRectVsRect(&vRects[0], fElapsedTime, &vRects[j.first]);
+ */
+ }
 
  /******************************************************************************
 *    Rectangle2DF::Clip
@@ -1093,14 +1230,8 @@ inline bool King::ImageBlock::Write(std::ofstream& outfileIn)
     return MemoryBlock<unsigned char>::Write(outfileIn);
 }
 
-void __vectorcall King::ImageBlock::Draw(const float2 ptIn, float4 colorIn)
+MemoryBlock<unsigned char> _vectorcall King::ImageBlock::ConvertColorFrom4FloatTo32Bit(const float4 colorIn)
 {
-    Rectangle2DF me(_w, _h);
-
-    if (!me.Intersects(ptIn))
-        return;
-
-    // color
     MemoryBlock<unsigned char> c;
     if (_stride > 0)
         c.PushBack((uint8_t)(255.f * colorIn.GetX()));
@@ -1110,6 +1241,27 @@ void __vectorcall King::ImageBlock::Draw(const float2 ptIn, float4 colorIn)
         c.PushBack((uint8_t)(255.f * colorIn.GetZ()));
     if (_stride > 3)
         c.PushBack((uint8_t)(255.f * colorIn.GetW()));
+
+    return c;
+}
+
+void __vectorcall King::ImageBlock::FloodFill(unsigned int row, unsigned int col, float4 newColor, float4 oldColor)
+{
+    auto newColor_mb = ConvertColorFrom4FloatTo32Bit(newColor);
+    auto oldColor_mb = ConvertColorFrom4FloatTo32Bit(oldColor);
+
+    FloodFill(row, col, newColor_mb, oldColor_mb);
+}
+
+void __vectorcall King::ImageBlock::Draw(const float2 ptIn, float4 colorIn)
+{
+    Rectangle2DF me(_w, _h);
+
+    if (!me.Intersects(ptIn))
+        return;
+
+    // color
+    auto c = ConvertColorFrom4FloatTo32Bit(colorIn);
 
     auto src = c.GetData();
     SetPixel(ptIn.GetX(), ptIn.GetY(), src, true);
@@ -1129,15 +1281,7 @@ void King::ImageBlock::Draw(const Line2DF& lineIn, float4 colorIn, const float f
         return;
 
     // color
-    MemoryBlock<unsigned char> c;
-    if (_stride > 0)
-        c.PushBack((uint8_t)(255.f * colorIn.GetX()));
-    if (_stride > 1)
-        c.PushBack((uint8_t)(255.f * colorIn.GetY()));
-    if (_stride > 2)
-        c.PushBack((uint8_t)(255.f * colorIn.GetZ()));
-    if (_stride > 3)
-        c.PushBack((uint8_t)(255.f * colorIn.GetW()));
+    auto c = ConvertColorFrom4FloatTo32Bit(colorIn);
 
     uint8_t* src = c.GetData();
     std::function<void(IntPoint2 ptOut)> callBack = [&](IntPoint2 ptOut) { SetPixel(ptOut.GetX(), ptOut.GetY(), src, false); };
@@ -1196,15 +1340,7 @@ void King::ImageBlock::Draw(const Rectangle2DF& rectIn, float4 colorIn, const fl
     const auto h = (uint32_t)rect.GetHeight();
 
     // color
-    MemoryBlock<unsigned char> c;
-    if (_stride > 0)
-        c.PushBack((uint8_t)(255.f * colorIn.GetX()));
-    if (_stride > 1)
-        c.PushBack((uint8_t)(255.f * colorIn.GetY()));
-    if (_stride > 2)
-        c.PushBack((uint8_t)(255.f * colorIn.GetZ()));
-    if (_stride > 3)
-        c.PushBack((uint8_t)(255.f * colorIn.GetW()));
+    auto c = ConvertColorFrom4FloatTo32Bit(colorIn);
 
     // horizontal lines
     auto destTopStart = (uint8_t*)&Get((size_t)y * _w);
@@ -1241,15 +1377,7 @@ void King::ImageBlock::Draw(const Circle2DF& cirIn, float4 colorIn, const float 
     if (!clip.Intersects(cirIn)) return;
 
     // color
-    MemoryBlock<unsigned char> c;
-    if (_stride > 0)
-        c.PushBack((uint8_t)(255.f * colorIn.GetX()));
-    if (_stride > 1)
-        c.PushBack((uint8_t)(255.f * colorIn.GetY()));
-    if (_stride > 2)
-        c.PushBack((uint8_t)(255.f * colorIn.GetZ()));
-    if (_stride > 3)
-        c.PushBack((uint8_t)(255.f * colorIn.GetW()));
+    auto c = ConvertColorFrom4FloatTo32Bit(colorIn);
 
     // using the generalized ellipse midpoint algorithm
     // reference: https://www.geeksforgeeks.org/midpoint-ellipse-drawing-algorithm/ 
@@ -1370,15 +1498,7 @@ void King::ImageBlock::DrawFilled(const Triangle2DF& triIn, float4 colorIn)
     Triangle2DF tri(triIn);
 
     // color
-    MemoryBlock<unsigned char> c;
-    if (_stride > 0)
-        c.PushBack((uint8_t)(255.f * colorIn.GetX()));
-    if (_stride > 1)
-        c.PushBack((uint8_t)(255.f * colorIn.GetY()));
-    if (_stride > 2)
-        c.PushBack((uint8_t)(255.f * colorIn.GetZ()));
-    if (_stride > 3)
-        c.PushBack((uint8_t)(255.f * colorIn.GetW()));
+    auto c = ConvertColorFrom4FloatTo32Bit(colorIn);
 
     // helpers
     auto SwapPt = [](float2& a, float2& b) { const float2 temp(a); a = b; b = temp; };
@@ -1436,15 +1556,7 @@ void King::ImageBlock::DrawFilled(const Rectangle2DF& rectIn, float4 colorIn)
     const auto h = (uint32_t)rect.GetHeight();
 
     // color
-    MemoryBlock<unsigned char> c;
-    if (_stride > 0)
-        c.PushBack((uint8_t)(255.f * colorIn.GetX()));
-    if (_stride > 1)
-        c.PushBack((uint8_t)(255.f * colorIn.GetY()));
-    if (_stride > 2)
-        c.PushBack((uint8_t)(255.f * colorIn.GetZ()));
-    if (_stride > 3)
-        c.PushBack((uint8_t)(255.f * colorIn.GetW()));
+    auto c = ConvertColorFrom4FloatTo32Bit(colorIn);
 
     for (uint32_t j = y; j < y + h; ++j)
     {
@@ -1468,15 +1580,7 @@ void King::ImageBlock::DrawFilled(const Circle2DF& cirIn, float4 colorIn)
     if (!clip.Intersects(cirIn)) return;
 
     // color
-    MemoryBlock<unsigned char> c;
-    if (_stride > 0)
-        c.PushBack((uint8_t)(255.f * colorIn.GetX()));
-    if (_stride > 1)
-        c.PushBack((uint8_t)(255.f * colorIn.GetY()));
-    if (_stride > 2)
-        c.PushBack((uint8_t)(255.f * colorIn.GetZ()));
-    if (_stride > 3)
-        c.PushBack((uint8_t)(255.f * colorIn.GetW()));
+    auto c = ConvertColorFrom4FloatTo32Bit(colorIn);
 
     // using the generalized ellipse midpoint algorithm
     // reference: https://www.geeksforgeeks.org/midpoint-ellipse-drawing-algorithm/ 
@@ -1741,15 +1845,7 @@ void __vectorcall King::ImageBlock::FillColor(float4 colorIn)
     Clear();
 
     // color
-    MemoryBlock<unsigned char> c;
-    if (_stride > 0)
-        c.PushBack((uint8_t)(255.f * colorIn.GetX()));
-    if (_stride > 1)
-        c.PushBack((uint8_t)(255.f * colorIn.GetY()));
-    if (_stride > 2)
-        c.PushBack((uint8_t)(255.f * colorIn.GetZ()));
-    if (_stride > 3)
-        c.PushBack((uint8_t)(255.f * colorIn.GetW()));
+    auto c = ConvertColorFrom4FloatTo32Bit(colorIn);
 
     // fill capacity
     std::lock_guard<std::mutex> guard(_mutex);
@@ -1764,6 +1860,31 @@ void __vectorcall King::ImageBlock::FillColor(float4 colorIn)
     }
 
     _length = _capacity;
+}
+void King::ImageBlock::FloodFill(unsigned int row, unsigned int col, const MemoryBlock<unsigned char> &newColor, const MemoryBlock<unsigned char>& oldColor)
+{
+    // Check if the current pixel is within the image boundaries
+    if (row < 0 || row >= _w || col < 0 || col >= _h) {
+        return;
+    }
+
+    // Check if the current pixel has the same color as the newColor, and that we fill from previous oldColor path only
+    MemoryBlock<unsigned char> c;
+    c.Reserve(4);
+    GetPixel(row, col, c.GetData());
+
+    if ( (memcmp(c.GetData(), &newColor, c.GetByteSize()) == 0) || (memcmp(c.GetData(), &oldColor, c.GetByteSize()) != 0) )
+        return;
+
+    // Update the color of the current pixel
+    const auto src = newColor.GetData();
+    SetPixel(row, col, src, false);
+
+    // Recursively call for the neighboring pixels
+    FloodFill(row - 1, col, newColor, oldColor); // Up
+    FloodFill(row + 1, col, newColor, oldColor); // Down
+    FloodFill(row, col - 1, newColor, oldColor); // Left
+    FloodFill(row, col + 1, newColor, oldColor); // Right
 }
 void King::ImageBlock::FlipVertically()
 {
@@ -1784,7 +1905,7 @@ void King::ImageBlock::FlipVertically()
     }
 }
 
-void King::ImageBlock::FilterBlur(const uint32_t radiusIn, const Rectangle2DF rectIn)
+void King::ImageBlock::FilterGaussianBlur(const uint32_t radiusIn, const Rectangle2DF rectIn)
 {
     // reference https://stackoverflow.com/questions/67566430/gaussian-blur-in-c
     const uint32_t radius = 3;
@@ -1886,7 +2007,7 @@ void King::ImageBlock::GetPixel(const uint32_t& x, const uint32_t& y, unsigned c
     std::copy(src, src + _stride, colorOut);
 }
 
-void King::ImageBlock::SetPixel(const uint32_t& x, const uint32_t& y, unsigned char* colorIn, const bool guardIn)
+void King::ImageBlock::SetPixel(const uint32_t& x, const uint32_t& y, const unsigned char* colorIn, const bool guardIn)
 {
     // note colorIn size must match _stride
     if (x < _w && y < _h)
@@ -1933,13 +2054,13 @@ bool King::ImageTGA::ReadTGA(std::ifstream& dataFileIn)
         return false;
     if ((header.width < 1) || (header.height < 1))
         return false;
-    if (header.bitsperpixel != 24 &&
+    if (header.bitsperpixel != 24 ||
         header.bitsperpixel != 32)
         return false;
 
     ImageBlock::Initialize(header.width, header.height, 4);
-    // when we right less than 4 bytes in little endian we fill with zero so 
-    // we do not have to right the remainder out of 4 as zeros later on
+    // when we write less than 4 bytes in little endian we fill with zero so 
+    // we do not have to write the remaining byte up to 4 
     MemoryBlock::Fill(0);
 
     char* dest = reinterpret_cast<char*>(GetData());

@@ -1,4 +1,4 @@
-﻿#include "..\MathSIMD\MathSIMD.h"
+﻿#include "..\..\..\Gits\MathSIMD\MathSIMD.h"
 #include "..\2DGeometryKing\2DGeometry.h"
 #include "..\3DGeometryKing\3DGeometry.h"
 #include "..\3DGeometryKing\Model_IO.h"
@@ -8,7 +8,7 @@ using namespace std;
 using namespace DirectX;
 
 // global constants
-extern const FloatPoint3 g_boxCorners[8] =
+extern const float3 g_boxCorners[8] =
 {
     { -1.0f, -1.0f, -1.0f }, // lbb (min)
     { -1.0f, -1.0f,  1.0f }, // lbf
@@ -19,6 +19,8 @@ extern const FloatPoint3 g_boxCorners[8] =
     { 1.0f,  1.0f,  1.0f }, // rtf (max)
     { 1.0f,  1.0f, -1.0f } // rtb
 };
+
+size_t ModelScaffold::s_modelNameCounter = 0;
 
 //namespace King {
     std::vector<std::string> King::VertexAttrib::description = { "Position", "Color", "TextureCoord" , "Normal" , "Tangent" , "Bi-Tangent" };
@@ -188,7 +190,7 @@ void King::from_json(const json& j, Frustum& to)
 *    Triangle Intersects
 *        Desc:       ray intersection test
 *        Input:      ray to test against (with origin and direction)
-*        Output:     FloatPoint3 containing the point of intersection
+*        Output:     float3 containing the point of intersection
 *        Returns:    true if intersection occurred, otherwise false
 *        Remarks:    Möller, Tomas; Trumbore, Ben (1997). "Fast, Minimum Storage Ray-Triangle Intersection". Journal of Graphics Tools. 2: 21–28.
 *                    https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
@@ -199,25 +201,25 @@ void King::from_json(const json& j, Frustum& to)
 *             \ /
 *             pt1
 ******************************************************************************/
-bool King::Triangle::Intersects(const FloatPoint3 &rayOriginIn, const FloatPoint3 &rayDirectionIn, FloatPoint3 *intersectPointOut)
+bool King::Triangle::Intersects(const float3 &rayOriginIn, const float3 &rayDirectionIn, float3 *intersectPointOut)
 {
-    King::FloatPoint3 hv, sv, qv;
+    King::float3 hv, sv, qv;
     float a, f, u, v;
 
     auto edge2 = pt[2] - pt[0];
     auto edge1 = pt[1] - pt[0];
 
-    hv = King::FloatPoint3::CrossProduct(rayDirectionIn, edge1); // result is an orthogonal vector
-    a = King::FloatPoint3::DotProduct(edge2, hv).GetX(); // project other edge onto the orthogonal vector
+    hv = King::float3::CrossProduct(rayDirectionIn, edge1); // result is an orthogonal vector
+    a = King::float3::DotProduct(edge2, hv).GetX(); // project other edge onto the orthogonal vector
     if (a > -FLT_EPSILON && a < FLT_EPSILON) // if projection is zero, then these vectors are also orthogonal, so the plane is parallel to the ray
         return false;
     f = 1 / a;
     sv = rayOriginIn - pt[0]; // ray relative to triangle
-    u = f * King::FloatPoint3::DotProduct(sv, hv).GetX();
+    u = f * King::float3::DotProduct(sv, hv).GetX();
     if (u < 0.0f || u > 1.0f)
         return false;
     qv = sv.CrossProduct(edge2);
-    v = f * King::FloatPoint3::DotProduct(rayDirectionIn, qv).GetX();
+    v = f * King::float3::DotProduct(rayDirectionIn, qv).GetX();
     if (v < 0.0f || u + v > 1.0f)
         return false;
     // At this stage we can compute t to find out where the intersection point is on the line.
@@ -231,26 +233,26 @@ bool King::Triangle::Intersects(const FloatPoint3 &rayOriginIn, const FloatPoint
         return false;
 }
 
-bool King::TriangleIndexed::Intersects(const FloatPoint3 &rayOriginIn, const FloatPoint3 &rayDirectionIn, FloatPoint3 *intersectPointOut)
+bool King::TriangleIndexed::Intersects(const float3 &rayOriginIn, const float3 &rayDirectionIn, float3 *intersectPointOut)
 {
     assert(intersectPointOut);
-    King::FloatPoint3 hv, sv, qv;
+    King::float3 hv, sv, qv;
     float a, f, u, v;
 
     auto edge2 = GetVertexPosition(2) - GetVertexPosition(0);
     auto edge1 = GetVertexPosition(1) - GetVertexPosition(0);
 
-    hv = King::FloatPoint3::CrossProduct(rayDirectionIn, edge1); // result is an orthogonal vector
-    a = King::FloatPoint3::DotProduct(edge2, hv).GetX(); // project other edge onto the orthogonal vector
+    hv = King::float3::CrossProduct(rayDirectionIn, edge1); // result is an orthogonal vector
+    a = King::float3::DotProduct(edge2, hv).GetX(); // project other edge onto the orthogonal vector
     if (a > -FLT_EPSILON && a < FLT_EPSILON) // if projection is zero, then these vectors are also orthogonal, so the plane is parallel to the ray
         return false;
     f = 1 / a;
     sv = rayOriginIn - GetVertex(0); // ray relative to triangle
-    u = f * King::FloatPoint3::DotProduct(sv, hv).GetX();
+    u = f * King::float3::DotProduct(sv, hv).GetX();
     if (u < 0.0f || u > 1.0f)
         return false;
     qv = sv.CrossProduct(edge2);
-    v = f * King::FloatPoint3::DotProduct(rayDirectionIn, qv).GetX();
+    v = f * King::float3::DotProduct(rayDirectionIn, qv).GetX();
     if (v < 0.0f || u + v > 1.0f)
         return false;
     // At this stage we can compute t to find out where the intersection point is on the line.
@@ -265,19 +267,19 @@ bool King::TriangleIndexed::Intersects(const FloatPoint3 &rayOriginIn, const Flo
 }
 
 // byte pointer to start of vertex data
-inline FloatPoint3 King::LineIndexed::GetVertexPosition(const uint32_t indexIn) const
+inline float3 King::LineIndexed::GetVertexPosition(const uint32_t indexIn) const
 {
     assert(vb != nullptr);
     auto attrI = vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::enumDesc::position);
     auto offset = vertexFormat.GetAttribute(attrI).GetOffset();
-    return FloatPoint3(reinterpret_cast<float*>((size_t)vb + (size_t)pt[indexIn] * vertexFormat.GetByteSize() + offset));
+    return float3(reinterpret_cast<float*>((size_t)vb + (size_t)pt[indexIn] * vertexFormat.GetByteSize() + offset));
 }
-inline FloatPoint3 King::TriangleIndexed::GetVertexPosition(const uint32_t indexIn) const
+inline float3 King::TriangleIndexed::GetVertexPosition(const uint32_t indexIn) const
 {
     assert(vb != nullptr);
     auto attrI = vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::enumDesc::position);
     auto offset = vertexFormat.GetAttribute(attrI).GetOffset();
-    return FloatPoint3(reinterpret_cast<float*>((size_t)vb + (size_t)pt[indexIn] * vertexFormat.GetByteSize() + offset));
+    return float3(reinterpret_cast<float*>((size_t)vb + (size_t)pt[indexIn] * vertexFormat.GetByteSize() + offset));
 }
 // Determine the number of verticies by finding the larget index in the index buffer
 auto King::LineMesh::GetNumVerticies()
@@ -309,24 +311,24 @@ uint32_t King::TriangleMesh::GetNumVerticies() const
     }
     return ni > 0 ? numVerticies+1 : 0; // indexing is zero based, size is therefore +1
 }
-inline FloatPoint3 King::LineMesh::GetVertexPosition(const uint32_t vertNumIn) const
+inline float3 King::LineMesh::GetVertexPosition(const uint32_t vertNumIn) const
 {
     assert(_vb != nullptr);
     auto attrI = _vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::enumDesc::position);
     auto offset = _vertexFormat.GetAttribute(attrI).GetOffset();
     //auto n = GetNumVerticies();
     //assert(vertNumIn >= n);
-    return FloatPoint3(reinterpret_cast<float*>(GetVertexAddr(vertNumIn) + offset));
+    return float3(reinterpret_cast<float*>(GetVertexAddr(vertNumIn) + offset));
 }
-inline FloatPoint3 King::TriangleMesh::GetVertexPosition(const uint32_t vertexNum) const
+inline float3 King::TriangleMesh::GetVertexPosition(const uint32_t vertexNum) const
 {
     assert(_vb != nullptr);
     auto attrI = _vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::enumDesc::position);
     auto offset = _vertexFormat.GetAttribute(attrI).GetOffset();
-    return FloatPoint3(reinterpret_cast<float*>(GetVertexAddr(vertexNum) + offset));
+    return float3(reinterpret_cast<float*>(GetVertexAddr(vertexNum) + offset));
 }
 
-void King::TriangleMesh::SetVertexPosition(const uint32_t indexIn, FloatPoint3 posIn)
+void King::TriangleMesh::SetVertexPosition(const uint32_t indexIn, float3 posIn)
 {
     assert(_vb != nullptr);
     auto attrI = _vertexFormat.GetAttributeIndexFromDescription(VertexAttrib::enumDesc::position);
@@ -496,20 +498,20 @@ void King::TriangleMesh::HelperMoveVertexOnGrid(const float3 delta, const unsign
     }
 }
 
-inline bool King::Point::Intersects(const FloatPoint3 &pointIn) const
+inline bool King::Point::Intersects(const float3 &pointIn) const
 {
-    FloatPoint3 diff = pointIn - static_cast<FloatPoint3>(*this);
-    diff.MakeAbsolute();
+    float3 diff = pointIn - static_cast<float3>(*this);
+    diff.Absolute();
 
-    return FloatPoint3::SumComponents(diff) < FLT_EPSILON ? true : false;
+    return float3::SumComponents(diff) < FLT_EPSILON ? true : false;
 }
 
 inline bool King::Point::Intersects(const Point & pointIn) const
 {
-    FloatPoint3 diff(pointIn - *this);
-    diff.MakeAbsolute();
+    float3 diff(pointIn - *this);
+    diff.Absolute();
 
-    return FloatPoint3::SumComponents(diff) < FLT_EPSILON ? true : false;
+    return float3::SumComponents(diff) < FLT_EPSILON ? true : false;
 }
 
 inline bool King::Point::Collision(Point const & pointIn) const { return Intersects(pointIn); }
@@ -546,33 +548,33 @@ inline bool King::Ray::Collision(Box const& boxIn) const { return boxIn.Collisio
 bool King::Ray::Intersects(const Point& pointIn) const
 {
     auto pt = FindNearestPoint(pointIn);
-    FloatPoint3 diff(pointIn - pt);
-    diff.MakeAbsolute();
+    float3 diff(pointIn - pt);
+    diff.Absolute();
 
-    return FloatPoint3::SumComponents(diff) < FLT_EPSILON ? true : false;
+    return float3::SumComponents(diff) < FLT_EPSILON ? true : false;
 }
 
 bool King::Ray::Intersects(const Ray& rayIn, Position* intersectionOut) const
 {
     const float epsilon_squared = FLT_EPSILON * FLT_EPSILON;
-    const FloatPoint3& rayA = GetDirection();
-    const FloatPoint3& rayB = rayIn.GetDirection();
+    const float3& rayA = GetDirection();
+    const float3& rayB = rayIn.GetDirection();
 
-    FloatPoint3 pointOnSegA, pointOnSegB;
+    float3 pointOnSegA, pointOnSegB;
 
     // this is the same as Dot(rayA,rayA) and Dot(rayB,rayB)
     float testL11 = Dot(rayA, rayA);
-    float L11 = DirectX::XMVectorGetX(DirectX::XMVectorSum(DirectX::XMVectorPow(rayA, FloatPoint3(2.f, 2.f, 2.f))));
+    float L11 = DirectX::XMVectorGetX(DirectX::XMVectorSum(DirectX::XMVectorPow(rayA, float3(2.f, 2.f, 2.f))));
     assert(testL11 == L11);
-    float L22 = DirectX::XMVectorGetX(DirectX::XMVectorSum(DirectX::XMVectorPow(rayB, FloatPoint3(2.f, 2.f, 2.f))));
+    float L22 = DirectX::XMVectorGetX(DirectX::XMVectorSum(DirectX::XMVectorPow(rayB, float3(2.f, 2.f, 2.f))));
     float testL22 = Dot(rayB, rayB);
     assert(testL22 == L22);
     cout << testL11 << '\n';
     cout << testL22 << '\n';
 
-    FloatPoint3 AB = rayIn.GetOrigin() - GetOrigin();
+    float3 AB = rayIn.GetOrigin() - GetOrigin();
     // - dot product of A and B
-    float L12 = -FloatPoint3::SumComponents(rayA * rayB);
+    float L12 = -float3::SumComponents(rayA * rayB);
     float DetL = L11 * L22 - L12 * L12;
 
     // Lines/Segments A and B are parallel
@@ -582,37 +584,37 @@ bool King::Ray::Intersects(const Ray& rayIn, Position* intersectionOut) const
     }
     else
     {
-        float ra = FloatPoint3::SumComponents(rayA * AB);
-        float rb = -FloatPoint3::SumComponents(rayB * AB);
+        float ra = float3::SumComponents(rayA * AB);
+        float rb = -float3::SumComponents(rayB * AB);
 
         float t = (L11 * rb - ra * L12) / DetL;
         float s = (ra - L12 * t) / L11;
 
-        pointOnSegA = s * rayA + GetOrigin();
-        pointOnSegB = t * rayB + rayIn.GetOrigin();
+        pointOnSegA = rayA * s + GetOrigin();
+        pointOnSegB = rayB * t + rayIn.GetOrigin();
     }
 
     // point of intersection is the midpoint of the two
     *intersectionOut = (pointOnSegA + pointOnSegB) * 0.5f;
 
-    FloatPoint3 nearestVector = pointOnSegB - pointOnSegA;
-    nearestVector.MakeAbsolute();
+    float3 nearestVector = pointOnSegB - pointOnSegA;
+    nearestVector.Absolute();
 
-    return FloatPoint3::SumComponents(nearestVector) < FLT_EPSILON ? true : false;
+    return float3::SumComponents(nearestVector) < FLT_EPSILON ? true : false;
 }
 
 bool King::Ray::Intersects(const Line& lineIn, Position* intersectionOut) const
 {
     const float epsilon_squared = FLT_EPSILON * FLT_EPSILON;
-    const FloatPoint3& rayA = GetDirection();
-    FloatPoint3 rayB = lineIn.pt[1] - lineIn.pt[0];
+    const float3& rayA = GetDirection();
+    float3 rayB = lineIn.pt[1] - lineIn.pt[0];
 
-    FloatPoint3 pointOnSegA, pointOnSegB;
+    float3 pointOnSegA, pointOnSegB;
 
     // line segment is degenerate (distance between end points is near zero)
     // this is the same as Dot(rayA,rayA) and Dot(rayB,rayB)
-    float L11 = DirectX::XMVectorGetX(DirectX::XMVectorSum(DirectX::XMVectorPow(rayA, FloatPoint3(2.f, 2.f, 2.f))));
-    float L22 = DirectX::XMVectorGetX(DirectX::XMVectorSum(DirectX::XMVectorPow(rayB, FloatPoint3(2.f, 2.f, 2.f))));
+    float L11 = DirectX::XMVectorGetX(DirectX::XMVectorSum(DirectX::XMVectorPow(rayA, float3(2.f, 2.f, 2.f))));
+    float L22 = DirectX::XMVectorGetX(DirectX::XMVectorSum(DirectX::XMVectorPow(rayB, float3(2.f, 2.f, 2.f))));
 
     if (L22 < epsilon_squared)
     {
@@ -620,9 +622,9 @@ bool King::Ray::Intersects(const Line& lineIn, Position* intersectionOut) const
     }
     else
     {
-        FloatPoint3 AB = lineIn.pt[0] - GetOrigin();
+        float3 AB = lineIn.pt[0] - GetOrigin();
         // - dot product of A and B
-        float L12 = -FloatPoint3::SumComponents(rayA * rayB);
+        float L12 = -float3::SumComponents(rayA * rayB);
         float DetL = L11 * L22 - L12 * L12;
 
         // Lines/Segments A and B are parallel
@@ -634,14 +636,14 @@ bool King::Ray::Intersects(const Line& lineIn, Position* intersectionOut) const
         else
         {
             // AB is the distance between the origin of the ray and line
-            float ra = FloatPoint3::SumComponents(rayA * AB);
-            float rb = -FloatPoint3::SumComponents(rayB * AB);
+            float ra = float3::SumComponents(rayA * AB);
+            float rb = -float3::SumComponents(rayB * AB);
 
             float t = (L11 * rb - ra * L12) / DetL;
             float s = (ra - L12 * t) / L11;
 
-            pointOnSegA = s * rayA + GetOrigin();
-            pointOnSegB = t * rayB + lineIn.pt[0];
+            pointOnSegA = rayA * s + GetOrigin();
+            pointOnSegB = rayB * t + lineIn.pt[0];
         }
 
     }
@@ -649,10 +651,10 @@ bool King::Ray::Intersects(const Line& lineIn, Position* intersectionOut) const
     if (intersectionOut != nullptr)
         *intersectionOut = (pointOnSegA + pointOnSegB) * 0.5f;
 
-    FloatPoint3 nearestVector = pointOnSegB - pointOnSegA;
-    nearestVector.MakeAbsolute();
+    float3 nearestVector = pointOnSegB - pointOnSegA;
+    nearestVector.Absolute();
 
-    return FloatPoint3::SumComponents(nearestVector) < FLT_EPSILON ? true : false;
+    return float3::SumComponents(nearestVector) < FLT_EPSILON ? true : false;
 }
 
 /******************************************************************************
@@ -665,15 +667,15 @@ bool King::Ray::Intersects(const Line& lineIn, Position* intersectionOut) const
 *        Returns:    none
 *        Remarks:    
 ******************************************************************************/
-King::FloatPoint3 King::Ray::FindNearestPoint(const Point& ptIn) const
+King::float3 King::Ray::FindNearestPoint(const Point& ptIn) const
 {
-    const FloatPoint3& dir = GetDirection();
-    const FloatPoint3& origin = GetOrigin();
+    const float3& dir = GetDirection();
+    const float3& origin = GetOrigin();
 
-    FloatPoint3 l(ptIn - GetOrigin());
+    float3 l(ptIn - GetOrigin());
 
     // project l onto our ray, direction must be normalized
-    FloatPoint3 projection = Dot(l, dir) * dir;
+    float3 projection = Dot(l, dir) * dir;
 
     return projection;
 }
@@ -707,7 +709,7 @@ void King::Line::Offset(const float distIn, Plane offsetPlaneIn)
 *        Desc:       Find the nearest point between two finite length line segments
 *        Input:      a line in 3-dimensional space
 *        Output:     true if within tolerance, false otherwise
-*                    FloatPoint3 *intersectOut is point of intersection
+*                    float3 *intersectOut is point of intersection
 *        Returns:    none
 *        Remarks:    Adapted from:
 |                         Book Title: Game Programming Gems II
@@ -719,24 +721,24 @@ inline bool __vectorcall King::Line::Intersects(const Point& pointIn) const
 {
     auto nPt = FindNearestPointOnLineSegment(pointIn);
 
-    FloatPoint3 diff = pointIn - nPt;
-    diff.MakeAbsolute();
+    float3 diff = pointIn - nPt;
+    diff.Absolute();
 
-    return FloatPoint3::SumComponents(diff) < FLT_EPSILON ? true : false;
+    return float3::SumComponents(diff) < FLT_EPSILON ? true : false;
 }
 
-inline bool __vectorcall King::Line::Intersects(const Line & lineIn, FloatPoint3 *intersectionOut) const
+inline bool __vectorcall King::Line::Intersects(const Line & lineIn, float3 *intersectionOut) const
 {
     const float epsilon_squared = FLT_EPSILON * FLT_EPSILON;
-    FloatPoint3 rayA = pt[1] - pt[0];
-    FloatPoint3 rayB = lineIn.pt[1] - lineIn.pt[0];
+    float3 rayA = pt[1] - pt[0];
+    float3 rayB = lineIn.pt[1] - lineIn.pt[0];
 
-    FloatPoint3 pointOnSegA, pointOnSegB;
+    float3 pointOnSegA, pointOnSegB;
 
     // line segment is degenerate (distance between end points is near zero)
     // this is the same as Dot(rayA,rayA) and Dot(rayB,rayB)
-    float L11 = DirectX::XMVectorGetX(DirectX::XMVectorSum(DirectX::XMVectorPow(rayA, FloatPoint3( 2.f, 2.f ,2.f ))));
-    float L22 = DirectX::XMVectorGetX(DirectX::XMVectorSum(DirectX::XMVectorPow(rayB, FloatPoint3( 2.f, 2.f, 2.f ))));
+    float L11 = DirectX::XMVectorGetX(DirectX::XMVectorSum(DirectX::XMVectorPow(rayA, float3( 2.f, 2.f ,2.f ))));
+    float L22 = DirectX::XMVectorGetX(DirectX::XMVectorSum(DirectX::XMVectorPow(rayB, float3( 2.f, 2.f, 2.f ))));
 
     if (L11 < epsilon_squared)
     {
@@ -748,9 +750,9 @@ inline bool __vectorcall King::Line::Intersects(const Line & lineIn, FloatPoint3
     }
     else
     {
-        FloatPoint3 AB = lineIn.pt[0] - pt[0];
+        float3 AB = lineIn.pt[0] - pt[0];
         // - dot product of A and B
-        float L12 = -FloatPoint3::SumComponents(rayA * rayB);
+        float L12 = -float3::SumComponents(rayA * rayB);
         float DetL = L11 * L22 - L12 * L12;
 
         // Lines/Segments A and B are parallel
@@ -761,14 +763,14 @@ inline bool __vectorcall King::Line::Intersects(const Line & lineIn, FloatPoint3
         // The general case
         else
         {
-            float ra = FloatPoint3::SumComponents(rayA * AB);
-            float rb = -FloatPoint3::SumComponents(rayB * AB);
+            float ra = float3::SumComponents(rayA * AB);
+            float rb = -float3::SumComponents(rayB * AB);
 
             float t = (L11 * rb - ra * L12) / DetL;
             float s = (ra - L12 * t) / L11;
 
-            pointOnSegA = s * rayA + pt[0];
-            pointOnSegB = t * rayB + lineIn.pt[0];
+            pointOnSegA = rayA * s + pt[0];
+            pointOnSegB = rayB * t + lineIn.pt[0];
         }
     
     }
@@ -776,10 +778,10 @@ inline bool __vectorcall King::Line::Intersects(const Line & lineIn, FloatPoint3
     if(intersectionOut != nullptr)
         *intersectionOut = (pointOnSegA + pointOnSegB) * 0.5f;
 
-    FloatPoint3 nearestVector = pointOnSegB - pointOnSegA;
-    nearestVector.MakeAbsolute();
+    float3 nearestVector = pointOnSegB - pointOnSegA;
+    nearestVector.Absolute();
 
-    return FloatPoint3::SumComponents(nearestVector) < FLT_EPSILON ? true : false;
+    return float3::SumComponents(nearestVector) < FLT_EPSILON ? true : false;
 }
 /******************************************************************************
 *    Line::FindNearestPointOnLineSegment
@@ -795,23 +797,23 @@ inline bool __vectorcall King::Line::Intersects(const Line & lineIn, FloatPoint3
 *                         Author: Graham Rhodes
 *                         Revisions: 05-Apr-2001 - GSR. Original.
 ******************************************************************************/
-King::FloatPoint3 King::Line::FindNearestPointOnLineSegment(const FloatPoint3 & pointIn) const
+King::float3 King::Line::FindNearestPointOnLineSegment(const float3 & pointIn) const
 {
     const float epsilon_squared = FLT_EPSILON * FLT_EPSILON;
-    FloatPoint3 ray = pt[1] - pt[0];
+    float3 ray = pt[1] - pt[0];
 
     // Line/Segment is degenerate (distance between them is near zero)
-    float d = FloatPoint3::SumComponents(DirectX::XMVectorPow(ray, { 2.f,2.f ,2.f ,2.f }));
+    float d = float3::SumComponents(DirectX::XMVectorPow(ray, { 2.f,2.f ,2.f ,2.f }));
     if (d < epsilon_squared)
         return pt[0];
 
-    FloatPoint3 ab = pointIn - pt[0];
+    float3 ab = pointIn - pt[0];
 
     // parametric coordinate of the nearest point along the line (infinite in direction of ray)
-    float parameter = FloatPoint3::SumComponents(ray * ab) / d;
+    float parameter = float3::SumComponents(ray * ab) / d;
     parameter = std::fmaxf(0.0f, std::fminf(1.0f, parameter)); // limit to the line segment (with range 0.0 to 1.0)
 
-    FloatPoint3 nearestPoint = parameter * ray + pt[0];
+    float3 nearestPoint = ray * parameter + pt[0];
     
     return nearestPoint;
 }
@@ -819,13 +821,13 @@ King::FloatPoint3 King::Line::FindNearestPointOnLineSegment(const FloatPoint3 & 
 *    Method:    Line::GetPerpendicular
 *       Note: my original code.  Wow, this was hard!
 ******************************************************************************/
-FloatPoint3 King::Line::GetPerpendicular() const
+float3 King::Line::GetPerpendicular() const
 {
     // any perpendicular vector to the line rotated about the line remains perpendicular (infinite solutions)
     // we chose a solution that minimizes the component that is the smallest and maximizes the largest
-    FloatPoint3 dir(pt[1] - pt[0]);
+    float3 dir(pt[1] - pt[0]);
     XMFLOAT3 d = dir;
-    dir.MakeAbsolute();
+    dir.Absolute();
     XMFLOAT3 a = dir;
     // Ax + By + Cz = 0 ; from the dot product
 
@@ -870,7 +872,7 @@ FloatPoint3 King::Line::GetPerpendicular() const
 *                           excluding w component storing the scalar s since we
 *                           have two points already anchoring the plane.
 * ******************************************************************************/
-FloatPoint3 __vectorcall King::Line::GetPerpendicular(FloatPoint3 firstPlaneIn) const 
+float3 __vectorcall King::Line::GetPerpendicular(float3 firstPlaneIn) const 
 { 
     auto rtn = GetPerpendicular() * firstPlaneIn; 
     rtn.MakeNormalize(); 
@@ -889,12 +891,12 @@ inline bool King::Line::Collision(Capsule const& capsuleIn) const { return capsu
 /******************************************************************************
 *    Method:    Quad::Intersects
 ******************************************************************************/
-bool King::Quad::Intersects(const Ray& ray, FloatPoint3* intersectPointOut)
+bool King::Quad::Intersects(const Ray& ray, float3* intersectPointOut)
 {
     return King::Quad::Intersects(ray.GetOrigin(), ray.GetDirection(), intersectPointOut);
 }
 
-bool King::Quad::Intersects(const FloatPoint3 & rayOriginIn, const FloatPoint3 & rayDirectionIn, FloatPoint3 * intersectPointOut)
+bool King::Quad::Intersects(const float3 & rayOriginIn, const float3 & rayDirectionIn, float3 * intersectPointOut)
 {
     auto t1 = GetTriangle1();
     if (t1.Intersects(rayOriginIn, rayDirectionIn, intersectPointOut))
@@ -913,11 +915,11 @@ std::vector<Quad> King::Quad::SubDivide()
 {
     std::vector<Quad> quadsOut;
     
-    FloatPoint3 c = GetCenter();
-    FloatPoint3 c0 = 0.5f * (pt[1] + pt[0]);
-    FloatPoint3 c1 = 0.5f * (pt[2] + pt[1]);
-    FloatPoint3 c2 = 0.5f * (pt[3] + pt[2]);
-    FloatPoint3 c3 = 0.5f * (pt[0] + pt[3]);
+    float3 c = GetCenter();
+    float3 c0 = 0.5f * (pt[1] + pt[0]);
+    float3 c1 = 0.5f * (pt[2] + pt[1]);
+    float3 c2 = 0.5f * (pt[3] + pt[2]);
+    float3 c3 = 0.5f * (pt[0] + pt[3]);
 
     Quad q;
 
@@ -1054,12 +1056,10 @@ bool King::Sphere::Intersects(const Plane& planeIn) const
 bool King::Sphere::Intersects(const Sphere & rhs) const
 {
     float3 d( rhs.GetCenter() - GetCenter() );
-    float3 dsq( DirectX::XMVector3LengthSq(d) );
+    float3 dsq( DirectX::XMVector3Dot(d, d) );
 
-    float rA = GetRadius();
-    float3 r3A(rA);
-    float rB = rhs.GetRadius();
-    float3 r3B(rB);
+    float3 r3A(GetRadius());
+    float3 r3B(rhs.GetRadius());
     auto rsq = r3A + r3B;
     rsq = rsq * rsq;
 
@@ -1067,7 +1067,6 @@ bool King::Sphere::Intersects(const Sphere & rhs) const
 }
 /******************************************************************************
 *    Method:    Intersects Orientated Box
-*       Sphere vs. Sphere
 ******************************************************************************/
 bool King::Sphere::Intersects(const Box& boxIn, const Quaternion& orientationIn) const
 {
@@ -1078,7 +1077,21 @@ bool King::Sphere::Intersects(const Box& boxIn, const Quaternion& orientationIn)
     // https://gamedev.stackexchange.com/questions/163873/separating-axis-theorem-obb-vs-sphere
     return false;
 }
+/******************************************************************************
+*    Method:    FindNearestPointFromSphere
+******************************************************************************/
+float3 __vectorcall King::Sphere::FindNearestPointFromSphere(const float3& pt3In) const
+{
+    float3 sphereToPoint = pt3In - GetCenter();
+    sphereToPoint.MakeNormalize();
+    sphereToPoint *= GetRadius();
+    float3 worldPoint = GetCenter() + sphereToPoint;
 
+    return float3();
+}
+/******************************************************************************
+*    Method:    Collision
+******************************************************************************/
 bool King::Sphere::Collision(Point const & pointIn) const { return Contains(pointIn); }
 bool King::Sphere::Collision(Ray const & rayIn) const { float3 ptOut; return Intersects(rayIn, &ptOut); }
 bool King::Sphere::Collision(Line const & lineIn) const { return Intersects(lineIn); }
@@ -1118,17 +1131,15 @@ void King::Sphere::Merge(const Sphere& sIn)
 ******************************************************************************/
 inline void King::Box::Merge(const Box & bIn)
 {
-    auto temp1 = Min(pt_min, pt_max);
-    auto temp2 = Max(pt_min, pt_max);
+    assert(pt_min <= pt_max);
 
-    pt_min = Min(temp1, bIn.pt_min);
-    pt_max = Max(temp2, bIn.pt_max);
-    //assert(pt_min <= pt_max);
+    pt_min = Min(pt_min, bIn.pt_min);
+    pt_max = Max(pt_max, bIn.pt_max);
 }
 /******************************************************************************
 *    Method:    Merge Point
 ******************************************************************************/
-inline void __vectorcall King::Box::Merge(const FloatPoint3 ptIn)
+inline void __vectorcall King::Box::Merge(const float3 ptIn)
 {
     pt_min = Min(pt_min, ptIn);
     pt_max = Max(pt_max, ptIn);
@@ -1143,8 +1154,8 @@ bool King::Box::Intersects(const Ray &rayIn, float &distOut) const
     assert(DirectX::Internal::XMVector3IsUnit(rayIn.GetDirection()));
 
     // Load the box.
-    XMVECTOR center = GetCenter();
-    XMVECTOR extents = GetExtents();
+    auto center = GetCenter();
+    auto extents = GetExtents();
 
     // Compute the dot product againt each axis of the box.
     // Since the axii are (1,0,0), (0,1,0), (0,0,1) no computation is necessary.
@@ -1237,11 +1248,6 @@ bool King::Box::Intersects(const Box & boxIn) const
 *     |      |
 *     \      /
 *      \----/
-*   r^2 = x^2 + y^2 + z^2
-*   l = x = y = z
-*   r^2 = l^2 + l^2 + l^2
-*   r^2 = 3 * l^2
-*   l = 0.57735027 * r
 ******************************************************************************/
 bool King::Box::Intersects(const Sphere & sphereIn) const
 {
@@ -1265,7 +1271,7 @@ bool King::Box::Intersects(const Sphere & sphereIn) const
 *   |      |return
 *   |------|
 ******************************************************************************/
-FloatPoint3 __vectorcall King::Box::FindNearestPointOnBox(const FloatPoint3 &pt3In) const
+float3 __vectorcall King::Box::FindNearestPointOnBox(const float3 &pt3In) const
 {
     return Max(pt_min, Min(pt_max, pt3In));
 }
@@ -1277,10 +1283,10 @@ FloatPoint3 __vectorcall King::Box::FindNearestPointOnBox(const FloatPoint3 &pt3
 *      \     \  *<---------------* localSpacePoint (box can be treated as a AABB)
 *       \-----\ (npOnBox)  
 ******************************************************************************/
-FloatPoint3 __vectorcall King::Box::FindNearestPointOnBox(const FloatPoint3 & pt3In, const DirectX::FXMMATRIX & M) const
+float3 __vectorcall King::Box::FindNearestPointOnBox(const float3 & pt3In, const DirectX::FXMMATRIX & M) const
 {
     // world to box space
-    FloatPoint3 localSpacePoint(pt3In);
+    float3 localSpacePoint(pt3In);
     localSpacePoint *= M;
 
     auto npOnBox = FindNearestPointOnBox(localSpacePoint);
@@ -1292,7 +1298,7 @@ FloatPoint3 __vectorcall King::Box::FindNearestPointOnBox(const FloatPoint3 & pt
     return npOnBox;
 }
 inline bool King::Box::Collision(Ray const & rayIn) const { float distOut; return Intersects(rayIn, distOut); }
-inline bool King::Box::Collision(Point const & pointIn) const { return DirectX::XMVector3InBounds((XMVECTOR)pointIn - GetCenter(), GetExtents()); }
+inline bool King::Box::Collision(Point const & pointIn) const { return DirectX::XMVector3InBounds((DirectX::XMVECTOR)(pointIn - GetCenter()), GetExtents()); }
 inline bool King::Box::Collision(Line const & lineIn) const { return Intersects(lineIn); }
 inline bool King::Box::Collision(Plane const& planeIn) const { return Intersects(planeIn); }
 inline bool King::Box::Collision(Sphere const & sphereIn) const { return Intersects(sphereIn); }
@@ -1302,7 +1308,8 @@ inline bool King::Box::Collision(Frustum const& frustumIn) const { return frustu
 /******************************************************************************
 *    Method:    CollisionVolume
 *       Assumption:  Collision detection has already occured and is true
-*       Note: solution could be a plane if they are touching and not overlapping like: { center{ x:         5 y:         0 z:         0 } pt_min{ x:         5 y:      -0.5 z:      -0.5 } pt_max{ x:         5 y:       0.5 z:       0.5 } }
+*       Note: solution could be a plane if they are touching and not overlapping
+*       otherwise a box.
 ******************************************************************************/
 Box King::Box::CollisionVolume(const Box& boxIn)
 {
@@ -1315,7 +1322,7 @@ Box King::Box::CollisionVolume(const Box& boxIn)
 }
 /******************************************************************************
 *    Method:    MomentsOfInertia
-*       Returns the momement of inertia of our box
+*       Returns the momement of inertia of our box of uniform density
 ******************************************************************************/
 DirectX::XMMATRIX King::Box::MomentsOfInertia(const float& densityIn)
 {
@@ -1336,7 +1343,7 @@ DirectX::XMMATRIX King::Box::MomentsOfInertia(const float& densityIn)
     
     auto Ii = i.Get_XMFLOAT3();
 
-    //// Inertia tensor
+    // Inertia tensor
     DirectX::XMMATRIX I(Ii.x, 0, 0, 0,
                         0, Ii.y, 0, 0,
                         0, 0, Ii.z, 0,
@@ -1358,16 +1365,16 @@ DirectX::XMMATRIX King::Box::MomentsOfInertiaRotated(const DirectX::XMMATRIX& Ii
 *    Method:    IdentifyCorners
 *       Returns the list with corner identifiers.
 ******************************************************************************/
-vector<pair<FloatPoint3, enum King::Box::CornerDescription>> King::Box::IdentifyCorners(const vector<FloatPoint3>& pointsIn, const Quaternion* quaternionIn) const
+vector<pair<float3, enum King::Box::CornerDescription>> King::Box::IdentifyCorners(const vector<float3>& pointsIn, const Quaternion* quaternionIn) const
 {
-    vector<pair<FloatPoint3, CornerDescription>> vectorCorners;
+    vector<pair<float3, CornerDescription>> vectorCorners;
     vectorCorners.reserve(8);
 
     auto myCorners = GetCorners8(quaternionIn);
 
     for (const auto& pt : pointsIn)
     {
-        pair<FloatPoint3, CornerDescription> ptWithDescriptor;
+        pair<float3, CornerDescription> ptWithDescriptor;
         ptWithDescriptor.first = pt;
 
         // default description
@@ -1394,8 +1401,9 @@ vector<pair<FloatPoint3, enum King::Box::CornerDescription>> King::Box::Identify
 *   |  ptIn|
 *   |------|
 ******************************************************************************/
-bool __vectorcall King::Box::Contains(const FloatPoint3 ptIn) const
+bool __vectorcall King::Box::Contains(const float3 ptIn) const
 {
+    // convert to local coordinate system and check against extents
     return DirectX::XMVector3InBounds(ptIn - GetCenter(), GetExtents());
 }
 /******************************************************************************
@@ -1406,7 +1414,7 @@ bool __vectorcall King::Box::Contains(const FloatPoint3 ptIn) const
 *   |  ptIn|
 *   |------|
 ******************************************************************************/
-void King::Box::Constrain(FloatPoint3* ptOut) const
+void King::Box::Constrain(float3* ptOut) const
 {
     if (!DirectX::XMVector3InBounds(*ptOut - GetCenter(), GetExtents()))
     {
@@ -1444,29 +1452,29 @@ bool King::Box::Contains(const Box & boxIn) const
 /******************************************************************************
 *    Method:    SetAABBfromThisTransformedBox
 *       Sets the extents outward for an axis aligned box (AAB) that encloses
-*       the original AAB that was rotated, scaled, and translated to be
+*       the original AABB that was rotated, scaled, and translated to be
 *       a orientated bounding box (OBB)
 ******************************************************************************/
 void King::Box::SetAABBfromThisTransformedBox(FXMMATRIX M)
 {
     auto corners = GetCorners8Transformed(M); // need to free this when done
 
-    FloatPoint3 min, max, corner;
-    min = max = corner = FloatPoint3(corners[0]);
+    float3 minC, maxC, corner;
+    minC = maxC = corner = float3(corners[0]);
 
     for (size_t i = 1; i < 8; ++i)
     {
-        min = Min(min, corners[i]);
-        max = Max(max, corners[i]);
+        minC = Min(minC, float3(corners[i]));
+        maxC = Max(maxC, float3(corners[i]));
     }
-    Set(min, max);
+    Set(minC, maxC);
 
     delete[] corners;
 }
 /******************************************************************************
 *    Method:    SetAABBfromBoundingSphere
 *       Sets the extents outward for an axis aligned box (AAB) that encloses
-*       the original AAB roated to any rotation based on the bounding sphere
+*       the original AABB roated to any rotation based on the bounding sphere
 ******************************************************************************/
 void __vectorcall King::Box::SetAABBfromBoundingSphere(Sphere s)
 {
@@ -1474,75 +1482,139 @@ void __vectorcall King::Box::SetAABBfromBoundingSphere(Sphere s)
 }
 /******************************************************************************
 *    Method:    GetCorners8Transformed
+*       Usage: Transform the box corners (in world space) by another matrix
 ******************************************************************************/
-//std::vector<King::FloatPoint3> 
+//std::vector<King::float3> 
 DirectX::XMFLOAT4* King::Box::GetCorners8Transformed(const DirectX::FXMMATRIX &M)
 {
-    DirectX::XMFLOAT3* pArray = new DirectX::XMFLOAT3[8];
     DirectX::XMFLOAT4* pArrayOut = new DirectX::XMFLOAT4[8];
+    assert(pArrayOut);
 
-    GetCorners8(pArray);
+    if (!GetExtents())
+    {
+        // invalid as infinite if really large
+        SetExtents(0.5f);
+    }
+
+    DirectX::XMFLOAT3* pArray = new DirectX::XMFLOAT3[8];
+    assert(pArray);
+
+
+    GetCorners8ObjectSpace(pArray);
+    const float3 a = pArray[0];
+    assert(a);
+
     DirectX::XMVector3TransformStream(pArrayOut, sizeof(XMFLOAT4), pArray, sizeof(XMFLOAT3), 8, M);
-    delete[] pArray;
 
-    //std::vector<King::FloatPoint3> rtn;
-    //rtn.reserve(8); // performance increase by allocating once
-    //for (int i = 0; i < 8; ++i)    
-    //    rtn.push_back(FloatPoint3(pArrayOut[i]));
-    
+    const float4 ao = pArrayOut[0];
+    assert(ao);
+
+
+    delete[] pArray;
     return pArrayOut; // remember to delete[] this array when done
+}
+/******************************************************************************
+*    Method:    GetCorners8ObjectSpace
+******************************************************************************/
+std::vector<King::float3> King::Box::GetCorners8ObjectSpace(const Quaternion* quaternionIn) 
+{
+    DirectX::XMFLOAT3 pArrayInOut[8];
+    GetCorners8ObjectSpace(pArrayInOut, quaternionIn);
+
+    std::vector<float3> rtn;
+    for (int i = 0; i < 8; ++i)    rtn.push_back(float3(pArrayInOut[i]));
+
+    return rtn;
 }
 /******************************************************************************
 *    Method:    GetCorners8
 ******************************************************************************/
-std::vector<King::FloatPoint3> King::Box::GetCorners8(const Quaternion * quaternionIn) const
+std::vector<King::float3> King::Box::GetCorners8(const Quaternion * quaternionIn) const
 {
     DirectX::XMFLOAT3 pArrayInOut[8];
     GetCorners8(pArrayInOut, quaternionIn);
 
-    std::vector<FloatPoint3> rtn;
-    for (int i = 0; i < 8; ++i)    rtn.push_back(FloatPoint3(pArrayInOut[i]));
+    std::vector<float3> rtn;
+    for (int i = 0; i < 8; ++i)    rtn.push_back(float3(pArrayInOut[i]));
 
     return rtn;
 }
 /******************************************************************************
 *    Method:    GetCornersTop4
 ******************************************************************************/
-std::vector<King::FloatPoint3> King::Box::GetCornersTop4(const Quaternion * quaternionIn) const // scaled, rotated and translated
+std::vector<King::float3> King::Box::GetCornersTop4(const Quaternion * quaternionIn) const // scaled, rotated and translated
 {
     DirectX::XMFLOAT3 pArrayInOut[4];
     GetCornersTop4(pArrayInOut, quaternionIn);
 
-    std::vector<King::FloatPoint3> rtn;
-    for (int i = 0; i < 4; ++i)    rtn.push_back(King::FloatPoint3(pArrayInOut[i]));
+    std::vector<King::float3> rtn;
+    for (int i = 0; i < 4; ++i)    rtn.push_back(King::float3(pArrayInOut[i]));
 
     return rtn;
 }
 /******************************************************************************
 *    Method:    GetCornersBottom4
 ******************************************************************************/
-std::vector<King::FloatPoint3> King::Box::GetCornersBottom4(const Quaternion * quaternionIn) const // scaled, rotated and translated
+std::vector<King::float3> King::Box::GetCornersBottom4(const Quaternion * quaternionIn) const // scaled, rotated and translated
 {
     DirectX::XMFLOAT3 pArrayInOut[4];
     GetCornersBottom4(pArrayInOut, quaternionIn);
 
-    std::vector<King::FloatPoint3> rtn;
-    for (int i = 0; i < 4; ++i)    rtn.push_back(King::FloatPoint3(pArrayInOut[i]));
+    std::vector<King::float3> rtn;
+    for (int i = 0; i < 4; ++i)    rtn.push_back(King::float3(pArrayInOut[i]));
 
     return rtn;
 }
 /******************************************************************************
 *    Method:    GetCornersLowest4
 ******************************************************************************/
-std::vector<King::FloatPoint3> King::Box::GetCornersLowest4(const Quaternion * quaternionIn) const // scaled, rotated and translated
+std::vector<King::float3> King::Box::GetCornersLowest4(const Quaternion * quaternionIn) const // scaled, rotated and translated
 {
     DirectX::XMFLOAT3 pArrayInOut[4];
     GetCornersLowest4(pArrayInOut, quaternionIn);
 
-    std::vector<King::FloatPoint3> rtn;
-    for (int i = 0; i < 4; ++i)    rtn.push_back(King::FloatPoint3(pArrayInOut[i]));
+    std::vector<King::float3> rtn;
+    for (int i = 0; i < 4; ++i)    rtn.push_back(King::float3(pArrayInOut[i]));
 
     return rtn;
+}
+/******************************************************************************
+*    Method:    GetCorners8ObectSpace
+******************************************************************************/
+void King::Box::GetCorners8ObjectSpace(DirectX::XMFLOAT3* pArrayInOut, const Quaternion* quaternionIn) 
+{
+    assert(pArrayInOut != nullptr);
+
+    King::float3 corn;
+
+    // Ensure the box is not infinite or otherwise too large to handle (leave room more math operators to use extents)
+    auto e = GetExtents();
+    const auto Extents_Max = FLT_MAX / 10000.f;
+    bool f(false);
+    if (e.GetX() > Extents_Max) { e.SetX(Extents_Max); f = true; }
+    if (e.GetY() > Extents_Max) { e.SetY(Extents_Max); f = true; }
+    if (e.GetZ() > Extents_Max) { e.SetZ(Extents_Max); f = true; }
+    if (f) SetExtents(e);
+
+    if (quaternionIn == nullptr)
+    {
+        for (size_t i = 0; i < 8; ++i)
+        {
+            corn = King::float3(DirectX::XMVectorMultiply(g_boxCorners[i], e)); // scale
+            assert((bool)corn);
+            pArrayInOut[i] = corn;
+        }
+    }
+    else
+    {
+        for (size_t i = 0; i < 8; ++i)
+        {
+            corn = DirectX::XMVectorMultiply(g_boxCorners[i], e); // scale to extents
+            corn = DirectX::XMVector3Rotate(corn, *quaternionIn); // rotate
+            assert((bool)corn);
+            pArrayInOut[i] = corn;
+        }
+    }
 }
 /******************************************************************************
 *    Method:    GetCorners8
@@ -1551,7 +1623,7 @@ void King::Box::GetCorners8(DirectX::XMFLOAT3 *pArrayInOut, const Quaternion * q
 {
     assert(pArrayInOut != nullptr);
 
-    King::FloatPoint3 corn;
+    King::float3 corn;
 
     auto c = GetCenter();
     auto e = pt_max - c;
@@ -1559,7 +1631,7 @@ void King::Box::GetCorners8(DirectX::XMFLOAT3 *pArrayInOut, const Quaternion * q
     if (quaternionIn == nullptr)
     {
         for (size_t i = 0; i < 8; ++i)
-            pArrayInOut[i] = King::FloatPoint3(XMVectorMultiplyAdd(g_boxCorners[i], e, c)); // scale and translate
+            pArrayInOut[i] = King::float3(DirectX::XMVectorMultiplyAdd(g_boxCorners[i], e, c)); // scale and translate
     }
     else
     {
@@ -1579,15 +1651,15 @@ void King::Box::GetCornersBottom4(DirectX::XMFLOAT3 *pArrayInOut, const Quaterni
 {
     assert(pArrayInOut != nullptr);
 
-    King::FloatPoint3 corn;
+    King::float3 corn;
 
-    King::FloatPoint3 c = GetCenter();
-    King::FloatPoint3 e = pt_max - c;
+    King::float3 c = GetCenter();
+    King::float3 e = pt_max - c;
 
     if (quaternionIn == nullptr)
     {
         for (size_t i = 0; i < 4; ++i)
-            pArrayInOut[i] = FloatPoint3(XMVectorMultiplyAdd(g_boxCorners[i], e, c)); // scale and translate
+            pArrayInOut[i] = float3(DirectX::XMVectorMultiplyAdd(g_boxCorners[i], e, c)); // scale and translate
         return;
     }
     else
@@ -1608,15 +1680,15 @@ void King::Box::GetCornersTop4(DirectX::XMFLOAT3 *pArrayInOut, const Quaternion 
 {
     assert(pArrayInOut != nullptr);
 
-    King::FloatPoint3 corn;
+    King::float3 corn;
 
-    King::FloatPoint3 c = GetCenter();
-    King::FloatPoint3 e = pt_max - c;
+    King::float3 c = GetCenter();
+    King::float3 e = pt_max - c;
 
     if (quaternionIn == nullptr)
     {
         for (size_t i = 0; i < 4; ++i)
-            pArrayInOut[i] = FloatPoint3(XMVectorMultiplyAdd(g_boxCorners[i+4], e, c)); // scale and translate
+            pArrayInOut[i] = float3(DirectX::XMVectorMultiplyAdd(g_boxCorners[i+4], e, c)); // scale and translate
         return;
     }
     else
@@ -1687,7 +1759,6 @@ void King::Box::GetCornersLowest4(DirectX::XMFLOAT3 * pArrayOut, const Quaternio
  ******************************************************************************/
 King::ModelScaffold& King::ModelScaffold::operator= (const King::Line& lineIn)
 {
-    _modelName = "Line";
     // position is added as default
     // uses the vertx format already set in class
     const auto& bs = _vertexFormat.GetByteSize();
@@ -1737,7 +1808,6 @@ King::ModelScaffold& King::ModelScaffold::operator= (const King::Line& lineIn)
 * ******************************************************************************/
 King::ModelScaffold & King::ModelScaffold::operator= (const King::Box& boxIn)
 {
-    _modelName = "Box";
     // position is added as default
     //_vertexFormat.SetNext(VertexAttrib::enumDesc::position, VertexAttrib::enumFormat::format_float32x3);
     //_vertexBufferMaster.SetStride(_vertexFormat.GetByteSize());
@@ -1784,7 +1854,6 @@ King::ModelScaffold & King::ModelScaffold::operator= (const King::Box& boxIn)
 * ******************************************************************************/
 King::LineModel& King::LineModel::operator= (const King::Box& boxIn)
 {
-    _modelName = "Box";
     // position is added as default
     _vertexFormat.SetNext(VertexAttrib::enumDesc::position, VertexAttrib::enumFormat::format_float32x3);
     _vertexFormat.SetNext(VertexAttrib::enumDesc::color, VertexAttrib::enumFormat::format_float32x4);
@@ -1909,8 +1978,6 @@ int King::LineModel::CreateMeshFrom(const King::Line& lineIn, float4 colorIn)
 ******************************************************************************/
 int King::Model::CreateMeshFrom(const Triangle& tri)
 {
-    _modelName = "Triangle";
-
     vector<float3>      positions(3);
     vector<uint32_t>    indicies(3);
     vector<float3>      normals(3);
@@ -1933,8 +2000,6 @@ int King::Model::CreateMeshFrom(const Triangle& tri)
 ******************************************************************************/
 int King::Model::CreateMeshFrom(const Quad& q)
 {
-    _modelName = "Quad";
-
     vector<float3>      positions(4);
     vector<uint32_t>    indicies(6);
     vector<float3>      normals(4);
@@ -1963,8 +2028,6 @@ int King::Model::CreateMeshFrom(const Quad& q)
 ******************************************************************************/
 int King::Model::CreateMeshForGridXZ(const uint32_t numWidth, const uint32_t numHeight, const float2 cellSize)
 {
-    _modelName = "GridXZ";
-
     const auto numVerticies = (numWidth + 1) * (numHeight + 1);
     const auto numIndicies = numWidth * numHeight * 6;
 
@@ -2079,7 +2142,7 @@ std::vector<King::float2> King::Model::HelperCreateTextureCoordinatesForTriOrQua
         textureCoord.SetY(-textureCoord.GetY());
         textureCoord += 0.5f;
 
-        textureCoord = float2::Absolute(textureCoord);
+        textureCoord = Abs(textureCoord);
 
         if (textureCoord.GetX() < 1.e-7)
             textureCoord.SetX(0.f);
@@ -2120,8 +2183,8 @@ void King::Model::HelperCreateTextureCoordinatesForSphere()
         int index = &pt - &pts[0];
         
         uv = uV = float3(pt) - c;
-        uV.MakeNormalize();
-        uV.MakeAbsolute();
+        uV.Normalize();
+        //uV.Absolute();
         auto t = max(uV.GetX(), uV.GetY());
         t = max(uV.GetZ(), t);
 
@@ -2302,8 +2365,6 @@ int King::Model::HelperCreateMeshFrom(const vector<float3>& positionsIn, const v
 ******************************************************************************/
 int King::Model::CreateMeshFrom(const King::Box& boxIn)
 {
-    _modelName = "Box";
-
     // Model() does not get called if Model m = Box(); since Box is not a model and the reference moves the model
     // but, if you Model m(Box()); it will be called first
     if (!_materials.count("default"))
@@ -2400,8 +2461,6 @@ int King::Model::CreateMeshFrom(const King::Box& boxIn)
 ******************************************************************************/
 int King::Model::CreateMeshFrom(const King::Sphere& sphereIn, const uint32_t segmentsIn)
 {
-    _modelName = "Sphere";
-
     if (!_materials.count("default"))
         AddMaterial(Material::Create("default"));
     if (!_vertexFormat.Has(VertexAttrib::enumDesc::position))
@@ -2511,6 +2570,13 @@ inline King::Model & King::Model::operator= (const King::Model &in)
         m->SetVB(_vertexBufferMaster.GetData());
         m->SetIB(_indexBufferMaster.GetData());
     }
+
+    if (in._boneHierarchy) 
+    { 
+        _boneHierarchy = std::make_unique<BoneHierarchy>(); 
+        *_boneHierarchy = *in._boneHierarchy; 
+    }
+
     return *this;
 }
 /******************************************************************************
@@ -2553,7 +2619,7 @@ bool King::Model::Load(std::string fileNameIN)
                     return false;
                 }
 
-                uint32_t maxVersion = 1;
+                uint32_t maxVersion = 2;
                 if (version > maxVersion)
                 {
                     cout << "Version " << version << " of .KNG file format is not supported. Max is version " << maxVersion << "\n";
@@ -2564,6 +2630,7 @@ bool King::Model::Load(std::string fileNameIN)
                 {
                     auto model = Model::Create();
                     if (version == 1) model->Read_v1(infile);
+                    else if (version == 2) model->Read_v2(infile);
 
                     models.push_back(model);
                 }
@@ -2630,7 +2697,7 @@ bool King::Model::Save(std::string fileNameIN)
         if (outfile.is_open())
         {
             uint32_t magic = 1971001974; // file type identifier
-            uint32_t version = 1;
+            uint32_t version = 2;
             uint32_t numModels = 1;
 
             outfile.write(reinterpret_cast<char*>(&magic), sizeof(magic));
@@ -2640,6 +2707,7 @@ bool King::Model::Save(std::string fileNameIN)
             for (uint32_t i = 0; i < numModels; ++i)
             {
                 if (version == 1) Write_v1(outfile);
+                else if (version == 2) Write_v2(outfile);
             }
 
             if (outfile.fail()) return false;
@@ -2737,9 +2805,9 @@ bool King::Model::Read_v1(ifstream& dataFileIn)
 
     if (dataFileIn.fail() || !good)
     {
-        assert(0);
         return false;
     }
+
     return true;
 }
 /******************************************************************************
@@ -2767,18 +2835,147 @@ bool King::Model::Write_v1(ofstream& outfileIn)
 
     for (const auto &mtl : _materials)
     {
-        // map
         WriteString(mtl.first);
         mtl.second->Write_v1(outfileIn);
     }
 
     for (const auto &mesh : _meshes)
     {
-        // vector
         mesh->Write_v1(outfileIn);
     }
 
     if (outfileIn.fail()) return false;
+
+    return true;
+}
+/******************************************************************************
+*    Method:    Read_v2
+*       Read from an open binary file
+******************************************************************************/
+bool King::Model::Read_v2(ifstream& dataFileIn)
+{
+    if (!dataFileIn.is_open())
+    {
+        return false;
+    }
+    // lambda
+    auto ReadString = [&dataFileIn](string& strOut)
+    {
+        size_t len;
+        dataFileIn.read(reinterpret_cast<char*>(&len), sizeof(len));
+        char* temp = new char[len + 1];
+        dataFileIn.read(temp, len);
+        temp[len] = '\0';
+        strOut = temp;
+        delete[] temp;
+    };
+    // read contents
+    uint32_t numMaterials;
+    dataFileIn.read(reinterpret_cast<char*>(&numMaterials), sizeof(numMaterials));
+
+    uint32_t numMeshes;
+    dataFileIn.read(reinterpret_cast<char*>(&numMeshes), sizeof(numMeshes));
+
+    bool readRtn = ModelScaffold::Read_v1(dataFileIn);
+    if (dataFileIn.fail() || !readRtn)
+    {
+        assert(0);
+        return false;
+    }
+
+    bool good = true;
+    string key;
+
+    while (dataFileIn && good && numMaterials)
+    {
+        auto mtl = Material::Create();
+
+        ReadString(key);
+        good = mtl->Read_v1(dataFileIn);
+
+        // store
+        _materials[key] = mtl;
+
+        --numMaterials;
+    }
+    if (dataFileIn.fail() || !good)
+    {
+        assert(0);
+        return false;
+    }
+
+    while (dataFileIn && good && numMeshes)
+    {
+        auto mesh = TriangleMesh::Create();
+
+        good = mesh->Read_v1(dataFileIn);
+
+        // set reference data
+        mesh->SetVertexFormat(GetVertexFormat());
+        mesh->SetVB(GetVertexBufferMaster().GetData());
+        mesh->SetIB(GetIndexBufferMaster().GetData());
+        // store
+        _meshes.push_back(mesh);
+
+        --numMeshes;
+    }
+
+    if (dataFileIn.fail() || !good)
+    {
+        return false;
+    }
+
+    // optional bone hierarchy data
+    {
+        _boneHierarchy = BoneHierarchy::CreateUnique();
+        good = _boneHierarchy->Read_v1(dataFileIn);
+
+        if (dataFileIn.fail() || !good)
+            _boneHierarchy.reset();
+    }
+
+    return true;
+}
+/******************************************************************************
+*    Method:    Write_v2
+*       Write to an open binary file
+*       Version 2: includes optional bone hierarchy data
+******************************************************************************/
+bool King::Model::Write_v2(ofstream& outfileIn)
+{
+    if (!outfileIn.is_open()) return false;
+    // lambda
+    auto WriteString = [&outfileIn](const string& str)
+    {
+        size_t len = str.size();
+        outfileIn.write(reinterpret_cast<const char*>(&len), sizeof(len));
+        outfileIn.write(str.c_str(), len);
+    };
+    // write contents
+    uint32_t numMaterials = (uint32_t)_materials.size();
+    outfileIn.write(reinterpret_cast<const char*>(&numMaterials), sizeof(numMaterials));
+
+    uint32_t numMeshes = (uint32_t)_meshes.size();
+    outfileIn.write(reinterpret_cast<const char*>(&numMeshes), sizeof(numMeshes));
+
+    ModelScaffold::Write_v1(outfileIn);
+
+    for (const auto& mtl : _materials)
+    {
+        WriteString(mtl.first);
+        mtl.second->Write_v1(outfileIn);
+    }
+
+    for (const auto& mesh : _meshes)
+    {
+        mesh->Write_v1(outfileIn);
+    }
+
+    if (_boneHierarchy)
+        if (!_boneHierarchy->Write_v1(outfileIn)) return false;
+
+    if (outfileIn.fail()) return false;
+
     return true;
 }
 /******************************************************************************
@@ -4217,9 +4414,6 @@ int King::Model::CreateMeshFrom(const Path& p)
     assert(p.size() > 2);
     auto numPathVerts = p.size();
 
-    if (_modelName == "")
-        _modelName = "ClosedPath";
-
     vector<float3> verticies;
     vector<uint32_t> indicies;
     vector<float2> uvs;
@@ -4268,7 +4462,7 @@ int King::Model::CreateMeshFrom(const Path& p)
     */
     // if p[0] is too far left of both points, the tri is inverted, we would need to reverse the winding order
     {
-        if (p[numPathVerts - 1].Get_position().GetY() > p[0].Get_position().GetY())
+        if (p[numPathVerts - 1].GetY() > p[0].GetY())
         {
             verticies.push_back(p[numPathVerts - 1]);
             verticies.push_back(p[0]);
@@ -4287,7 +4481,7 @@ int King::Model::CreateMeshFrom(const Path& p)
             //{ x:  -1002.52 y : 206.8 z : 0 }
             //{ x:  -661.723 y : 1007.02 z : 0 }
             // p[last].y < p[first].y !!!
-            if (p[numPathVerts - 2].Get_position().GetY() < p[numPathVerts - 1].Get_position().GetY())
+            if (p[numPathVerts - 2].GetY() < p[numPathVerts - 1].GetY())
             {
                 // p[numPathVerts - 2] has the smallest y
                 verticies.push_back(p[0]);
@@ -4465,9 +4659,6 @@ int King::Model::CreateMeshFrom(const Path& p)
 int King::Model::CreateMeshFrom(const Path& p, Distance d)
 {
     assert(p.size() > 2);
-
-    if (_modelName == "")
-        _modelName = "PathDistance";
 
     // Form a series of quad meshes joined by one common edge between pairs.
     const auto& numPathVerts = p.size();
@@ -4668,9 +4859,6 @@ int King::Model::CreateMeshFrom(const Path& p, Distance d)
 
 int King::Model::CreateMeshFromExp(const Path& path, Distance d)
 {
-    if (_modelName == "")
-        _modelName = "CreateMeshFromPathToPath";
-
     vector<float3> positions;
     vector<uint32_t> indicies;
     // these are optional, HelperCreateMeshFrom will create them
@@ -4829,9 +5017,6 @@ int King::Model::CreateMeshFromExp(const Path& path, Distance d)
 int King::Model::CreateMeshFrom(const Path& pFrom, const Path& pTo)
 {
     assert(pFrom.size() > 1 && pTo.size() > 1);
-
-    if (_modelName == "")
-        _modelName = "CreateMeshFromPathToPath";
 
     auto numPathVerts = min(pFrom.size(), pTo.size());
     vector<float3> verts;
@@ -5198,8 +5383,7 @@ Box King::LineMesh::CalculateBoundingBox()
 
     if (_vb && _vertexFormat.Has(VertexAttrib::enumDesc::position))
     {
-        rtn.Setpt_min(GetVertexPosition(0));
-        rtn.Setpt_max(GetVertexPosition(0));
+        rtn.Set(GetVertexPosition(0), GetVertexPosition(0));
 
         const auto to = GetNumIndicies();
         for (uint32_t i = 1; i < to; ++i)
@@ -5241,7 +5425,7 @@ Box King::TriangleMesh::CalculateBoundingBox()
     const auto to = GetNumVerticies();
     for (uint32_t i = 1; i < to; ++i)
     {
-        pos = FloatPoint3(reinterpret_cast<float*>(vb + *(ib + i) * bs + offset));
+        pos = float3(reinterpret_cast<float*>(vb + *(ib + i) * bs + offset));
         rtn.Merge(pos);
     }
 
@@ -5576,14 +5760,14 @@ void King::Frustum::ConstructPerspectiveFrustum(float HTan, float VTan, float Ne
     const float FarY = VTan * FarClip;
 
     // Define the frustum corners
-    _FrustumCorners[lbf] = FloatPoint3(-NearX, -NearY, -NearClip);    // Near lower left
-    _FrustumCorners[ltf] = FloatPoint3(-NearX, NearY, -NearClip);    // Near upper left
-    _FrustumCorners[rbf] = FloatPoint3(NearX, -NearY, -NearClip);    // Near lower right
-    _FrustumCorners[rtf] = FloatPoint3(NearX, NearY, -NearClip);    // Near upper right
-    _FrustumCorners[lbb] = FloatPoint3(-FarX, -FarY, -FarClip);    // Far lower left
-    _FrustumCorners[ltb] = FloatPoint3(-FarX, FarY, -FarClip);    // Far upper left
-    _FrustumCorners[rbb] = FloatPoint3(FarX, -FarY, -FarClip);    // Far lower right
-    _FrustumCorners[rtb] = FloatPoint3(FarX, FarY, -FarClip);    // Far upper right
+    _FrustumCorners[lbf] = float3(-NearX, -NearY, -NearClip);    // Near lower left
+    _FrustumCorners[ltf] = float3(-NearX, NearY, -NearClip);    // Near upper left
+    _FrustumCorners[rbf] = float3(NearX, -NearY, -NearClip);    // Near lower right
+    _FrustumCorners[rtf] = float3(NearX, NearY, -NearClip);    // Near upper right
+    _FrustumCorners[lbb] = float3(-FarX, -FarY, -FarClip);    // Far lower left
+    _FrustumCorners[ltb] = float3(-FarX, FarY, -FarClip);    // Far upper left
+    _FrustumCorners[rbb] = float3(FarX, -FarY, -FarClip);    // Far lower right
+    _FrustumCorners[rtb] = float3(FarX, FarY, -FarClip);    // Far upper right
 
     const float NHx = 1.f / sqrtf(1.0f + HTan * HTan);
     const float NHz = -NHx * HTan;
@@ -5602,14 +5786,14 @@ void King::Frustum::ConstructPerspectiveFrustum(float HTan, float VTan, float Ne
 void King::Frustum::ConstructOrthographicFrustum(float Left, float Right, float Top, float Bottom, float Front, float Back)
 {
     // Define the frustum corners
-    _FrustumCorners[lbf] = FloatPoint3(Left, Bottom, -Front);    // Near lower left
-    _FrustumCorners[ltf] = FloatPoint3(Left, Top, -Front);    // Near upper left
-    _FrustumCorners[rbf] = FloatPoint3(Right, Bottom, -Front);    // Near lower right
-    _FrustumCorners[rtf] = FloatPoint3(Right, Top, -Front);    // Near upper right
-    _FrustumCorners[lbb] = FloatPoint3(Left, Bottom, -Back);    // Far lower left
-    _FrustumCorners[ltb] = FloatPoint3(Left, Top, -Back);    // Far upper left
-    _FrustumCorners[rbb] = FloatPoint3(Right, Bottom, -Back);    // Far lower right
-    _FrustumCorners[rtb] = FloatPoint3(Right, Top, -Back);    // Far upper right
+    _FrustumCorners[lbf] = float3(Left, Bottom, -Front);    // Near lower left
+    _FrustumCorners[ltf] = float3(Left, Top, -Front);    // Near upper left
+    _FrustumCorners[rbf] = float3(Right, Bottom, -Front);    // Near lower right
+    _FrustumCorners[rtf] = float3(Right, Top, -Front);    // Near upper right
+    _FrustumCorners[lbb] = float3(Left, Bottom, -Back);    // Far lower left
+    _FrustumCorners[ltb] = float3(Left, Top, -Back);    // Far upper left
+    _FrustumCorners[rbb] = float3(Right, Bottom, -Back);    // Far lower right
+    _FrustumCorners[rtb] = float3(Right, Top, -Back);    // Far upper right
 
     // Define the bounding planes
     _FrustumPlanes[kNearPlane] = Plane(0.0f, 0.0f, -1.0f, -Front);
@@ -5695,6 +5879,67 @@ King::Frustum::Frustum(const DirectX::XMMATRIX &projectionMatrixIn)
 *        
 *        Code below allows for CPU processing and variable number of influences
 ******************************************************************************/
+std::vector<float3> King::Model::CalculateVertexSkinPositions(size_t meshIndex)
+{
+    assert(meshIndex > _meshes.size() - 1);
+    auto& m = _meshes[meshIndex];
+
+    std::vector<float3> skinPositions;
+    float4 pos; // position of skinned vertex, w = 1.0f
+    uint8_t n; // number of bones influencing the vertex
+    uint8_t bi; // absolute bone index
+    DirectX::XMMATRIX boneToParentTrans; // bind pose transform of the bone
+    DirectX::XMMATRIX M; // transform of the bone
+    float w; // weight of the bone influence
+
+    // identify vertex positions
+    const auto vb = m->GetVB();
+    assert(vb != nullptr);
+    const auto ib = m->GetIB();
+    const auto& ibStart = m->GetIBStart();
+    const auto& vFormat = m->GetVertexFormat();
+    const auto& stride = vFormat.GetByteSize();
+    const auto& attrP = vFormat.GetAttributeIndexFromDescription(VertexAttrib::enumDesc::position);
+    const auto& offset = vFormat.GetAttribute(attrP).GetOffset();
+    // byte pointer to start of vertex data
+    auto GetVertexAddr = [&](const uint32_t indexIn) { return vb + ((size_t) * (ib + ibStart + indexIn) * stride); };
+
+    // copy vertex positions
+    const auto numVerticies = m->GetNumVerticies();
+    for (uint32_t i = 0; i < numVerticies; ++i)
+    {
+        skinPositions.push_back(float3(reinterpret_cast<float*>(GetVertexAddr(i) + offset)));
+    }
+    // transform vertex positions
+    size_t boneIndexOffset = 0; // into skin.boneIndex[]
+    for (uint32_t i = 0; i < numVerticies; ++i)
+    {
+        pos = float4(skinPositions[i], 1.0f);
+        float3 posSkinned;
+        n = _boneHierarchy->_boneInfluenceCount[i]; // number of bones influencing this vertex
+
+        // apply bone influences
+        for (uint8_t b = 0; b < n; ++b)
+        {
+            bi = _boneHierarchy->_boneIndex[boneIndexOffset + b]; // bone that influences this vertex
+            w = _boneHierarchy->_boneWeight[boneIndexOffset + b]; // weight of this influence
+            M = DirectX::XMLoadFloat4x4(&_boneHierarchy->_skeleton._bones[bi]._transform); // transform of bone (rotation, scale)
+            boneToParentTrans = DirectX::XMLoadFloat4x4(&_boneHierarchy->_skeleton._toParentTransform[bi]); // heiarchy
+
+            //auto detBi = DirectX::XMMatrixDeterminant(boneToParentTrans);
+            auto BiInverse = DirectX::XMMatrixInverse(nullptr, boneToParentTrans);
+
+            auto r1 = DirectX::XMVector4Transform(pos.GetVecConst(), M); // bone orientation
+            auto r2 = DirectX::XMVector4Transform(r1, BiInverse); // relative to parent
+
+            posSkinned += w * float3(r2);
+        }
+        skinPositions[i] = posSkinned;
+        boneIndexOffset += n;
+    }
+
+    return skinPositions; // compiler should involk std::move() optimization
+}
 std::vector<float3> King::SkinnedModel::CalculateVertexSkinPositions(size_t meshIndex)
 {
     assert(meshIndex > _meshes.size() - 1);
@@ -5880,7 +6125,7 @@ Pose King::Pose::Interpolate(const Pose &in, const float fractionIn) const
     Pose rtn;
     rtn._rotation = DirectX::XMQuaternionSlerp(_rotation, in._rotation, fractionIn);
     rtn._scale = DirectX::XMVectorLerp(_scale, in._scale, fractionIn);
-    rtn._translation = DirectX::XMVectorLerp(_translation, in._translation, fractionIn);
+    rtn._translation = DirectX::XMVectorLerp(_translation.GetVecConst(), in._translation.GetVecConst(), fractionIn);
     return rtn;
 }
 
@@ -6034,12 +6279,12 @@ void King::ModelScaffold::SetDataAttribute(vector<vector<float>>& dataIn, Vertex
 }
 
 
-inline King::Plane::Plane(const Position origin, const FloatPoint3 normalToPlane) 
+inline King::Plane::Plane(const Position origin, const float3 normalToPlane) 
 { 
     v = DirectX::XMPlaneFromPointNormal(static_cast<DirectX::XMVECTOR>(origin), DirectX::XMPlaneNormalizeEst(normalToPlane)); 
-    float3 w = XMVector3Dot((float3)origin, normalToPlane);
+    float3 w = DirectX::XMVector3Dot((float3)origin, normalToPlane);
     w = -w;
-    v = XMVectorSelect(w, normalToPlane, g_XMSelect1110.v);
+    v = DirectX::XMVectorSelect(w, normalToPlane, g_XMSelect1110.v);
 }
 
 King::Plane::Plane(const Position& point1, const Position& point2, const Position& point3)
@@ -6054,7 +6299,7 @@ King::Plane::Plane(const Position& point1, const Position& point2, const Positio
     float3 d = Dot(n, (float3)point1);
     d = -d;
 
-    v = XMVectorSelect(d, n, g_XMSelect1110.v);
+    v = DirectX::XMVectorSelect(d, n, g_XMSelect1110.v);
 }
 
 // double dispatch
@@ -6157,7 +6402,7 @@ bool King::Plane::Intersects(const Line& lineIn, float3* ptOut) const
     // between the segment and the plane.
     if (s >= 0.f && s <= 1.f)
     {
-        *ptOut = s * u + P0;
+        *ptOut = u * s + P0;
         return true;
     }
     else
@@ -6190,7 +6435,7 @@ inline bool __vectorcall King::Plane::Intersects(const Line& lineIn, Point* ptOu
     // between the segment and the plane.
     if (s >= 0.f && s <= 1.f)
     {
-        *ptOut = s * u + P0;
+        *ptOut = u * s + P0;
         return true;
     }
     else
@@ -6221,7 +6466,7 @@ inline bool __vectorcall King::Plane::Intersects(const Ray& rayIn, Point* ptOut)
     // For a positive ray, there is an intersection with the plane when s >= 0.
     if (s >= 0.f)
     {
-        *ptOut = s * u + P0;
+        *ptOut = u * s + P0;
         return true;
     }
     else
@@ -6232,15 +6477,15 @@ inline bool __vectorcall King::Plane::Intersects(const Sphere & sphereIn) const
 {
     float4 center(sphereIn.GetCenter(), 1.0f);
     float4 radius(sphereIn.GetRadius());
-    float4 dist(XMVector4Dot(center, v));
+    float4 dist(DirectX::XMVector4Dot(center, v));
 
-    float4 greater( XMVectorGreater(dist, radius) );
-    float4 less( XMVectorLess(dist, -radius) );
+    float4 greater(DirectX::XMVectorGreater(dist, radius) );
+    float4 less(DirectX::XMVectorLess(dist, -radius) );
     // in front of plane
-    if (XMVector4EqualInt(greater, XMVectorTrueInt()))
+    if (DirectX::XMVector4EqualInt(greater, DirectX::XMVectorTrueInt()))
         return false;
     // in back of plane
-    if (XMVector4EqualInt(less, XMVectorTrueInt()))
+    if (DirectX::XMVector4EqualInt(less, DirectX::XMVectorTrueInt()))
         return false;
     // intersecting plane
     return true;
@@ -6250,29 +6495,29 @@ inline bool __vectorcall King::Plane::Intersects(const Triangle& triangleIn) con
 {
     // FastIntersectTrianglePlane from DirectXCollision.inl
     // Plane0
-    XMVECTOR Dist0 = XMVector4Dot(triangleIn.GetVertex(0), v);
-    XMVECTOR Dist1 = XMVector4Dot(triangleIn.GetVertex(1), v);
-    XMVECTOR Dist2 = XMVector4Dot(triangleIn.GetVertex(2), v);
+    XMVECTOR Dist0 = DirectX::XMVector4Dot(triangleIn.GetVertex(0), v);
+    XMVECTOR Dist1 = DirectX::XMVector4Dot(triangleIn.GetVertex(1), v);
+    XMVECTOR Dist2 = DirectX::XMVector4Dot(triangleIn.GetVertex(2), v);
 
-    XMVECTOR MinDist = XMVectorMin(Dist0, Dist1);
-    MinDist = XMVectorMin(MinDist, Dist2);
+    XMVECTOR MinDist = DirectX::XMVectorMin(Dist0, Dist1);
+    MinDist = DirectX::XMVectorMin(MinDist, Dist2);
 
-    XMVECTOR MaxDist = XMVectorMax(Dist0, Dist1);
-    MaxDist = XMVectorMax(MaxDist, Dist2);
+    XMVECTOR MaxDist = DirectX::XMVectorMax(Dist0, Dist1);
+    MaxDist = DirectX::XMVectorMax(MaxDist, Dist2);
 
-    XMVECTOR Zero = XMVectorZero();
+    XMVECTOR Zero = DirectX::XMVectorZero();
 
     // Outside the plane?
-    XMVECTOR Outside = XMVectorGreater(MinDist, Zero);
+    XMVECTOR Outside = DirectX::XMVectorGreater(MinDist, Zero);
 
     // Fully inside the plane?
-    XMVECTOR Inside = XMVectorLess(MaxDist, Zero);
+    XMVECTOR Inside = DirectX::XMVectorLess(MaxDist, Zero);
 
     // in Outside of plane
-    if (XMVector4EqualInt(Outside, XMVectorTrueInt()))
+    if (DirectX::XMVector4EqualInt(Outside, DirectX::XMVectorTrueInt()))
         return false;
     // in inside of plane
-    if (XMVector4EqualInt(Inside, XMVectorTrueInt()))
+    if (DirectX::XMVector4EqualInt(Inside, DirectX::XMVectorTrueInt()))
         return false;
     // intersecting plane
     return true;
@@ -6283,26 +6528,26 @@ inline bool __vectorcall King::Plane::Intersects(const Box& boxIn) const
     // FastIntersectAxisAlignedBoxPlane from DirectXCollision.inl
 
     // Compute the distance to the center of the box.
-    XMVECTOR Dist = XMVector4Dot(boxIn.GetCenter(), v);
+    XMVECTOR Dist = DirectX::XMVector4Dot(boxIn.GetCenter(), v);
 
     // Project the axes of the box onto the normal of the plane.  Half the
     // length of the projection (sometime called the "radius") is equal to
     // h(u) * abs(n dot b(u))) + h(v) * abs(n dot b(v)) + h(w) * abs(n dot b(w))
     // where h(i) are extents of the box, n is the plane normal, and b(i) are the
     // axes of the box. In this case b(i) = [(1,0,0), (0,1,0), (0,0,1)].
-    XMVECTOR Radius = XMVector3Dot(boxIn.GetExtents(), XMVectorAbs(v));
+    XMVECTOR Radius = DirectX::XMVector3Dot(boxIn.GetExtents(), DirectX::XMVectorAbs(v));
 
     // Outside the plane?
-    XMVECTOR Outside = XMVectorGreater(Dist, Radius);
+    XMVECTOR Outside = DirectX::XMVectorGreater(Dist, Radius);
 
     // Fully inside the plane?
-    XMVECTOR Inside = XMVectorLess(Dist, XMVectorNegate(Radius));
+    XMVECTOR Inside = DirectX::XMVectorLess(Dist, DirectX::XMVectorNegate(Radius));
 
     // in Outside of plane
-    if (XMVector4EqualInt(Outside, XMVectorTrueInt()))
+    if (DirectX::XMVector4EqualInt(Outside, DirectX::XMVectorTrueInt()))
         return false;
     // in inside of plane
-    if (XMVector4EqualInt(Inside, XMVectorTrueInt()))
+    if (DirectX::XMVector4EqualInt(Inside, DirectX::XMVectorTrueInt()))
         return false;
     // intersecting plane
     return true;
@@ -6324,28 +6569,25 @@ bool __vectorcall King::Frustum::Intersect(const Sphere sphereIn) const
     {
         Plane p = GetFrustumPlane((PlaneID)i);
 
-        if (p.DistanceFromPoint(c) + radius < 0.0f)
+        // 0 is on plane (-0.0005f to 0.0005f)
+        if (p.DistanceFromPoint(c) + radius < -0.0005f)
             return false;
     }
     return true;
 }
-bool King::Frustum::Intersect(Box const& boxIn) const
+bool King::Frustum::Intersect(Box const& boxIn, const Quaternion* quaternionIn) const
 {
-    const auto& pt_min = boxIn.GetMin();
-    const auto& pt_max = boxIn.GetMax();
-    const auto zero = float3();
-
     for (int i = kNearPlane; i < kINVALID; ++i)
     {
         Plane p = GetFrustumPlane((PlaneID)i);
-        float3 mask = DirectX::XMVectorGreater(p.GetNormal(), zero);
+        float3 mask = DirectX::XMVectorGreater(p.GetNormal(), DirectX::XMVectorZero());
 
-        auto furthestCorner =  DirectX::XMVectorSelect(pt_min, pt_max, mask);
+        auto furthestCorner =  DirectX::XMVectorSelect(boxIn.pt_min, boxIn.pt_max, mask);
 
-        if (p.DistanceFromPoint(furthestCorner) < 0.0f)
+        // behind plane (frustum normals point in, then this is outside the frustum)
+        if (p.DistanceFromPoint(furthestCorner) < 0.f)
             return false;
     }
-
     return true;
 }
 King::Frustum& King::Frustum::operator*=(const DirectX::XMMATRIX& m)
@@ -6367,13 +6609,13 @@ King::Frustum& King::Frustum::operator*=(const DirectX::XMMATRIX& m)
 // json
 // operators
 // methods
-bool King::Contact::GetHasPenetration() const
-{
-    auto& mag = _directionContactObj2_to_ContactObj1.Get_magnitude();
-    const float epsilon = 5.e-5f;
-
-    return (mag > epsilon);
-}
+//bool King::Collided::GetHasPenetration() const
+//{
+//    const auto& mag = _Obj2_to_Obj1.Get_magnitude();
+//    const float epsilon = 5.e-5f;
+//
+//    return (mag > epsilon);
+//}
 
 //void King::Contact::SetContactLocalObjectSpace(const Position& contactObj1LocalIn, const Position& contactObj2LocalIn, const Distance& worldSpaceDistanceObj1ToObj2)
 //{
@@ -6406,11 +6648,11 @@ bool King::Contact::GetHasPenetration() const
 // http://gamma.cs.unc.edu/SSV/obb.pdf.  
 // (c) Christopher H. King 2020, All rights reserved
 
-std::vector<Contact> King::SAT_OBBonOBB(const Box& A, const King::Quaternion& qA, const Box& B, const King::Quaternion& qB)
+std::vector<Collided> King::SAT_OBBonOBB(const Box& A, const King::Quaternion& qA, const Box& B, const King::Quaternion& qB)
 {
     // Output of contacts, each with a vector of contact points in world coordinates
-    vector<Contact> contacts;
-    vector<Contact> rtn;
+    vector<Collided> contacts;
+    vector<Collided> rtn;
 
     // A and B are oriented bounding boxes(OBB) with 8 corners each
     vector<float3> cA = A.GetCorners8(&qA);
@@ -6587,170 +6829,194 @@ std::vector<Contact> King::SAT_OBBonOBB(const Box& A, const King::Quaternion& qA
     // if we made it here then there were no separating axis
     for (auto& ea : contacts)
     {
-        if (ea.SetContactPointsFromOBBonOBBIntersection(A, qA, B, qB, cA, cB))
+        if (ea.OBBonOBBIntersection(A, qA, B, qB, cA, cB))
             rtn.push_back(ea);
     }
 
 
     return rtn;
 }
-Contact King::SAT_ContactDepthAndDirectionFromOBBonOBBIntersection(const vector<float3>& cornersA, const vector<float3>& cornersB, const float3& nonSeparatingAxis)
+Collided King::SAT_ContactDepthAndDirectionFromOBBonOBBIntersection(const vector<float3>& cornersA, const vector<float3>& cornersB, const float3& nonSeparatingAxis)
 {
-    Contact contact;
+    Collided contact;
+    // *** TO DO *** commented out on 7/15/2023; code is fine, just need to consider contact.SetPenetration which was moved into each contact point struct
+    //if (float3::Magnitude(nonSeparatingAxis) < 0.02f)
+    //{
+    //    // cross products of parallel axis is zero (and near zero) process as contact
+    //    contact.SetPenetration(Distance(10000.f, nonSeparatingAxis));
+    //    return contact;
+    //}
 
-    if (float3::Magnitude(nonSeparatingAxis) < 0.02f)
-    {
-        // cross products of parallel axis is zero (and near zero) process as contact
-        contact.SetContactPenetration(Distance(10000.f, nonSeparatingAxis));
-        return contact;
-    }
+    //// project each corner onto the axis for each box
+    //float minA, maxA, dist;
+    //minA = maxA = Dot(cornersA.front(), nonSeparatingAxis);
+    //for (const auto& ea : cornersA)
+    //{
+    //    dist = Dot(ea, nonSeparatingAxis);
+    //    if (dist < minA) minA = dist;
+    //    else maxA = max(maxA, dist);
+    //}
+    //float distA = maxA - minA;
 
-    // project each corner onto the axis for each box
-    float minA, maxA, dist;
-    minA = maxA = Dot(cornersA.front(), nonSeparatingAxis);
-    for (const auto& ea : cornersA)
-    {
-        dist = Dot(ea, nonSeparatingAxis);
-        if (dist < minA) minA = dist;
-        else maxA = max(maxA, dist);
-    }
-    float distA = maxA - minA;
+    //// project each corner onto the axis for each box
+    //float minB, maxB;
+    //minB = maxB = Dot(cornersB.front(), nonSeparatingAxis);
+    //for (const auto& ea : cornersB)
+    //{
+    //    dist = Dot(ea, nonSeparatingAxis);
+    //    if (dist < minB) minB = dist;
+    //    else maxB = max(maxB, dist);
+    //}
+    //float distB = maxB - minB;
 
-    // project each corner onto the axis for each box
-    float minB, maxB;
-    minB = maxB = Dot(cornersB.front(), nonSeparatingAxis);
-    for (const auto& ea : cornersB)
-    {
-        dist = Dot(ea, nonSeparatingAxis);
-        if (dist < minB) minB = dist;
-        else maxB = max(maxB, dist);
-    }
-    float distB = maxB - minB;
+    //if (minB > maxA || minA > maxB)
+    //{
+    //    assert(0);
+    //    // separated, this was a false contact call
+    //    return contact;
+    //}
+    //else
+    //{
+    //    // contact
+    //    float minC = min(minA, minB);
+    //    float maxC = max(maxA, maxB);
+    //    float distC = maxC - minC;
+    //    auto axis = nonSeparatingAxis;
 
-    if (minB > maxA || minA > maxB)
-    {
-        assert(0);
-        // separated, this was a false contact call
-        contact.SetNoContact();
-        return contact;
-    }
-    else
-    {
-        // contact
-        float minC = min(minA, minB);
-        float maxC = max(maxA, maxB);
-        float distC = maxC - minC;
-        auto axis = nonSeparatingAxis;
+    //    float penetration = distA + distB - distC;
 
-        float penetration = distA + distB - distC;
+    //    // BoxA pushes BoxB away
+    //    // world space distance from objA to objB
+    //    // minA < minB, if not reverse the axis
+    //    if (minA > minB)
+    //    {
+    //        axis *= -1.f;
+    //    }
 
-        // BoxA pushes BoxB away
-        // world space distance from objA to objB
-        // minA < minB, if not reverse the axis
-        if (minA > minB)
-        {
-            axis *= -1.f;
-        }
-
-        contact.SetContactPenetration(Distance(penetration, axis));
-    }
+    //    contact.SetPenetration(Distance(penetration, axis));
+    //}
     return contact; // compiler to optimize as && from temporary
 }
 
-bool King::Contact::SetContactPointsFromOBBonOBBIntersection(const Box& A, const Quaternion qA, const Box& B, const Quaternion qB, const vector<float3>& cornersA, const vector<float3>& cornersB)
+bool King::Collided::SphereOnSphereIntersection(const Sphere& A, const Sphere& B)
 {
-    // penetration must already be defined
+    // check for collision
+    contactPoints.clear();
 
-    _contactVerts.clear();
-    SetObjects(A.GetCenter(), B.GetCenter());
+    const float radiusSum = A.GetRadius() + B.GetRadius();
+    const auto AtoB = B.GetCenter() - A.GetCenter();
+    const float distance = AtoB.GetMagnitudeEst();   
 
-    auto& p = GetPenetration();
-    auto& d = p.Get_magnitude();
+    if (distance < radiusSum) {
+        normal = float3::Normal(AtoB);
+        penetrationDepth = radiusSum - distance;
 
-    auto contactVertsA = GetContactVerts(cornersA, p);
-    auto contactVertsB = GetContactVerts(cornersB, -p);
+        // Calculate contact points on the surface of each collider
+        DirectX::XMVECTOR contactPoint1 = DirectX::XMVectorMultiplyAdd(normal, DirectX::XMVectorReplicate(A.GetRadius()), A.GetCenter());
+        DirectX::XMVECTOR contactPoint2 = DirectX::XMVectorMultiplyAdd(DirectX::XMVectorNegate(normal), DirectX::XMVectorReplicate(B.GetRadius()), B.GetCenter());
 
-    //cout << "    Contact VertsA: " << contactVertsA.size() << "\n";
-    //for (auto& ea : contactVertsA)
-    //    cout << "        " << ea << "\n";
-    //cout << "    Contact VertsB: " << contactVertsB.size() << "\n";
-    //for (auto& ea : contactVertsB)
-    //    cout << "        " << ea << "\n";
-
-    if (!contactVertsA.size() || !contactVertsB.size())
-        return false; // this should not really happen unless p or corners have an issue
-
-    // if we have more than four both boxes, clip them to face contacts only
-    if (contactVertsA.size() > 4 && contactVertsB.size() > 4)
-    {
-        _contactVerts = ClosestPointsToFaces(&contactVertsA, &contactVertsB);
+        contactPoints.push_back(contactPoint1);
+        contactPoints.push_back(contactPoint2);
+        return true;
     }
 
-    if (contactVertsA.size() == 4)
-    {
-        _contactVerts = contactVertsA;
-    }
+    return false;
+}
 
-    if (contactVertsB.size() == 4)
-    {
-        for (auto& ea : contactVertsB)
-            _contactVerts.push_back(ea);
-    }
+bool King::Collided::OBBonOBBIntersection(const Box& A, const Quaternion qA, const Box& B, const Quaternion qB, const vector<float3>& cornersA, const vector<float3>& cornersB)
+{
+    //// *** TO DO *** pass in penetration normal and magnitude as a Distince ?? ***
+    // *** TO DO *** refactor below for _contacts was just a point and now is struct Contact that include all information (ex: penetration normal)
+    //// penetration must already be defined
+    ////auto& p = GetPenetration();
+    ////auto& d = p.Get_magnitude();
 
-    if (contactVertsB.size() < contactVertsA.size())
-    {
-        _contactVerts = contactVertsB;
-        _directionContactObj2_to_ContactObj1 = -_directionContactObj2_to_ContactObj1;
-    }
+    //_contacts.clear();
+    ////SetObjects(A.GetCenter(), B.GetCenter());
 
-    if (contactVertsA.size() == 2 && contactVertsB.size() == 2)
-    {
-        _contactVerts.push_back(ClosestPointEdgeEdge(contactVertsA, contactVertsB));
-    }
+    //auto contactVertsA = GetContactPoints(cornersA, p);
+    //auto contactVertsB = GetContactPoints(cornersB, -p);
 
-    if (contactVertsA.size() == 2 && contactVertsB.size() >= 3)
-    {
-        // this fills like a hack.  Why not line to OBB intersection? (too expensive??)
-        XMMATRIX rB = qB; // save conversion since we use it twice
-        _contactVerts.push_back(B.FindNearestPointOnBox(contactVertsA[0], rB));
-        _contactVerts.push_back(B.FindNearestPointOnBox(contactVertsA[1], rB));
-    }
+    ////cout << "    Contact VertsA: " << contactVertsA.size() << "\n";
+    ////for (auto& ea : contactVertsA)
+    ////    cout << "        " << ea << "\n";
+    ////cout << "    Contact VertsB: " << contactVertsB.size() << "\n";
+    ////for (auto& ea : contactVertsB)
+    ////    cout << "        " << ea << "\n";
 
-    if (contactVertsA.size() >= 3 && contactVertsB.size() == 2)
-    {
-        // this fills like a hack.  Why not line to OBB intersection? (too expensive??)
-        XMMATRIX rA = qA; // save conversion since we use it twice
-        _contactVerts.push_back(A.FindNearestPointOnBox(contactVertsB[0], rA));
-        _contactVerts.push_back(A.FindNearestPointOnBox(contactVertsB[1], rA));
-    }
+    //if (!contactVertsA.size() || !contactVertsB.size())
+    //    return false; // this should not really happen unless p or corners have an issue
 
-    // Check for duplicates
-    for (unsigned int i=0; i < _contactVerts.size();++i)
-    {
-        for (unsigned int j = i+1; j < _contactVerts.size(); ++j)
-        {
-            if (_contactVerts[i] == _contactVerts[j])
-            {
-                // duplicate so remove
-                for (unsigned int k = j; k < _contactVerts.size() - 1; ++k)
-                    _contactVerts[k] = _contactVerts[k + 1];
-                _contactVerts.pop_back();
-            }
-        }
-    }
+    //// if we have more than four both boxes, clip them to face contacts only
+    //if (contactVertsA.size() > 4 && contactVertsB.size() > 4)
+    //{
+    //    _contacts = ClosestPointsToFaces(&contactVertsA, &contactVertsB);
+    //}
 
-    //cout << "    Clipped Verts: " << _contactVerts.size() << "\n";
-    //for (auto& ea : _contactVerts)
-    //    cout << "        " << ea << "\n";
+    //if (contactVertsA.size() == 4)
+    //{
+    //    _contacts = contactVertsA;
+    //}
 
-    if (_contactVerts.size())
+    //if (contactVertsB.size() == 4)
+    //{
+    //    for (auto& ea : contactVertsB)
+    //        _contacts.push_back(ea);
+    //}
+
+    //if (contactVertsB.size() < contactVertsA.size())
+    //{
+    //    _contacts = contactVertsB;
+    //    _Obj2_to_Obj1 = -_Obj2_to_Obj1;
+    //}
+
+    //if (contactVertsA.size() == 2 && contactVertsB.size() == 2)
+    //{
+    //    _contacts.push_back(ClosestPointEdgeEdge(contactVertsA, contactVertsB));
+    //}
+
+    //if (contactVertsA.size() == 2 && contactVertsB.size() >= 3)
+    //{
+    //    XMMATRIX rB = qB;
+    //    _contacts.push_back(B.FindNearestPointOnBox(contactVertsA[0], rB));
+    //    _contacts.push_back(B.FindNearestPointOnBox(contactVertsA[1], rB));
+    //}
+
+    //if (contactVertsA.size() >= 3 && contactVertsB.size() == 2)
+    //{
+    //    XMMATRIX rA = qA;
+    //    _contacts.push_back(A.FindNearestPointOnBox(contactVertsB[0], rA));
+    //    _contacts.push_back(A.FindNearestPointOnBox(contactVertsB[1], rA));
+    //}
+
+    //// Check for duplicates
+    //for (unsigned int i=0; i < _contacts.size();++i)
+    //{
+    //    for (unsigned int j = i+1; j < _contacts.size(); ++j)
+    //    {
+    //        if (_contacts[i] == _contacts[j])
+    //        {
+    //            // duplicate so remove
+    //            for (unsigned int k = j; k < _contacts.size() - 1; ++k)
+    //                _contacts[k] = _contacts[k + 1];
+    //            _contacts.pop_back();
+    //        }
+    //    }
+    //}
+
+    ////cout << "    Clipped Verts: " << _contactVerts.size() << "\n";
+    ////for (auto& ea : _contactVerts)
+    ////    cout << "        " << ea << "\n";
+
+    if (contactPoints.size())
         return true;
     else
         return false;
 }
 
-inline vector<float3> King::Contact::GetContactVerts(const vector<float3>& corners, const Distance& dist)
+inline vector<float3> King::Collided::GetContactPoints(const vector<float3>& corners, const Distance& dist)
 {
+    // find the corners that are in contact
     const auto& penetration = dist.Get_magnitude();
     const auto& N = dist.Get_unit_direction();
     auto planePoint = corners[0];
@@ -6784,7 +7050,7 @@ inline vector<float3> King::Contact::GetContactVerts(const vector<float3>& corne
     return contactVerts;
 }
 
-inline vector<float3> King::Contact::ClosestPointsToFaces(vector<float3>* contactVertsA, vector<float3>* contactVertsB)
+inline vector<float3> King::Collided::ClosestPointsToFaces(vector<float3>* contactVertsA, vector<float3>* contactVertsB)
 {
     // *** TO DO *** we might have to sort them to get CW ordering correct
     //SortVertices(verts0, vertIndexs0);
@@ -6886,11 +7152,24 @@ inline vector<float3> King::Contact::ClosestPointsToFaces(vector<float3>* contac
 
     return temp;
 }
-
-inline float3 King::Contact::ClosestPointEdgeEdge(const vector<float3>& contactVertsA, const vector<float3>& contactVertsB)
+/******************************************************************************
+*    ClosestPointEdgeEdge
+*        Input four points of contacts (an edge of object A and an edge of obect B) 
+*        and returns the average point between the contacts to collapse the edges
+*        of contact down to one point.
+******************************************************************************/
+inline float3 King::Collided::ClosestPointEdgeEdge(const vector<float3>& contactVertsA, const vector<float3>& contactVertsB)
 {
     assert(contactVertsA.size() > 1 && contactVertsB.size() > 1);
 
+    /*        lA
+        A[0]------A[1]
+             \  /lBA   
+              /\ 
+            /    \lAB 
+        B[0]------B[1]
+              lB
+    */
     Line lA(contactVertsA[0], contactVertsA[1]);
     Line lB(contactVertsB[0], contactVertsB[1]);
     Line lAB(contactVertsA[0], contactVertsB[1]);
@@ -6902,18 +7181,18 @@ inline float3 King::Contact::ClosestPointEdgeEdge(const vector<float3>& contactV
     return (pt1 + pt2) * 0.5f;
 }
 
-inline bool King::Contact::VertInsideFace(const vector<float3>& contactVerts, const float3& p0, const float& planeErr)
+inline bool King::Collided::VertInsideFace(const vector<float3>& contactPoints, const float3& p0, const float& planeErr)
 {
     // Work out the normal for the face
-    float3 v0 = contactVerts[1] - contactVerts[0];
-    float3 v1 = contactVerts[2] - contactVerts[0];
+    float3 v0 = contactPoints[1] - contactPoints[0];
+    float3 v1 = contactPoints[2] - contactPoints[0];
     float3 n = Cross(v1, v0);
     n = Normalize(n);
 
-    for (size_t i = 0; i < contactVerts.size(); i++)
+    for (size_t i = 0; i < contactPoints.size(); i++)
     {
-        float3 s0 = contactVerts[i];
-        float3 s1 = contactVerts[(i + 1) % 4];
+        float3 s0 = contactPoints[i];
+        float3 s1 = contactPoints[(i + 1) % 4];
         float3 sx = s0 + n * 10.0f;
 
         // Work out the normal for the face
@@ -6934,8 +7213,6 @@ inline bool King::Contact::VertInsideFace(const vector<float3>& contactVerts, co
 
     return true;
 }
-
-
 // Functionality
 /* To test collision against a capsule, you must find the closest point to it's line segment to whatever it is you are testing, then construct a spehre at that point. Then it becomes a whatever / sphere test.*/
 
@@ -7156,15 +7433,15 @@ bool King::Capsule::Intersects(const Line& lineIn) const
     // find the nearest point on the capsule line segment and the line
     // it then become a sphere point test
     const float epsilon_squared = FLT_EPSILON * FLT_EPSILON;
-    FloatPoint3 rayA = segment.pt[1] - segment.pt[0];
-    FloatPoint3 rayB = lineIn.pt[1] - lineIn.pt[0];
+    float3 rayA = segment.pt[1] - segment.pt[0];
+    float3 rayB = lineIn.pt[1] - lineIn.pt[0];
 
-    FloatPoint3 pointOnSegA, pointOnSegB;
+    float3 pointOnSegA, pointOnSegB;
 
     // line segment is degenerate (distance between end points is near zero)
     // this is the same as Dot(rayA,rayA) and Dot(rayB,rayB)
-    float L11 = DirectX::XMVectorGetX(DirectX::XMVectorSum(DirectX::XMVectorPow(rayA, FloatPoint3(2.f, 2.f, 2.f))));
-    float L22 = DirectX::XMVectorGetX(DirectX::XMVectorSum(DirectX::XMVectorPow(rayB, FloatPoint3(2.f, 2.f, 2.f))));
+    float L11 = DirectX::XMVectorGetX(DirectX::XMVectorSum(DirectX::XMVectorPow(rayA, float3(2.f, 2.f, 2.f))));
+    float L22 = DirectX::XMVectorGetX(DirectX::XMVectorSum(DirectX::XMVectorPow(rayB, float3(2.f, 2.f, 2.f))));
 
     if (L11 < epsilon_squared)
     {
@@ -7176,9 +7453,9 @@ bool King::Capsule::Intersects(const Line& lineIn) const
     }
     else
     {
-        FloatPoint3 AB = lineIn.pt[0] - segment.pt[0];
+        float3 AB = lineIn.pt[0] - segment.pt[0];
         // - dot product of A and B
-        float L12 = -FloatPoint3::SumComponents(rayA * rayB);
+        float L12 = -float3::SumComponents(rayA * rayB);
         float DetL = L11 * L22 - L12 * L12;
 
         // Lines/Segments A and B are parallel
@@ -7189,14 +7466,14 @@ bool King::Capsule::Intersects(const Line& lineIn) const
         // The general case
         else
         {
-            float ra = FloatPoint3::SumComponents(rayA * AB);
-            float rb = -FloatPoint3::SumComponents(rayB * AB);
+            float ra = float3::SumComponents(rayA * AB);
+            float rb = -float3::SumComponents(rayB * AB);
 
             float t = (L11 * rb - ra * L12) / DetL;
             float s = (ra - L12 * t) / L11;
 
-            pointOnSegA = s * rayA + segment.pt[0];
-            pointOnSegB = t * rayB + lineIn.pt[0];
+            pointOnSegA = rayA * s + segment.pt[0];
+            pointOnSegB = rayB * t + lineIn.pt[0];
         }
 
     }

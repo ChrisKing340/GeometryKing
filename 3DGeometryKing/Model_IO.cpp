@@ -20,7 +20,7 @@ std::vector<shared_ptr<King::ModelScaffold>> King::Model_IO::Load_KNG(const std:
     // v1 for only a King::ModelScaffold
     struct KNG_v1 
     {
-        uint32_t    version = 1;
+        uint32_t    version = 2;
         uint32_t    numModels = 1;
     } header;
 
@@ -40,7 +40,11 @@ std::vector<shared_ptr<King::ModelScaffold>> King::Model_IO::Load_KNG(const std:
     {
         auto model = ModelScaffold::Create();
 
-        good = model->Read_v1(dataFile);
+        if (header.version == 1)
+            good = model->Read_v1(dataFile);
+        //if (header.version == 2)
+        //    good = model->Read_v2(dataFile);
+
         models.push_back(model);
 
         --header.numModels;
@@ -1599,24 +1603,7 @@ std::map<std::string, std::shared_ptr<Material>> King::Model_IO::Load_MTL(const 
     TextFileParse mtlFile;
     {
         bool loaded = mtlFile.Load(fileNameIN);
-        //if (!loaded)
-        //    loaded = mtlFile.Load("Models/" + fileNameIN);
-        //if (!loaded)
-        //    loaded = mtlFile.Load("Materials/" + fileNameIN);
-        //if (!loaded)
-        //    loaded = mtlFile.Load("Textures/" + fileNameIN);
-        //if (!loaded)
-        //    loaded = mtlFile.Load("Images/" + fileNameIN);
-        //if (!loaded)
-        //    loaded = mtlFile.Load("Resources/" + fileNameIN);
-        //if (!loaded)
-        //    loaded = mtlFile.Load("Resources/Models/" + fileNameIN);
-        //if (!loaded)
-        //    loaded = mtlFile.Load("Resources/Textures/" + fileNameIN);
-        //if (!loaded)
-        //    loaded = mtlFile.Load("Resources/Images/" + fileNameIN);
-        //if (!loaded)
-        //    loaded = mtlFile.Load("Resources/Materials/" + fileNameIN);
+
         if (!loaded)
         {
             cout << "Material file not found: " << fileNameIN << '\n';

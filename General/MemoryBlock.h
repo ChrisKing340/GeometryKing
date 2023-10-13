@@ -34,10 +34,12 @@ Revisions:      7/23/2021: Implemented MinMax(...), Min(), and Max() for efficie
                 9/25/2022: Improved exception safety for bad memory allocations. Some allowed to fail and continue, others throw
                     if it cannot continue. Constructors and Destructor do not throw. After Initializing a MemoryBlock, check 
                     GetLength() != 0 for successful data space. Can also check over loaded ! operator (ex: MemoryBlock mb; if (!mb) cout << "Empty memory block";)
+                10/10/2023: Added method WriteCppHeader(const std::string& outputFileName, const std::string& variableName) to easily
+                    export MemoryBlock to imbed in C++ applications. Very useful!
 
 Contact:        ChrisKing340@gmail.com
 
-(c) Copyrighted 2017-2022 Christopher H. King all rights reserved with permissions as noted here.
+(c) Copyrighted 2017-2023 Christopher H. King all rights reserved with permissions as noted here.
 
 References:     1. https://msdn.microsoft.com/en-us/library/dd293665.aspx
                 2. Stroustrup, Bjarne. A Tour of C++. Addison-Wesley, 2014
@@ -74,7 +76,7 @@ SOFTWARE.
 
 namespace King 
 {
-template<typename T, std::size_t align = 16> // bytes
+template<typename T, std::size_t align = 16Ui64> // bytes
 class alignas(align) MemoryBlock
 {
     /* variables */
@@ -90,8 +92,8 @@ public:
     explicit MemoryBlock() noexcept : _capacity(0) {} // Allocates empty, PushBack() handles dynamic increases
     MemoryBlock(nullptr_t) noexcept : MemoryBlock() {} // allow nullptr construct since that is the default
     explicit MemoryBlock(size_t elementCount, size_t byteStridePerElement = 1) noexcept : _stride(byteStridePerElement) { Allocate(elementCount * _stride); Fill(); }
-    explicit MemoryBlock(const MemoryBlock& other) noexcept { *this = other; } // Copy constructor
-    explicit MemoryBlock(MemoryBlock&& other) noexcept { *this = std::move(other); } // Move constructor
+    MemoryBlock(const MemoryBlock& other) noexcept { *this = other; } // Copy constructor
+    MemoryBlock(MemoryBlock&& other) noexcept { *this = std::move(other); } // Move constructor
     MemoryBlock(std::initializer_list<T> il) noexcept : _length(il.size()) { Allocate(_length); if (_data) std::copy(std::begin(il), std::end(il), _data); }
     
     virtual ~MemoryBlock() noexcept { Destroy(); }
@@ -111,7 +113,7 @@ public:
     // Appends will throw, original data lost
     inline MemoryBlock& operator+=(const MemoryBlock& other);
     inline MemoryBlock operator+(const MemoryBlock& other);
-    // Assignment operators no not throw, original data lost, as the intent was to replace the data anyways
+    // Assignment operators do not throw, original data lost, as the intent was to replace the data anyways
     inline MemoryBlock& operator=(const T* other) noexcept; // if fails, _length = 0, _capacity = 0, and _data = nullptr;
     inline MemoryBlock& operator=(const MemoryBlock& other) noexcept; // if fails, _length = 0, _capacity = 0, and _data = nullptr;
     inline MemoryBlock& operator=(MemoryBlock&& other) noexcept;
@@ -152,6 +154,7 @@ public:
     inline bool                 WriteRawBinary(const std::string& fileNameIn);
 
     inline bool                 WriteText(const std::string& fileNameIn); // for easy debugging of data
+    inline bool                 WriteCppHeader(std::string outputFileName, const std::string& variableName); // for easy imbedding into C++ applications
 
     [[deprecated("Use GetLength() or GetElements() depending on use instead.")]]
     auto Size() { return _length; } // note, use GetElements() for stride lengths
@@ -688,7 +691,7 @@ inline bool MemoryBlock<T, align>::ReadRawBinary(const std::string& fileNameIn) 
 
     std::lock_guard<std::mutex> guard(_mutex);
 
-    infile.read(reinterpret_cast<const char*>(_data), _length * sizeof(T));
+    infile.read(reinterpret_cast<char*>(_data), _length * sizeof(T));
     infile.close();
     if (infile.fail()) return false;
     return true;
@@ -730,6 +733,56 @@ inline bool MemoryBlock<T, align>::WriteText(const std::string& fileNameIn) // r
     if (outfile.fail()) return false;
     else return true;
 }
+
+template<typename T, std::size_t align>
+inline bool MemoryBlock<T, align>::WriteCppHeader(std::string outputFileName, const std::string& variableName)
+{
+    size_t dotPosition = outputFileName.find_last_of('.');
+
+    if (dotPosition != std::string::npos && dotPosition > 0)
+    {
+        // Extract the part of the filename before the last period
+        std::string nameWithoutExtension = outputFileName.substr(0, dotPosition);
+        // Append ".h" to the extracted part
+        outputFileName = nameWithoutExtension + ".h";
+    }
+    else
+        // If no period was found, just append ".h" to the original filename
+        outputFileName = outputFileName + ".h";
+
+    std::ofstream outputFile(outputFileName, std::ios::out | std::ios::trunc);
+
+    if (!outputFile.is_open()) {
+        std::cerr << "Output file failed to open." << std::endl;
+        return false;
+    }
+
+    // Write the C++ header file content
+    outputFile << "#pragma once\n\n";
+    outputFile << "const unsigned char " << variableName << "[] = {\n";
+
+    for (std::size_t i = 0; i < GetLength(); ++i)
+    {
+        outputFile << " " << Get(i);
+        if (i != GetLength() - 1)
+        {
+            outputFile << ",";
+        }
+    }
+    outputFile << " };\n";
+    outputFile << "const std::size_t " << variableName << "_size = " << GetLength() << ";\n\n";
+
+    outputFile.close();
+
+    if (outputFile.fail())
+    {
+        std::cerr << "Failed write operation." << std::endl;
+        return false;
+    }
+
+    return true;
+}
+
 
 //void King::from_json(const json& j, UIntPoint2& to) { j.at("x").get_to(to.u[0]); j.at("y").get_to(to.u[1]); }
 
