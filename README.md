@@ -17,7 +17,9 @@ Compiled with Visual Studio 2019, C\+\+17, 64 Bit Windows 10
 
 Dependencies, visit:
    json:    [https://github.com/nlohmann/json](https://github.com/nlohmann/json)
+   
    Math:    [https://github.com/ChrisKing340/MathSIMD](https://github.com/ChrisKing340/MathSIMD)
+   
    Physics: [https://github.com/ChrisKing340/PhysicsKing](https://github.com/ChrisKing340/PhysicsKing)
 
 This code is the foundation of a fully functional DirectX 12 game engine and physics simulator.
