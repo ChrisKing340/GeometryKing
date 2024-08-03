@@ -2,18 +2,14 @@
 
 Math and Physics have been separated from GeometryKing for use and tutorial from the main code base.
 
-# 2D & 3D GeometryKing
-
-Generic, render independent, geometric game engine foundation. Intended as the foundation for "made from scratch" game engines.
-Physics body simulation with intrinsic SIMD acceleration from projects:
-
    Math:    [https://github.com/ChrisKing340/MathSIMD](https://github.com/ChrisKing340/MathSIMD)
    
    Physics: [https://github.com/ChrisKing340/PhysicsKing](https://github.com/ChrisKing340/PhysicsKing)
-   
-C\+\+ classes support json for data transport, 2DGeometryKing has ImageBlock with Draw(...) methods from primitives to a memory buffer, and 3DGeometryKing has Model with constructors to convert 3D primitives to Models with vertex and index buffers ready for rendering. 
 
-Physics classes represent real world motion while the geometry classes handling collision detection. High degree of inline code for readability and compiled only if used in your projects.
+# 2D & 3D GeometryKing
+
+Purpose: Generic, render independent, geometric game engine foundation. 
+Intended as the foundation for any type of game and software requiring 3D or 2D representation. No rendering is provided, instead, the basics needed to for representing 2D and 3D geometry, collision detection, math acceleration, and model generation of vertex and index buffers to translate class primitives into meshes ready for a rendering pipeline you provide. 2D is managed in memory blocks rather than vertex and index buffers as are the 3D models. Therefore, they can be saved and stored easily in a raw or image format for viewing. C\+\+ class example has ImageBlock that inherits from MemoryBlock that adds a Draw(...) method to draw our class primitives (such as line) into its memory buffer. 3DGeometryKing files have similar methodes within classes such as Model of CreateMesh(...) to convert 3D primitives to Models with vertex and index buffers ready for rendering. 
 
 2D Example export from class ImageTga after being drawn from 2D primities of Triangle2DF, Circle2DF, and Rectangle2DF:
 
