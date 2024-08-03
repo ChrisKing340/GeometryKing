@@ -1,10 +1,6 @@
 ## New 2.6 Release of 3D Geometry King
 
-Math and Physics have been separated from GeometryKing for use and tutorial from the main code base.
-
-   Math:    [https://github.com/ChrisKing340/MathSIMD](https://github.com/ChrisKing340/MathSIMD)
-   
-   Physics: [https://github.com/ChrisKing340/PhysicsKing](https://github.com/ChrisKing340/PhysicsKing)
+Math and Physics have been separated from GeometryKing for use and tutorial from the main code base. See dependencies below.
 
 # 2D & 3D GeometryKing
 
@@ -19,11 +15,10 @@ ImageTga maintains our render independent status as well as visualization of usa
 
 Compiled with Visual Studio 2019, C\+\+17, 64 Bit Windows 10
 
-For the latest version of DirectXMath, visit:
-[https://github.com/Microsoft/DirectXMath](https://github.com/Microsoft/DirectXMath)
-
-For the latest version of json visit:
-[https://github.com/nlohmann/json](https://github.com/nlohmann/json)
+Dependencies, visit:
+   json:    [https://github.com/nlohmann/json](https://github.com/nlohmann/json)
+   Math:    [https://github.com/ChrisKing340/MathSIMD](https://github.com/ChrisKing340/MathSIMD)
+   Physics: [https://github.com/ChrisKing340/PhysicsKing](https://github.com/ChrisKing340/PhysicsKing)
 
 This code is the foundation of a fully functional DirectX 12 game engine and physics simulator.
 
@@ -88,3 +83,5 @@ Complex models require more than just simple geometry shapes.  Multiple meshes o
 ## Physics collision resolution 
 
 TO DO: working on collision points of contact and solvers for varying geometries. When complete, finishes the features list for a generic render independent geometric game engine.
+
+https://youtu.be/vbz0JtT7-vk?si=KqjE_mo5nLp_SyZB
