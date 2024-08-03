@@ -51,7 +51,7 @@ This code is the foundation of a fully functional DirectX 12 game engine and phy
     class Line2DF; // SIMD
     class Triangle2DF; // SIMD
     class Rectangle2DF; // SIMD
-    class Rectangle2D; // not accelerated, replaces Windows RECT class thourgh conversions
+    class Rectangle2D; // not accelerated, replaces Windows RECT class through conversions
     class Circle2DF; // SIMD
     class Polygon2DF; // SIMD
 
@@ -80,20 +80,6 @@ Complex models require more than just simple geometry shapes.  Multiple meshes o
     // Helpers
     class VertexAttrib;
     class VertexFormat;
-
-## Math foundation
-
-    #include "MathSIMD\MathSIMD.h"
-    https://github.com/ChrisKing340/MathSIMD 
-    unique data types built on Single Instruction Multiple Data, SIMD, DirectXMath library of intrinsics for speed and simple implementation
-    class FloatPoint2; // SIMD
-    class FloatPoint3; // SIMD
-    class FloatPoint4; // SIMD
-    class Quaternion; // SIMD
-
-    class UIntPoint2; // not accelerated
-    class IntPoint2; // not accelerated
-    class IntPoint3; // not accelerated
 
 ## General utilities
 
