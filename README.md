@@ -1,19 +1,11 @@
 ## New 2.6 Release of 3D Geometry King
 
-Math and Physics have been separated from GeometryKing for use and tutorial from the main code base.
+Math and Physics have been separated from GeometryKing for use and tutorial from the main code base. See dependencies below.
 
 # 2D & 3D GeometryKing
 
-Generic, render independent, geometric game engine foundation. Intended as the foundation for "made from scratch" game engines.
-Physics body simulation with intrinsic SIMD acceleration from projects:
-
-   Math:    [https://github.com/ChrisKing340/MathSIMD](https://github.com/ChrisKing340/MathSIMD)
-   
-   Physics: [https://github.com/ChrisKing340/PhysicsKing](https://github.com/ChrisKing340/PhysicsKing)
-   
-C\+\+ classes support json for data transport, 2DGeometryKing has ImageBlock with Draw(...) methods from primitives to a memory buffer, and 3DGeometryKing has Model with constructors to convert 3D primitives to Models with vertex and index buffers ready for rendering. 
-
-Physics classes represent real world motion while the geometry classes handling collision detection. High degree of inline code for readability and compiled only if used in your projects.
+Purpose: Generic, render independent, geometric game engine foundation. 
+Intended as the foundation for any type of game and software requiring 3D or 2D representation. No rendering is provided, instead, the basics needed to for representing 2D and 3D geometry, collision detection, math acceleration, and model generation of vertex and index buffers to translate class primitives into meshes ready for a rendering pipeline you provide. 2D is managed in memory blocks rather than vertex and index buffers as are the 3D models. Therefore, they can be saved and stored easily in a raw or image format for viewing. C\+\+ class example has ImageBlock that inherits from MemoryBlock that adds a Draw(...) method to draw our class primitives (such as line) into its memory buffer. 3DGeometryKing files have similar methodes within classes such as Model of CreateMesh(...) to convert 3D primitives to Models with vertex and index buffers ready for rendering. 
 
 2D Example export from class ImageTga after being drawn from 2D primities of Triangle2DF, Circle2DF, and Rectangle2DF:
 
@@ -23,11 +15,12 @@ ImageTga maintains our render independent status as well as visualization of usa
 
 Compiled with Visual Studio 2019, C\+\+17, 64 Bit Windows 10
 
-For the latest version of DirectXMath, visit:
-[https://github.com/Microsoft/DirectXMath](https://github.com/Microsoft/DirectXMath)
-
-For the latest version of json visit:
-[https://github.com/nlohmann/json](https://github.com/nlohmann/json)
+Dependencies, visit:
+   json:    [https://github.com/nlohmann/json](https://github.com/nlohmann/json)
+   
+   Math:    [https://github.com/ChrisKing340/MathSIMD](https://github.com/ChrisKing340/MathSIMD)
+   
+   Physics: [https://github.com/ChrisKing340/PhysicsKing](https://github.com/ChrisKing340/PhysicsKing)
 
 This code is the foundation of a fully functional DirectX 12 game engine and physics simulator.
 
@@ -51,7 +44,7 @@ This code is the foundation of a fully functional DirectX 12 game engine and phy
     class Line2DF; // SIMD
     class Triangle2DF; // SIMD
     class Rectangle2DF; // SIMD
-    class Rectangle2D; // not accelerated, replaces Windows RECT class thourgh conversions
+    class Rectangle2D; // not accelerated, replaces Windows RECT class through conversions
     class Circle2DF; // SIMD
     class Polygon2DF; // SIMD
 
@@ -81,20 +74,6 @@ Complex models require more than just simple geometry shapes.  Multiple meshes o
     class VertexAttrib;
     class VertexFormat;
 
-## Math foundation
-
-    #include "MathSIMD\MathSIMD.h"
-    https://github.com/ChrisKing340/MathSIMD 
-    unique data types built on Single Instruction Multiple Data, SIMD, DirectXMath library of intrinsics for speed and simple implementation
-    class FloatPoint2; // SIMD
-    class FloatPoint3; // SIMD
-    class FloatPoint4; // SIMD
-    class Quaternion; // SIMD
-
-    class UIntPoint2; // not accelerated
-    class IntPoint2; // not accelerated
-    class IntPoint3; // not accelerated
-
 ## General utilities
 
     #include "General\MemoryBlock.h"
@@ -106,3 +85,5 @@ Complex models require more than just simple geometry shapes.  Multiple meshes o
 ## Physics collision resolution 
 
 TO DO: working on collision points of contact and solvers for varying geometries. When complete, finishes the features list for a generic render independent geometric game engine.
+
+https://youtu.be/vbz0JtT7-vk?si=KqjE_mo5nLp_SyZB
