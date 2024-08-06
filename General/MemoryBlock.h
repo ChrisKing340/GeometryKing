@@ -36,10 +36,13 @@ Revisions:      7/23/2021: Implemented MinMax(...), Min(), and Max() for efficie
                     GetLength() != 0 for successful data space. Can also check over loaded ! operator (ex: MemoryBlock mb; if (!mb) cout << "Empty memory block";)
                 10/10/2023: Added method WriteCppHeader(const std::string& outputFileName, const std::string& variableName) to easily
                     export MemoryBlock to imbed in C++ applications. Very useful!
+                06/29/2024: 1) Renamed some methods and [[deprecated]] the old names. 2) Corrected an error in assert check from _capacity to _length
+                    in const T& operator [](size_t i) const { assert(i*_stride<_length); return _data[i*_stride]; }
+                    3) Optimized _capacity allocations to increments of _stride to reduce the number of new allocations when working with vertex buffers
 
 Contact:        ChrisKing340@gmail.com
 
-(c) Copyrighted 2017-2023 Christopher H. King all rights reserved with permissions as noted here.
+(c) Copyrighted 2017-2024 Christopher H. King all rights reserved with permissions as noted here.
 
 References:     1. https://msdn.microsoft.com/en-us/library/dd293665.aspx
                 2. Stroustrup, Bjarne. A Tour of C++. Addison-Wesley, 2014
@@ -68,6 +71,7 @@ SOFTWARE.
 
 #include <assert.h>
 #include <iostream>
+#include <stdio.h>
 #include <new>
 #include <fstream>
 #include <string>
@@ -103,7 +107,7 @@ public:
     void  operator delete (void* p) noexcept { _aligned_free(static_cast<MemoryBlock*>(p)); }
     
     const T& operator [](size_t i) const { assert(i*_stride<_length); return _data[i*_stride]; } // accessor 
-    T& operator [](size_t i) { assert(i*_stride<_capacity); return _data[i*_stride]; } // assignment
+    T& operator [](size_t i) { assert(i*_stride<_length); return _data[i*_stride]; } // assignment
     
     explicit operator T* () const { return 0; } // prevents implicit conversions to other data types, use static_cast
     T* operator->() { return _data; } // data pointer access
@@ -147,14 +151,24 @@ public:
     [[deprecated("Use Write instead.")]]
     inline bool WriteMemoryBlock(std::ofstream& outfileIn) {}
 
-    inline bool                 Read(std::ifstream& dataFileIn); // pass stream so we could pack multiple MemoryBlocks into one file
+    inline bool                 Read(std::ifstream& dataFileIn); // pass as stream so we could pack multiple MemoryBlocks into one file
     inline bool                 Write(std::ofstream& outfileIn);
 
-    inline bool                 ReadRawBinary(const std::string& fileNameIn); // length unknown, so read entire file and use file length as byte size
-    inline bool                 WriteRawBinary(const std::string& fileNameIn);
+    [[deprecated("Use ReadAsRawBinary instead.")]]
+    inline bool ReadRawBinary(const std::string& fileNameIn) {} 
+    [[deprecated("Use WriteAsRawBinary instead.")]]
+    inline bool WriteRawBinary(const std::string& fileNameIn) {}
 
-    inline bool                 WriteText(const std::string& fileNameIn); // for easy debugging of data
-    inline bool                 WriteCppHeader(std::string outputFileName, const std::string& variableName); // for easy imbedding into C++ applications
+    inline bool                 ReadAsRawBinary(const std::string& fileNameIn); // length unknown, so read entire file and use file length as byte size
+    inline bool                 WriteAsRawBinary(const std::string& fileNameIn);
+
+    [[deprecated("Use WriteAsText instead.")]]
+    inline bool WriteText(const std::string& fileNameIn) {}
+    [[deprecated("Use WriteAsCppHeader instead.")]]
+    inline bool WriteCppHeader(std::string outputFileName, const std::string& variableName) {}
+
+    inline bool                 WriteAsText(const std::string& fileNameIn); // for easy debugging of data
+    inline bool                 WriteAsCppHeader(std::string outputFileName, const std::string& variableName); // for easy imbedding into C++ applications
 
     [[deprecated("Use GetLength() or GetElements() depending on use instead.")]]
     auto Size() { return _length; } // note, use GetElements() for stride lengths
@@ -346,6 +360,7 @@ inline void MemoryBlock<T, align>::Allocate(const std::size_t capacityIn) noexce
         _capacity = 0;
         _length = 0;
         _data = nullptr;
+        std::cout << "Exception from King::MemoryBlock " << e.what() << std::endl;
     }
 
     if (_capacity < _length)
@@ -371,6 +386,7 @@ inline void MemoryBlock<T, align>::ReAllocate(std::size_t capacity) noexcept
         _capacity = 0;
         _length = 0;
         data = nullptr;
+        std::cout << "Exception from King::MemoryBlock " << e.what() << std::endl;
     }
 
     // shrink?
@@ -423,15 +439,17 @@ inline void MemoryBlock<T, align>::PushBack(const T& valueIn)
 {
     // dynamic to 4, 16, 24, 32, 48, 72, ..., 256, 512, 768, ... when starting from zero
     if (!_capacity)
-        Allocate(4);
+        Allocate(4 * _stride); // note, will allocate in increments of _stride
     if (_length >= _capacity)
     {
-        if (_capacity >= 4 && _capacity < 16)
-            ReAllocate(16);
-        else if (_capacity > 256)
-            ReAllocate((_capacity / 256 + 1) * 256);
+        if (_capacity < 4 * _stride)
+            ReAllocate(4 * _stride);
+        if (_capacity >= 4 * _stride && _capacity < 16 * _stride)
+            ReAllocate(16 * _stride);
+        else if (_capacity > 256 * _stride)
+            ReAllocate((_capacity / (256 * _stride) + 1) * (256 * _stride));
         else
-            ReAllocate(_capacity + _capacity / 2); // 16, 24, 36, 48, 72,...
+            ReAllocate(_capacity * _stride + _capacity * _stride / 2); // 16, 24, 36, 48, 72,...
     }
 
     _data[_length] = valueIn;
@@ -443,15 +461,17 @@ inline void MemoryBlock<T, align>::PushBack(const T&& valueIn)
 {
     // dynamic to 4, 16, 24, 32, 48, 72, ..., 256, 512, 768, ... when starting from zero
     if (!_capacity)
-        Allocate(4);
+        Allocate(4 * _stride); // note, will allocate in increments of _stride
     if (_length >= _capacity)
     {
-        if (_capacity >= 4 && _capacity < 16)
-            ReAllocate(16);
-        else if (_capacity > 256)
-            ReAllocate((_capacity / 256 + 1) * 256);
+        if (_capacity < 4 * _stride)
+            ReAllocate(4 * _stride);
+        if (_capacity >= 4 * _stride && _capacity < 16 * _stride)
+            ReAllocate(16 * _stride);
+        else if (_capacity > 256 * _stride)
+            ReAllocate((_capacity / (256 * _stride) + 1) * (256 * _stride));
         else
-            ReAllocate(_capacity + _capacity / 2); // 16, 24, 36, 48, 72,...
+            ReAllocate(_capacity * _stride + _capacity * _stride / 2); // 16, 24, 36, 48, 72,...
     }
 
     _data[_length] = std::move(valueIn);
@@ -472,23 +492,25 @@ template<typename T, std::size_t align>
 template<typename ...Args>
 inline T& MemoryBlock<T, align>::EmplaceBack(Args && ...args)
 {
-    // dynamic to 4, 8, 12, 18, 27, 40, 60, 90, 135... when starting from zero
+    // dynamic to 4, 16, 24, 32, 48, 72, ..., 256, 512, 768, ... when starting from zero
     if (!_capacity)
-        Allocate(4);
+        Allocate(4 * _stride); // note, will allocate in increments of _stride
     if (_length >= _capacity)
     {
-        if (_capacity >= 4 && _capacity < 16)
-            ReAllocate(16);
-        else if (_capacity > 256)
-            ReAllocate((_capacity / 256 + 1) * 256);
+        if (_capacity < 4 * _stride)
+            ReAllocate(4 * _stride);
+        if (_capacity >= 4 * _stride && _capacity < 16 * _stride)
+            ReAllocate(16 * _stride);
+        else if (_capacity > 256 * _stride)
+            ReAllocate((_capacity / (256 * _stride) + 1) * (256 * _stride));
         else
-            ReAllocate(_capacity + _capacity / 2); // 16, 24, 36, 48, 72,...
+            ReAllocate(_capacity * _stride + _capacity * _stride / 2); // 16, 24, 36, 48, 72,...
     }
 
     if (!_data)
     {
         // we cannot return a bad address
-        throw std::bad_alloc("BAD MEMORY ALLOCATION in MemoryBlock::EmplaceBack(...)");
+        throw std::bad_alloc();
     }
 
     new(&_data[_length]) T(std::forward<Args>(args)...);
@@ -659,7 +681,7 @@ inline bool MemoryBlock<T, align>::Write(std::ofstream& outfileIn) // Memory blo
 }
 
 template<typename T, std::size_t align>
-inline bool MemoryBlock<T, align>::ReadRawBinary(const std::string& fileNameIn) // data only, no stride.  Reads entire contents of file
+inline bool MemoryBlock<T, align>::ReadAsRawBinary(const std::string& fileNameIn) // data only, no stride.  Reads entire contents of file
 {
     std::ifstream infile(fileNameIn, std::ifstream::binary);
     if (infile.fail()) return false;
@@ -698,7 +720,7 @@ inline bool MemoryBlock<T, align>::ReadRawBinary(const std::string& fileNameIn) 
 }
 
 template<typename T, std::size_t align>
-inline bool MemoryBlock<T, align>::WriteRawBinary(const std::string& fileNameIn) // data only, no length or stride
+inline bool MemoryBlock<T, align>::WriteAsRawBinary(const std::string& fileNameIn) // data only, no length or stride
 {
     const auto& bytes = GetByteSize();
 
@@ -714,7 +736,7 @@ inline bool MemoryBlock<T, align>::WriteRawBinary(const std::string& fileNameIn)
 }
 
 template<typename T, std::size_t align>
-inline bool MemoryBlock<T, align>::WriteText(const std::string& fileNameIn) // readable format
+inline bool MemoryBlock<T, align>::WriteAsText(const std::string& fileNameIn) // readable format
 {
     std::ofstream outfile(fileNameIn, std::ofstream::trunc);
     outfile << "Length: " << std::to_string(_length) << '\n';
@@ -735,7 +757,7 @@ inline bool MemoryBlock<T, align>::WriteText(const std::string& fileNameIn) // r
 }
 
 template<typename T, std::size_t align>
-inline bool MemoryBlock<T, align>::WriteCppHeader(std::string outputFileName, const std::string& variableName)
+inline bool MemoryBlock<T, align>::WriteAsCppHeader(std::string outputFileName, const std::string& variableName)
 {
     size_t dotPosition = outputFileName.find_last_of('.');
 
@@ -782,9 +804,6 @@ inline bool MemoryBlock<T, align>::WriteCppHeader(std::string outputFileName, co
 
     return true;
 }
-
-
-//void King::from_json(const json& j, UIntPoint2& to) { j.at("x").get_to(to.u[0]); j.at("y").get_to(to.u[1]); }
 
 template<typename T, std::size_t align>
 inline void MemoryBlock<T, align>::Copy(const size_t& startElementNumber, const T* srcIn, size_t size)

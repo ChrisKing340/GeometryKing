@@ -58,9 +58,9 @@ namespace King {
 	class vertexComposite
 	{
 	public:
-		float xyz[3]; // 12 position
-	   	float uv[2]; // 8 texture coordinate
-		float norm[3]; // 12 normal
+        float xyz[3] = { 0.f, 0.f, 0.f }; // 12 position
+	   	float uv[2] = { 0.f, 0.f }; // 8 texture coordinate
+		float norm[3] = { 0.f, 0.f, 0.f }; // 12 normal
 		
 		vertexComposite() = default;
 		vertexComposite(const vertexComposite &in) = default;

@@ -16,9 +16,6 @@
     <Filter Include="Header Files\General">
       <UniqueIdentifier>{5639f202-e921-4036-9ece-c65acb508f66}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Header Files\MathSIMD">
-      <UniqueIdentifier>{77f21c6e-b9ea-459f-aab8-7def8643fb53}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Source Files\General">
       <UniqueIdentifier>{9b2c635b-f317-4ff5-ac4f-13f6ba473879}</UniqueIdentifier>
     </Filter>
@@ -38,9 +35,6 @@
     </ClInclude>
     <ClInclude Include="..\General\TextFileParse.h">
       <Filter>Header Files\General</Filter>
-    </ClInclude>
-    <ClInclude Include="..\MathSIMD\MathSIMD.h">
-      <Filter>Header Files\MathSIMD</Filter>
     </ClInclude>
     <ClInclude Include="..\GeometryKing.h">
       <Filter>Header Files</Filter>

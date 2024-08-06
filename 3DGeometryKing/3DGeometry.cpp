@@ -1,4 +1,4 @@
-﻿#include "..\..\..\Gits\MathSIMD\MathSIMD.h"
+﻿#include "..\..\MathSIMD\MathSIMD.h"
 #include "..\2DGeometryKing\2DGeometry.h"
 #include "..\3DGeometryKing\3DGeometry.h"
 #include "..\3DGeometryKing\Model_IO.h"

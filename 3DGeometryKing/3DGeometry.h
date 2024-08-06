@@ -111,23 +111,43 @@ SOFTWARE.
     09/23/2023 - Version 2.7.1 - Minor code clean up, added additional scoping, eliminated intelisense warnings in math ordering for
         ambiguous (more than one) available operators. Removed FloatPoint3 class naming and used the alias float3 for a future
         transition to permanently changing the math library from FloatPoint3 class to float3 class naming.
+    11/27/2023 - Version 2.7.2 - Minor comment and code organization changes
 
     WIP
     Version 3.0 Planned release - Oriented box on oriented box and sphere collision tests. Previously extended our axis 
         aligned bounding box in version 1 to oriented by passing in a orientation quaterion. WIP code to implement
-        separating axis theorem. Goal is to finish the physics engine by taking the OB on OB contacts and penetration
-        and implementing a momentum based response to resolve the collisions. Plan is to support OB and Sphere collisions
-        in the v3 release candidate: 1st: Sphere on Sphere, 2nd: Sphere on OB, 3rd: OB on OB. 
+        separating axis theorem. Goal is to finish the start of a physics engine by taking the OB on OB contacts and penetration
+        and implementing a momentum based response to resolve the collisions (this part is out of scope of this code base).
+        
+        Plan: is to support OB and Sphere collisions in the v3 release candidate: 
+            1st: Sphere on Sphere 
+            2nd: Sphere on oriented box
+            3rd: Oriented box on oriented box
+        Goal: Geometry3D objects to be the base class of 3D worlds with collission detection built in. Proper handling
+            by a resolving physics code requires points of contact which is provided by our class Collided initialized 
+            with the object in contact and then keeps as a vector the contact points and also in class any other needed
+            information to properly handle it (like weak pointers to the objects themselves, accumulated impulses to warm
+            start and optimize mulitple objects in contact, etc.)
         Experimental code: 
             Function SAT_OBBonOBB(...); 
             Function SAT_ContactDepthAndDirectionFromOBBonOBBIntersection(...)
+        11/27/2023 Note: Work is done in the game engine and implemented outside of this code base for sphere on sphere.
+        Need is for an object manager for response handling which is out of scope of this repository. You can find the 
+        Sphere on Sphere cose in Geometry3D::Collided class which is the goal of this repository to perform collission 
+        detection with base and objects.
 */
+
+//// WIP: Collsision testing, these are TEMPORARIES for experimentation
+//#include "..\PhysicsKing\Physics\CK_Cube.h"
+//#include "..\PhysicsKing\Physics\CK_CubeCollision.h"
+
+// Compile with code files 3DGeometry.cpp and CK_CubeCollision.cpp
 
 constexpr auto KING_3DGEOMETRY_VERSION_MAJOR = 2;
 constexpr auto KING_3DGEOMETRY_VERSION_MINOR = 7;
-constexpr auto KING_3DGEOMETRY_VERSION_PATCH = 1;
+constexpr auto KING_3DGEOMETRY_VERSION_PATCH = 2;
 
-#include <DirectXCollision.h>
+#include <DirectXCollision.h> // *** TO DO *** included for compatibility until all our classes are fully implemented
 #include <vector>
 #include <map>
 #include <filesystem>
@@ -140,7 +160,7 @@ using json = nlohmann::json;
 // Simple memory handling
 #include "..\General\MemoryBlock.h"
 
-// Simple SIMD acceleration
+// Simple SIMD (single instruction multiple data) using DirectXMath accelerated library
 #include "..\..\MathSIMD\MathSIMD.h"
 
 // Physics building blocks
@@ -150,12 +170,6 @@ using json = nlohmann::json;
 
 // Geometry building blocks
 #include "..\2DGeometryKing\2DGeometry.h"
-
-//// WIP: Collsision testing, these are TEMPORARIES for experimentation
-//#include "..\PhysicsKing\Physics\CK_Cube.h"
-//#include "..\PhysicsKing\Physics\CK_CubeCollision.h"
-
-// Compile with code files 3DGeometry.cpp and CK_CubeCollision.cpp
 
 using namespace std;
 using namespace DirectX;
@@ -175,32 +189,39 @@ namespace King {
     class Capsule; // SIMD two points & a float
     class Box;  // SIMD two points; AABB and as a OBB by passing in a Quaternion to methods
     class Frustum; // SIMD six planes and eight points
+    class Collided; // Vector to store multiple contacts between geometries and methods to determine contacts
 
-    // 3D Complex objects, working with vertex buffer references:
-    class LineIndexed; // int[2] into a vertex buffer
-    class TriangleIndexed; // int[3] into a vertex buffer
+    // 3D Modeling with meshes:
+    // Design is that models own the master data. Data is referenced by different meshes within the model clas. 
+    class Material; // keeps material information and texture names
+    class ModelScaffold; // base class for models of different geometries
+    class BoneHierarchy; // 3D Structure that matches verticies to an underlining connected hierarchy
 
-    // 3D Meshs, data is not owned and rather referenced from the model that stores it.
+    class LineModel; // Lines
+    class Model; // Triangles; Utilize Model::CreateMeshFrom(...) to create vertex data from geometries
+
+    // *** TO DO ** Depreciate SkinnedModel. The pointer has been moved into Model and file type v2 was added to support the loading and saving of data
+    class SkinnedModel; // Model with a pointer to BoneHierarchy data (if it is not skinned then pointer is not initalized)
+
+    class HeightGrid; // Memory block of heights. Initalize using a TriangleMesh, keeps a rectangular grid of float heights in the XZ domain. Interpolates the heights along the mesh to create just a height field from it and a world bounding box with min/max heights (for collision detection)
+
+    // 3D Meshs
     class LineMesh;
     class TriangleMesh;
 
-    // 3D Structure that matches verticies to an underlining connected hierarchy
-    class BoneHierarchy; //skelton structure with transforms, index, and weights to influence verticies
-    
-    // 3D Models containing meshes.  Models own the master data that is shared by different meshes. 
-    class HeightGrid; // initalized using a TriangleMesh, keeps a rectangular grid of float heights in the XZ domain and a world bounding box with min/max heights for collision detection to grid in the Y domain.
-    class LineModel; // from lines
-    class Model; // from triangles
-    class SkinnedModel; // Model with a pointer to BoneHierarchy data (if it is not skinned then pointer is not initalized)
-    
+    // Helper 3D Complex objects, working with vertex buffer references similar to class Triangle and Line:
+    class LineIndexed; // int[2] into a vertex buffer
+    class TriangleIndexed; // int[3] into a vertex buffer 
+
     // Helpers
     class VertexAttrib;
     class VertexFormat;
     //enum IndexFormat;
 
     // Functions
-    // *** TO DO *** WIP an oriented box (OB) or (OBB, oriented bounding box) on OBB collision test using separating axis theorem. Objective is a contact point.
+    // *** TO DO *** Move test functions into Collided class. Sphere on Sphere implemented, next OBB on Sphere
     // *** TO DO *** WIP an oriented box (OB) or (OBB, oriented bounding box) on Sphere collision test using nearest point intersection testing from reference #3
+    // *** TO DO *** WIP an oriented box (OB) or (OBB, oriented bounding box) on OBB collision test using separating axis theorem. Objective is a contact point.
     class Collided;
     std::vector<Collided>    SAT_OBBonOBB(const Box& A, const King::Quaternion& qA, const Box& B, const King::Quaternion& qB);
     Collided                 SAT_ContactDepthAndDirectionFromOBBonOBBIntersection(const std::vector<float3>& cornersA, const std::vector<float3>& cornersB, const float3& nonSeparatingAxis);
@@ -219,7 +240,7 @@ namespace King {
             formats
         };
         enum enumDesc
-        {   position = 0,color,textureCoord,normal,tangent,bitangent,boneWeights,boneIndicies,
+        {   position = 0, color, textureCoord, normal, tangent, bitangent, boneWeights, boneIndicies,
             types
         };
 
@@ -240,14 +261,16 @@ namespace King {
     /******************************************************************************
     *    VertexFormat
     ******************************************************************************/
+    constexpr auto KING_MAX_ATTRIBUTES_VERTEXFORMAT = 8;
+    
     class alignas(16) VertexFormat
     {
     public:
-        VertexAttrib    attributes[8];
+        VertexAttrib    attributes[KING_MAX_ATTRIBUTES_VERTEXFORMAT];
         uint16_t        nextAttribute = 0;
     public:
         VertexFormat() = default;
-        VertexFormat(const VertexFormat & otherIn) { for (uint16_t i = 0; i < 8; ++i) attributes[i] = otherIn.attributes[i]; nextAttribute = otherIn.nextAttribute; } // copy assign
+        VertexFormat(const VertexFormat & otherIn) { for (uint16_t i = 0; i < KING_MAX_ATTRIBUTES_VERTEXFORMAT; ++i) attributes[i] = otherIn.attributes[i]; nextAttribute = otherIn.nextAttribute; } // copy assign
 
         void Destroy() { nextAttribute = 0; }
 
@@ -259,7 +282,7 @@ namespace King {
         uint32_t                GetByteSize() const;
         uint32_t                GetAttributeByteStart(uint16_t indexIn) const;
         auto                    GetAttribute(uint16_t indexIn) const { return attributes[indexIn]; }
-        uint16_t                GetAttributeIndexFromDescription(VertexAttrib::enumDesc descIn) const;
+        uint16_t                GetAttributeIndexFromDescription(VertexAttrib::enumDesc descIn) const; // error returns UINT16_MAX 
         auto                    GetAttributeDescriptionFromIndex(uint16_t indexIn) const { return attributes[indexIn]._desc; }
         auto                    GetNumAttributes() const { return nextAttribute; }
     };
@@ -1390,10 +1413,25 @@ namespace King {
     /******************************************************************************
     *    Collided 
     *        Methods to find contacts and keep the information from them
-    *        along with the respone impulses
+    *        along with the respone impulses. CollisionBehavior is just a  
+    *        stored value to be check by handling routines for the collision response.
+    *        This must be set by external code that parses collisions into types for
+    *        a response by other collision resolver routines.
+    * 
+    *        Definitions:
+    *           none - do nothing
+    *           stop - stop, leave the collision in place
+    *           repel - adjust positions so not overlapping
+    *           rickochet - use impulses to separate collisions which modifies velocities
+    *           detonate - something bad to handle
+    *           invalid - as it says, this collision type is not liked, could be reporting
+    *               an event that should not occur
     ******************************************************************************/
     class alignas(16) Collided
     {
+        /* definitions */
+    public:
+        enum class eCollisionBehavior { none, stop, repel, rickochet, detonate, invalid };
         /* variables */
     public:
         std::weak_ptr<Sphere>           collider1;
@@ -1402,7 +1440,8 @@ namespace King {
         std::vector<DirectX::XMVECTOR>  contactPoints;
 
         DirectX::XMVECTOR               normal;
-        float                           penetrationDepth;
+        float                           penetrationDepth = 0.f;
+        enum class eCollisionBehavior   collisionType = eCollisionBehavior::invalid;
 
     private:
         /* methods */
@@ -1430,8 +1469,10 @@ namespace King {
         // Functionality
         // Accessors
         const size_t                        GetHasContact() const { return contactPoints.size(); }
+        const auto&                         GetCollisionType() const { return collisionType; }
         // Assignments
         void                                SetObjects(std::weak_ptr<Sphere> obj1, std::weak_ptr<Sphere> obj2) { collider1 = obj1; collider2 = obj2; }
+        void                                SetCollisionType(eCollisionBehavior type) { collisionType = type; }
 
         bool                                SphereOnSphereIntersection(const Sphere& A, const Sphere& B);
         bool                                OBBonOBBIntersection(const Box& A, const Quaternion qA, const Box& B, const Quaternion qB, const std::vector<float3>& cornersA, const std::vector<float3>& cornersB);
