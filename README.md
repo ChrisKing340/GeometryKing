@@ -13,7 +13,7 @@ Intended as the foundation for any type of game and software requiring 3D or 2D 
 
 ImageTga maintains our render independent status as well as visualization of usage cases (path finding, intersection tests, transforms, clipping, etc.) of geometry. Provides a way to test your code before connecting your rendering backend.
 
-Compiled with Visual Studio 2019, C\+\+17, 64 Bit Windows 10
+Compiled with Visual Studio 2022, C\+\+17, 64 Bit Windows 11
 
 Dependencies, visit:
    json:    [https://github.com/nlohmann/json](https://github.com/nlohmann/json)
