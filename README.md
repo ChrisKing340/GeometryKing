@@ -13,11 +13,11 @@
 Purpose: Generic, render independent, geometric game engine foundation. 
 Intended as the foundation for any type of game and software requiring 3D or 2D representation. No rendering is provided, instead, the basics needed to for representing 2D and 3D geometry, collision detection, math acceleration, and model generation of vertex and index buffers to translate class primitives into meshes ready for a rendering pipeline you provide. 2D is managed in memory blocks rather than vertex and index buffers as are the 3D models. Therefore, they can be saved and stored easily in a raw or image format for viewing. C\+\+ class example has ImageBlock that inherits from MemoryBlock that adds a Draw(...) method to draw our class primitives (such as line) into its memory buffer. 3DGeometryKing files have similar methodes within classes such as Model of CreateMesh(...) to convert 3D primitives to Models with vertex and index buffers ready for rendering. 
 
-3D Example
+3D Example (Models created from 3D primities of Pyramid, Sphere, and Box)
 
 ![image](https://github.com/user-attachments/assets/b2f6a2b9-4caa-415d-9154-c15210d4a212)
 
-2D Example export from class ImageTga after being drawn from 2D primities of Triangle2DF, Circle2DF, and Rectangle2DF:
+2D Example (export from class ImageTga after being drawn from 2D primities of Triangle2DF, Circle2DF, and Rectangle2DF)
 
 ![image](https://user-images.githubusercontent.com/15188055/192162868-6b863a96-c34d-49b2-83d2-d2f9f18e1af1.png)
 
