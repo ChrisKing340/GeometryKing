@@ -1,6 +1,6 @@
 ## New 2.8 Release of 3D Geometry King
 
-10/15/2024 - Version 2.8 - Added several new methods to return intersection points to basic geometries. This is used to return contact points for collision responses outside the library. Also added a new primitive class, pyramid, and interaction code added to most of the other primitive geometries.
+10/15/2024 - Version 2.8 - Added several new methods to return intersection points to basic geometries. This is used to return contact points for collision responses outside the library. Also added a new primitive class, pyramid, and intersection code added to most of the other primitive geometries.
 
 # 2D & 3D GeometryKing
 
