@@ -1,6 +1,28 @@
 ## New 2.8 Release of 3D Geometry King
 
-10/15/2024 - Version 2.8 - Added several new methods to return intersection points to basic geometries. This is used to return contact points for collision responses outside the library. Also added a new primitive class, pyramid, and intersection code added to most of the other primitive geometries.
+10/15/2024 - Version 2.8 - Added several new methods to return intersection points to basic geometries. This is used to return contact points for collision responses outside the library. Also added a new primitive class, Pyramid, and intersection code added to most of the other primitive geometries. Previous version added class Capsule and class Collided to store multiple contacts between geometries. The foundation is now within the library to implement physics into your games and simulations. The response handling to collisions is outside this library, as that is out of scope. The intent of this library is foundational, to build your own engine from it. An example, using the library as base geometries you might implement a culling function before you render, checking each object (or actor object in this example) for a fixed distance from the camera:
+unsigned int CullObjectsOutofViewFrustumDynamic(const Frustum& wF, float3 cameraPosition)
+{
+    unsigned int culled(0);
+    const float radius = 25000.f;
+
+    // dynamic objects
+    for (const auto& i : actorCache)
+    {
+        const Box& bb = i.second->GetBoundingBox();
+        const auto& loc = bb.GetCenter();
+
+        if ((cameraPosition - loc).GetMagnitudeEst() < radius && wF.Intersect(bb))
+            i.second->SetCulledFlag(false);
+        else
+        {
+            i.second->SetCulledFlag(true);
+            ++culled;
+        }
+    }
+
+    return culled;
+}
 
 # 2D & 3D GeometryKing
 
@@ -41,8 +63,11 @@ This code is the foundation of a fully functional DirectX 12 game engine and phy
     class Triangle; // SIMD three points;
     class Quad; // SIMD four points
     class Sphere; // SIMD float[4]
+    class Capsule; // SIMD two points & a float
     class Box;  // SIMD two points
     class Fustrum; // SIMD six planes and eight points
+    class Pyramid; // SIMD one point and two floats
+    class Collided; // Vector to store multiple contacts between geometries and methods to determine contacts
 
     #include "2DGeometryKing\2DGeometry.h"
     class Line2DF; // SIMD
@@ -88,6 +113,6 @@ Complex models require more than just simple geometry shapes.  Multiple meshes o
 
 ## Physics collision resolution 
 
-TO DO: working on collision points of contact and solvers for varying geometries. When complete, finishes the features list for a generic render independent geometric game engine.
+TO DO: working on collision points of contact and solvers for varying geometries. When complete, finishes the features list for a generic render independent geometric game engine. This is targeted for Release 3.0
 
 https://youtu.be/vbz0JtT7-vk?si=KqjE_mo5nLp_SyZB
