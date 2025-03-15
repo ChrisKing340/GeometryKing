@@ -1,12 +1,6 @@
-## New 2.7 Release of 3D Geometry King
+## New 2.8 Release of 3D Geometry King
 
-09/9/2023 - Version 2.7 - Added Model copy constructors and assignment operators for Triangle and Quad classes, which in turn
-        call the CreateMeshFrom(...) methods to construct the mesh from the primitive.
-        Also continued work on Contact class adding impulse accumulation and Sphere on Sphere point detection
-        Added Sphere::FindNearestPointFromSphere(const float3& pt3In)
-        Collidable class received sleep tracking variable for physics simulations
-        Added _boneHierarchy into Model class which depreciates SkinnedModel. Model now loads and writes the optional SkinnedModel
-        data at the EOF. Identical to the original SkinnedModel v1 format. 
+10/15/2024 - Version 2.8 - Added several new methods to return intersection points to basic geometries. This is used to return contact points for collision responses outside the library. Also added a new primitive class, pyramid, and interaction code added to most of the other primitive geometries.
 
 # 2D & 3D GeometryKing
 
