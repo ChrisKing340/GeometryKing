@@ -186,6 +186,38 @@ void King::from_json(const json& j, Frustum& to)
     j.at("P5").get_to(to._FrustumPlanes[5]);
 }
 
+bool __vectorcall King::Triangle::Contains(const Point& ptIn) const 
+{
+    const float epsilon = 1e-6f;
+
+    // Get the vertices of the triangle
+    float3 v0 = GetVertex(0);
+    float3 v1 = GetVertex(1);
+    float3 v2 = GetVertex(2);
+
+    // Vector from point to triangle vertices
+    float3 v0p = ptIn - v0;
+    float3 v1p = ptIn - v1;
+    float3 v2p = ptIn - v2;
+
+    // Cross products to determine areas
+    float3 cross0 = Cross(v1 - v0, v0p);
+    float3 cross1 = Cross(v2 - v1, v1p);
+    float3 cross2 = Cross(v0 - v2, v2p);
+
+    // Check if the point is on the same side of all edges
+    if (Dot(cross0, cross1) < -epsilon || Dot(cross1, cross2) < -epsilon || Dot(cross2, cross0) < -epsilon) {
+        return false; // Point is outside the triangle
+    }
+
+    // Optional: Check if the point is exactly on the triangle's edges
+    //if (std::abs(Dot(cross0, cross1)) < epsilon || std::abs(Dot(cross1, cross2)) < epsilon || std::abs(Dot(cross2, cross0)) < epsilon) {
+    //    return true; // Point is on the edge
+    //}
+
+    return true; // Point is inside the triangle
+}
+
 /******************************************************************************
 *    Triangle Intersects
 *        Desc:       ray intersection test
@@ -201,7 +233,7 @@ void King::from_json(const json& j, Frustum& to)
 *             \ /
 *             pt1
 ******************************************************************************/
-bool King::Triangle::Intersects(const float3 &rayOriginIn, const float3 &rayDirectionIn, float3 *intersectPointOut)
+bool King::Triangle::Intersects(const float3 &rayOriginIn, const float3 &rayDirectionIn, float3 *intersectPointOut) const
 {
     King::float3 hv, sv, qv;
     float a, f, u, v;
@@ -528,6 +560,8 @@ inline bool King::Point::Collision(Plane const& planeIn) const { return planeIn.
 
 inline bool King::Point::Collision(Capsule const& capsuleIn) const { return capsuleIn.Collision(*this); }
 
+inline bool King::Point::Collision(Pyramid const& pyramidIn) const { return false; } // { return pyramidIn.Collision(*this); }
+
 
 // double dispatch
 
@@ -544,6 +578,8 @@ inline bool King::Ray::Collision(Sphere const& sphereIn) const { return sphereIn
 inline bool King::Ray::Collision(Capsule const& capsuleIn) const { return capsuleIn.Collision(*this); }
 
 inline bool King::Ray::Collision(Box const& boxIn) const { return boxIn.Collision(*this); }
+
+inline bool King::Ray::Collision(Pyramid const& pyramidIn) const { return false; }// { return pyramidIn.Collision(*this); }
 
 bool King::Ray::Intersects(const Point& pointIn) const
 {
@@ -655,6 +691,83 @@ bool King::Ray::Intersects(const Line& lineIn, Position* intersectionOut) const
     nearestVector.Absolute();
 
     return float3::SumComponents(nearestVector) < FLT_EPSILON ? true : false;
+}
+
+// Based on Möller–Trumbore intersection algorithm
+inline bool __vectorcall Ray::Intersects(const Triangle& triangleIn, float3* intersectionOut) const {
+    const float EPSILON = 1.0e-6f;
+    
+    // Get the vertices of the triangle
+    float3 v0 = triangleIn.GetVertex(0);
+    float3 v1 = triangleIn.GetVertex(1);
+    float3 v2 = triangleIn.GetVertex(2);
+
+    // Calculate the two edges of the triangle
+    float3 edge1 = v1 - v0;
+    float3 edge2 = v2 - v0;
+
+    // Calculate the determinant (cross product of direction and edge2)
+    float3 h = Cross(direction, edge2);
+    float a = Dot(edge1, h);
+
+    // If a is close to 0, the ray is parallel to the triangle (no intersection)
+    if (fabs(a) < EPSILON) {
+        return false;
+    }
+
+    // Calculate the inverse determinant
+    float f = 1.0f / a;
+
+    // Calculate the distance from v0 to the ray's origin
+    float3 s = origin - v0;
+
+    // Calculate the first barycentric coordinate
+    float u = f * Dot(s, h);
+    if (u < 0.0f || u > 1.0f) {
+        return false;
+    }
+
+    // Calculate the second barycentric coordinate
+    float3 q = Cross(s, edge1);
+    float v = f * Dot(direction, q);
+    if (v < 0.0f || u + v > 1.0f) {
+        return false;
+    }
+
+    // Calculate the distance t to the intersection point
+    float t = f * Dot(edge2, q);
+
+    // If t is positive, the ray intersects the triangle
+    if (t > EPSILON) {
+        // If intersectionOut is provided, calculate the intersection point
+        if (intersectionOut != nullptr) {
+            *intersectionOut = origin + direction * t;
+        }
+        return true;
+    }
+
+    // No valid intersection
+    return false;
+}
+
+
+inline bool __vectorcall Ray::Intersects(const Quad& quadIn, float3* intersectionOut) const {
+    // Extract the two triangles that form the quad
+    Triangle tri1 = quadIn.GetTriangle1();
+    Triangle tri2 = quadIn.GetTriangle2();
+
+    // Check intersection with the first triangle
+    if (this->Intersects(tri1, intersectionOut)) {
+        return true; // If intersection occurs with the first triangle, return true
+    }
+
+    // Check intersection with the second triangle
+    if (this->Intersects(tri2, intersectionOut)) {
+        return true; // If intersection occurs with the second triangle, return true
+    }
+
+    // No intersection with either triangle
+    return false;
 }
 
 /******************************************************************************
@@ -885,9 +998,10 @@ inline bool King::Line::Collision(Point const & pointIn) const { return Intersec
 inline bool King::Line::Collision(Ray const& rayIn) const { return rayIn.Collision(*this); }
 inline bool King::Line::Collision(Line const & lineIn) const { return Intersects(lineIn); }
 inline bool King::Line::Collision(Sphere const & sphereIn) const { return sphereIn.Intersects(*this); }
-inline bool King::Line::Collision(Box const & boxIn) const { return boxIn.Intersects(*this); }
+inline bool King::Line::Collision(Box const& boxIn) const { float3 ptOut; return boxIn.Intersects(*this, &ptOut); }
 inline bool King::Line::Collision(Plane const& planeIn) const { return planeIn.Collision(*this); }
 inline bool King::Line::Collision(Capsule const& capsuleIn) const { return capsuleIn.Collision(*this); }
+inline bool King::Line::Collision(Pyramid const& pyramidIn) const { return false; }// { return pyramidIn.Collision(*this); }
 /******************************************************************************
 *    Method:    Quad::Intersects
 ******************************************************************************/
@@ -1043,6 +1157,24 @@ inline bool King::Sphere::Intersects(const Line & lineIn) const
     else
         return false;
 }
+bool King::Sphere::Intersects(const Triangle& triIn, float3* intersectionOut) const
+{
+    float3 sphereCenter = GetCenter();
+    float radius = GetRadius();
+
+    float3 closestPoint = triIn.FindNearestPoint(sphereCenter);
+
+    float distance = (sphereCenter - closestPoint).GetMagnitude();
+
+    if (distance <= radius) {
+        if (intersectionOut != nullptr) {
+            *intersectionOut = closestPoint;
+        }
+        return true;
+    }
+
+    return false;
+}
 bool King::Sphere::Intersects(const Plane& planeIn) const
 {
     auto nPt = planeIn.FindNearestPointOnPlane(GetCenter());
@@ -1100,6 +1232,8 @@ bool King::Sphere::Collision(Sphere const & sphereIn) const { return Intersects(
 inline bool King::Sphere::Collision(Capsule const& capsuleIn) const { return capsuleIn.Collision(*this); }
 bool King::Sphere::Collision(Box const & boxIn) const { return boxIn.Intersects(*this); }
 inline bool King::Sphere::Collision(Frustum const& frustumIn) const { return frustumIn.Collision(*this); }
+//inline bool King::Sphere::Collision(Pyramid const& pyramidIn) const { return pyramidIn.Collision(*this); } // does not seem to work, linker does not see this definiton for some reason
+
 /******************************************************************************
 *    Method:    Merge Sphere
 *       grow the sphere to match the min and max extents of each sphere
@@ -1202,14 +1336,64 @@ bool King::Box::Intersects(const Ray &rayIn, float &distOut) const
     distOut = 0.f;
     return false;
 }
-inline bool King::Box::Intersects(const Line & lineIn) const 
+inline bool King::Box::Intersects(const Line & lineIn, float3* intersectionOut) const
 { 
     const float3& c = GetCenter();
     auto l_nearest = lineIn.FindNearestPointOnLineSegment(c);
 
-    return DirectX::XMVector3InBounds(l_nearest - c, GetExtents());
+    if (DirectX::XMVector3InBounds(l_nearest - c, GetExtents()))
+    {
+        if (intersectionOut)
+            *intersectionOut = FindNearestPointOnBox(l_nearest);
+        return true;
+    }
 
+    return false;
 }
+bool King::Box::Intersects(const Triangle& rhs, float3* intersectionOut) const 
+{
+    // Get the vertices of the triangle
+    float3 v0 = rhs.GetVertex(0);
+    float3 v1 = rhs.GetVertex(1);
+    float3 v2 = rhs.GetVertex(2);
+
+    // Box corners
+    float3 corners[8] = {
+        pt_min,
+        { pt_min.GetX(), pt_min.GetY(), pt_max.GetZ() },
+        { pt_min.GetX(), pt_max.GetY(), pt_min.GetZ() },
+        { pt_min.GetX(), pt_max.GetY(), pt_max.GetZ() },
+        { pt_max.GetX(), pt_min.GetY(), pt_min.GetZ() },
+        { pt_max.GetX(), pt_min.GetY(), pt_max.GetZ() },
+        { pt_max.GetX(), pt_max.GetY(), pt_min.GetZ() },
+        pt_max
+    };
+
+    // Check each edge of the triangle against the box
+
+    if (Intersects(Line(v0, v1), intersectionOut) || Intersects(Line(v1, v2), intersectionOut) || Intersects(Line(v2, v0), intersectionOut)) {
+        if (intersectionOut) {
+            // Find intersection point(s) if needed
+            // (For simplicity, this part can be more complex depending on your specific needs)
+            *intersectionOut = (v0 + v1 + v2) / 3.0f; // Use the centroid for now
+        }
+        return true; // Triangle edge intersects with the box
+    }
+
+    // Check if any of the box corners are inside the triangle
+    for (const auto& corner : corners) {
+        if (rhs.Contains(corner)) {
+            if (intersectionOut) {
+                *intersectionOut = corner; // Store the corner point as intersection
+            }
+            return true; // Box corner is inside the triangle
+        }
+    }
+
+    return false; // No intersection detected
+}
+
+
 inline bool King::Box::Intersects(const Plane& planeIn) const 
 { 
     const float3& c = GetCenter();
@@ -1263,6 +1447,10 @@ bool King::Box::Intersects(const Sphere & sphereIn) const
 
     return distSq < rSq;
 }
+bool King::Box::Intersects(const Pyramid& pyramidIn, float3* intersectionOut) const
+{
+    return pyramidIn.Intersects(*this, Quaternion(), intersectionOut);
+}
 /******************************************************************************
 *    Method:    Find Nearest Point On Box
 *   |------|
@@ -1299,12 +1487,13 @@ float3 __vectorcall King::Box::FindNearestPointOnBox(const float3 & pt3In, const
 }
 inline bool King::Box::Collision(Ray const & rayIn) const { float distOut; return Intersects(rayIn, distOut); }
 inline bool King::Box::Collision(Point const & pointIn) const { return DirectX::XMVector3InBounds((DirectX::XMVECTOR)(pointIn - GetCenter()), GetExtents()); }
-inline bool King::Box::Collision(Line const & lineIn) const { return Intersects(lineIn); }
+inline bool King::Box::Collision(Line const & lineIn) const { float3 ptOut; return Intersects(lineIn, &ptOut); }
 inline bool King::Box::Collision(Plane const& planeIn) const { return Intersects(planeIn); }
 inline bool King::Box::Collision(Sphere const & sphereIn) const { return Intersects(sphereIn); }
 inline bool King::Box::Collision(Capsule const& capsuleIn) const { return capsuleIn.Intersects(*this); }
 inline bool King::Box::Collision(Box const & boxIn) const { return Intersects(boxIn); }
 inline bool King::Box::Collision(Frustum const& frustumIn) const { return frustumIn.Collision(*this); }
+//inline bool King::Box::Collision(Pyramid const& pyramidIn) const { return pyramidIn.Collision(*this); } // this does not seem to work, linker does not see this definition
 /******************************************************************************
 *    Method:    CollisionVolume
 *       Assumption:  Collision detection has already occured and is true
@@ -2525,6 +2714,72 @@ int King::Model::CreateMeshFrom(const King::Sphere& sphereIn, const uint32_t seg
 
     return (int)firstIndex;
 }
+
+int King::Model::CreateMeshFrom(const King::Pyramid& pyramidIn)
+{
+    // Check and set up material
+    if (!_materials.count("default"))
+        AddMaterial(Material::Create("default"));
+
+    // Set up vertex format if not already done
+    if (!_vertexFormat.Has(VertexAttrib::enumDesc::position))
+    {
+        _vertexFormat.SetNext(VertexAttrib::enumDesc::position, VertexAttrib::enumFormat::format_float32x3);
+    }
+    _vertexFormat.SetNext(VertexAttrib::enumDesc::textureCoord, VertexAttrib::enumFormat::format_float32x2);
+    _vertexFormat.SetNext(VertexAttrib::enumDesc::normal, VertexAttrib::enumFormat::format_float32x3);
+    _vertexFormat.SetNext(VertexAttrib::enumDesc::tangent, VertexAttrib::enumFormat::format_float32x3);
+    _vertexFormat.SetNext(VertexAttrib::enumDesc::bitangent, VertexAttrib::enumFormat::format_float32x3);
+    _vertexBufferMaster.SetStride(_vertexFormat.GetByteSize());
+    assert(_vertexFormat.GetByteSize() == 56); // Ensure byte size matches expectations
+
+    // Create our pyramid geometry
+    Model& m = *this;
+
+    // Get the base vertices and apex of the pyramid
+    const std::vector<float3>& baseVertices = pyramidIn.GetBaseVertices();
+    const float3& apex = pyramidIn.GetApex();
+
+    // Indices for creating the mesh
+    std::vector<uint32_t> indices;
+    std::vector<float3> vertices;
+    std::vector<float3> normals;
+
+    // Add the base vertices to the vertex buffer
+    vertices.insert(vertices.end(), baseVertices.begin(), baseVertices.end());
+
+    // Add the apex to the vertex buffer
+    vertices.push_back(apex);
+
+    // Generate indices for the base of the pyramid (as a fan)
+    const size_t baseVertexCount = baseVertices.size();
+    const uint32_t apexIndex = static_cast<uint32_t>(vertices.size() - 1); // Last index is the apex
+
+    // Create the base of the pyramid
+    for (size_t i = 0; i < baseVertexCount; ++i)
+    {
+        uint32_t nextIndex = (i + 1) % baseVertexCount;
+        indices.push_back(i);               // Current base vertex
+        indices.push_back(nextIndex);       // Next base vertex
+        indices.push_back(apexIndex);       // Apex
+    }
+
+    // Create the mesh from the generated vertices, indices, and normals
+    auto meshIndex = HelperCreateMeshFrom(vertices, indices, {}, {});
+
+    // Set the bounding box of the pyramid mesh
+    _meshes[meshIndex]->CalculateBoundingBox();
+
+    // Translate the mesh to the pyramid's position
+    Translate(pyramidIn.GetCenter() - float3(0.f, pyramidIn.GetHeight() * 0.5f, 0.f));
+
+    // Set texture coordinates if applicable
+    if (_vertexFormat.Has(VertexAttrib::enumDesc::textureCoord))
+        HelperCreateTextureCoordinatesForTriOrQuad(vertices, baseVertexCount);
+
+    return static_cast<int>(meshIndex);
+}
+
 /******************************************************************************
 *    Method:    operator= ; copy assignment
 ******************************************************************************/
@@ -6279,6 +6534,170 @@ void King::ModelScaffold::SetDataAttribute(vector<vector<float>>& dataIn, Vertex
 }
 
 
+bool __vectorcall King::Triangle::Intersects(const Triangle& triIn, float3* intersectionOut) const 
+{
+    // Möller–Trumbore intersection algorithm
+    const float3& A = pt[0];
+    const float3& B = pt[1];
+    const float3& C = pt[2];
+    const float3& P = triIn.pt[0];
+    const float3& Q = triIn.pt[1];
+    const float3& R = triIn.pt[2];
+
+    // Edge vectors
+    float3 AB = B - A;
+    float3 AC = C - A;
+    float3 PQ = Q - P;
+    float3 PR = R - P;
+
+    // Calculate the normal for the triangle (A, B, C)
+    float3 N = Cross(AB, AC);
+
+    // Check for zero area triangle
+    if (N.IsOrNearZero()) return false; // Degenerate triangle
+
+    // Normalize the normal vector
+    N.Normalize();
+
+    // Find the intersection line of the two triangles (P, Q, R) and (A, B, C)
+    float3 E1 = Cross(PQ, N);
+    float3 E2 = Cross(PR, N);
+
+    // Calculate the determinant
+    float det = Dot(AB, E2);
+    if (fabs(det) < 1e-8f) return false; // Parallel planes
+
+    // Calculate the distance from point A to the plane
+    float invDet = 1.0f / det;
+    float3 AP = P - A;
+
+    // Barycentric coordinates
+    float u = Dot(AP, E1) * invDet;
+    float v = Dot(PQ, E2) * invDet;
+
+    // Check if intersection lies within triangle A-B-C
+    if (u < 0.0f || v < 0.0f || u + v > 1.0f) return false;
+
+    // Calculate intersection point
+    float3 intersectionPoint = P + u * PQ;
+
+    // Check if the intersection point lies within triangle P-Q-R
+    float3 AE = intersectionPoint - A;
+    float3 APQ = Cross(AB, AE);
+    if (Dot(N, APQ) < 0.0f) return false; // Outside triangle
+
+    // Check for intersection with triangle (P, Q, R)
+    float3 APQCross = Cross(E1, PR);
+    if (Dot(N, APQCross) < 0.0f) return false; // Outside triangle
+
+    // Output the intersection point if requested
+    if (intersectionOut) {
+        *intersectionOut = intersectionPoint;
+    }
+
+    return true; // Intersection found
+}
+
+inline bool __vectorcall King::Triangle::Intersects(const Quad& qIn, float3* intersectionOut) const { return qIn.Intersects(*this, intersectionOut); }
+
+inline bool __vectorcall King::Triangle::Intersects(const Plane& pIn, float3* intersectionOut) const { return pIn.Intersects(*this, intersectionOut); }
+
+inline bool __vectorcall King::Triangle::Intersects(const Sphere& sIn, float3* intersectionOut) const { return sIn.Intersects(*this, intersectionOut); }
+
+float3 __vectorcall Triangle::FindNearestPoint(const float3& pt3In) const 
+{
+    // Check if the point is inside the triangle
+    if (Contains(pt3In)) {
+        return pt3In; // Return the point itself if it's inside the triangle
+    }
+
+    float3 nearestPoint = pt[0]; // Start by assuming the nearest point is the first vertex
+    float minDistSquared = DirectX::XMVectorGetX(DirectX::XMVector3LengthSq(pt3In - pt[0])); // Initialize with the distance to the first vertex
+
+    // Step 2: Check each vertex and edge for the nearest point
+    for (int i = 0; i < 3; ++i) {
+        float3 currentVertex = pt[i];
+        float distSquared = DirectX::XMVectorGetX(DirectX::XMVector3LengthSq(pt3In - currentVertex));
+        if (distSquared < minDistSquared) {
+            minDistSquared = distSquared;
+            nearestPoint = currentVertex; // Update nearest point if the current vertex is closer
+        }
+
+        // Check the edge formed by the current vertex and the next vertex (wrap around)
+        int nextIndex = (i + 1) % 3;
+        float3 edge = pt[nextIndex] - currentVertex;
+        float3 toPoint = pt3In - currentVertex;
+
+        // Project the point onto the edge
+        float edgeLengthSquared = DirectX::XMVectorGetX(DirectX::XMVector3LengthSq(edge));
+        if (edgeLengthSquared > 0) { // Prevent division by zero
+            float minor = min(1.0f, Dot(toPoint, edge));
+            float t = max(0.0f, minor / edgeLengthSquared);
+            float3 projection = currentVertex + t * edge; // The closest point on the edge
+            distSquared = DirectX::XMVectorGetX(DirectX::XMVector3LengthSq(pt3In - projection));
+            if (distSquared < minDistSquared) {
+                minDistSquared = distSquared;
+                nearestPoint = projection; // Update nearest point if the edge projection is closer
+            }
+        }
+    }
+
+    return nearestPoint; // Return the closest point found
+}
+
+
+bool __vectorcall King::Quad::Intersects(const Triangle& triIn, float3* intersectionOut) const 
+{
+    // Get the vertices of the quad
+    const float3& A = GetVertex(0);
+    const float3& B = GetVertex(1);
+    const float3& C = GetVertex(2);
+    const float3& D = GetVertex(3);
+
+    // Split the quad into two triangles: ABC and ACD
+    Triangle triangle1(A, B, C);
+    Triangle triangle2(A, C, D);
+
+    // Check intersection with the first triangle (ABC)
+    float3 intersectionPoint;
+    if (triangle1.Intersects(triIn, &intersectionPoint)) {
+        if (intersectionOut) {
+            *intersectionOut = intersectionPoint; // Store intersection point
+        }
+        return true; // Intersection found with triangle1
+    }
+
+    // Check intersection with the second triangle (ACD)
+    if (triangle2.Intersects(triIn, &intersectionPoint)) {
+        if (intersectionOut) {
+            *intersectionOut = intersectionPoint; // Store intersection point
+        }
+        return true; // Intersection found with triangle2
+    }
+
+    return false; // No intersection found with either triangle
+}
+
+// Helper function to find the intersection point between a plane and an edge of the triangle
+bool Plane::FindIntersectionWithEdge(const float3& v0, const float3& v1, float3& intersectionOut) const {
+    // Compute the direction of the edge
+    float3 edgeDir = v1 - v0;
+
+    // Compute the distance from the starting vertex to the plane
+    float d0 = DistanceFromPoint(v0);
+    float d1 = DistanceFromPoint(v1);
+
+    // Check if the edge intersects the plane
+    if (d0 * d1 < 0) { // One vertex is on one side and the other is on the other side
+        // Interpolation factor to find the intersection
+        float t = d0 / (d0 - d1);
+        intersectionOut = v0 + edgeDir * t; // Linear interpolation to find the intersection point
+        return true; // Intersection found
+    }
+
+    return false; // No intersection
+}
+
 inline King::Plane::Plane(const Position origin, const float3 normalToPlane) 
 { 
     v = DirectX::XMPlaneFromPointNormal(static_cast<DirectX::XMVECTOR>(origin), DirectX::XMPlaneNormalizeEst(normalToPlane)); 
@@ -6315,6 +6734,8 @@ inline bool King::Plane::Collision(Plane const& planeIn) const { Line lineOut; r
 inline bool King::Plane::Collision(Sphere const& sphereIn) const { return Intersects((Sphere)sphereIn); }
 
 inline bool King::Plane::Collision(Box const& boxIn) const { return Intersects(boxIn); }
+
+inline bool King::Plane::Collision(Pyramid const& pyramidIn) const { return false; }// { return pyramidIn.Collision(*this); }
 
 inline bool __vectorcall King::Plane::Intersects(const float3 pointIn) const
 {
@@ -6490,38 +6911,70 @@ inline bool __vectorcall King::Plane::Intersects(const Sphere & sphereIn) const
     // intersecting plane
     return true;
 }
+bool King::Plane::Intersects(const Triangle& triIn, float3* intersectionOut) const {
+    // Get triangle vertices
+    XMVECTOR v0 = triIn.GetVertex(0);
+    XMVECTOR v1 = triIn.GetVertex(1);
+    XMVECTOR v2 = triIn.GetVertex(2);
 
-inline bool __vectorcall King::Plane::Intersects(const Triangle& triangleIn) const
-{
-    // FastIntersectTrianglePlane from DirectXCollision.inl
-    // Plane0
-    XMVECTOR Dist0 = DirectX::XMVector4Dot(triangleIn.GetVertex(0), v);
-    XMVECTOR Dist1 = DirectX::XMVector4Dot(triangleIn.GetVertex(1), v);
-    XMVECTOR Dist2 = DirectX::XMVector4Dot(triangleIn.GetVertex(2), v);
+    // Calculate distances from the triangle vertices to the plane
+    XMVECTOR Dist0 = DirectX::XMVector4Dot(v0, v);
+    XMVECTOR Dist1 = DirectX::XMVector4Dot(v1, v);
+    XMVECTOR Dist2 = DirectX::XMVector4Dot(v2, v);
 
+    // Determine the minimum and maximum distances
     XMVECTOR MinDist = DirectX::XMVectorMin(Dist0, Dist1);
     MinDist = DirectX::XMVectorMin(MinDist, Dist2);
 
     XMVECTOR MaxDist = DirectX::XMVectorMax(Dist0, Dist1);
     MaxDist = DirectX::XMVectorMax(MaxDist, Dist2);
 
+    // Zero vector
     XMVECTOR Zero = DirectX::XMVectorZero();
 
-    // Outside the plane?
-    XMVECTOR Outside = DirectX::XMVectorGreater(MinDist, Zero);
+    // Check for nearly parallel planes
+    float3 planeNormal = GetNormal();
+    float3 triangleNormal = triIn.GetNormalCCW(); // Assuming counter-clockwise order
+    // Calculate the dot product
+    float dotProduct = Dot(planeNormal, triangleNormal);
+    // If the dot product is close to zero, the plane and triangle are nearly parallel
+    if (fabs(dotProduct) < 1e-6f) {
+        return false;
+    }
 
-    // Fully inside the plane?
+    // Check if triangle vertices are outside or fully inside the plane
+    XMVECTOR Outside = DirectX::XMVectorGreater(MinDist, Zero);
     XMVECTOR Inside = DirectX::XMVectorLess(MaxDist, Zero);
 
-    // in Outside of plane
-    if (DirectX::XMVector4EqualInt(Outside, DirectX::XMVectorTrueInt()))
-        return false;
-    // in inside of plane
-    if (DirectX::XMVector4EqualInt(Inside, DirectX::XMVectorTrueInt()))
-        return false;
-    // intersecting plane
+    // If fully outside the plane
+    if (DirectX::XMVector4EqualInt(Outside, DirectX::XMVectorTrueInt())) {
+        return false; // No intersection
+    }
+
+    // If fully inside the plane
+    if (DirectX::XMVector4EqualInt(Inside, DirectX::XMVectorTrueInt())) {
+        return false; // No intersection
+    }
+
+    // If intersecting the plane, calculate the intersection point
+    if (intersectionOut) {
+        // Calculate the intersection point using the triangle's centroid as a reference
+        float3 intersectionPoint = (float3(v0) + float3(v1) + float3(v2)) / 3.0f; // Average point
+
+        // Check where this average point lies in relation to the plane
+        float distanceToPlane = Dot(intersectionPoint, planeNormal) + GetW();
+
+        if (intersectionOut && fabs(distanceToPlane) < 1e-6) { // On the plane
+            *intersectionOut = intersectionPoint; // Output the intersection point
+            return true;
+        }
+    }
+
+    // If the triangle intersects the plane but we couldn't find a specific intersection point
     return true;
 }
+
+
 
 inline bool __vectorcall King::Plane::Intersects(const Box& boxIn) const
 {
@@ -6602,6 +7055,387 @@ King::Frustum& King::Frustum::operator*=(const DirectX::XMMATRIX& m)
 
     return *this;
 }
+
+DirectX::XMMATRIX King::Pyramid::MomentsOfInertia(const float& densityIn) 
+{
+    // Calculate the volume of the pyramid
+    float volume = (1.0f / 3.0f) * baseLength * baseLength * height;
+    float mass = densityIn * volume;
+
+    // Calculate the moments of inertia about the centroid
+    float Ixx = (mass * (baseLength * baseLength)) / 12.0f;  // About X-axis
+    float Iyy = (mass * (baseLength * baseLength)) / 12.0f;  // About Y-axis
+    float Izz = (mass * (height * height)) / 12.0f;          // About Z-axis
+
+    // Since the pyramid is symmetric around the Y-axis, we will have:
+    // Ixy = Ixz = Iyx = Iyz = Izx = Izy = 0
+
+    // Inertia tensor (with respect to the centroid)
+    DirectX::XMMATRIX I(
+        Ixx, 0, 0, 0,
+        0, Iyy, 0, 0,
+        0, 0, Izz, 0,
+        0, 0, 0, 1
+    );
+
+    // Adjust the moments of inertia to be about the origin
+    // Using parallel axis theorem, the adjustments can be made based on the location of the centroid.
+    // The centroid of the pyramid is at (0, height/4, 0) since the base is in the XZ plane.
+
+    float d = height / 4.0f; // distance from the centroid to the base
+    DirectX::XMVectorSetX(I.r[1], DirectX::XMVectorGetY(I.r[1]) + mass * d * d); // Adjust Iyy for Y-axis
+    // Adjust Izz and Ixx if needed based on other axes
+
+    return I;
+}
+
+
+bool King::Pyramid::Contains(const Point& ptIn) const
+{
+    // Get the local coordinates of the point relative to the pyramid's center
+    float3 localPt = ptIn - GetCenter();
+
+    // Check if the point is within the height of the pyramid
+    if (localPt.GetY() < 0 || localPt.GetY() > height)
+        return false;
+
+    // Scale down the base size as the point moves up the height of the pyramid
+    float baseScale = 1.0f - (localPt.GetY() / height);
+    float halfBase = (baseLength * baseScale) * 0.5f;
+
+    // Check if the point is within the base at the given height level
+    return (localPt.GetX() >= -halfBase && localPt.GetX() <= halfBase && localPt.GetZ() >= -halfBase && localPt.GetZ() <= halfBase);
+}
+
+bool King::Pyramid::Intersects(const Ray& ray, float3* ptOut) const
+{
+    // Check intersection with each triangular face
+    std::vector<Triangle> tri = GetFaces();
+    for (const auto& face : tri) {
+        if (face.Intersects(ray, ptOut)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool King::Pyramid::Intersects(const Line& lineIn, float3* intersectionOut) const 
+{
+    // Check intersection with each triangular face
+    std::vector<Triangle> faces = GetFaces();
+    for (const auto& face : faces) {
+        if (face.Intersects(lineIn, intersectionOut)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool King::Pyramid::Intersects(const Triangle& rhs, float3* intersectionOut) const {
+    // Check intersection with each triangular face
+    std::vector<Triangle> faces = GetFaces(); // Define this method to get all triangular faces
+    for (const auto& face : faces) {
+        if (face.Intersects(rhs, intersectionOut)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool King::Pyramid::Intersects(const Quad& rhs, float3* intersectionOut) const {
+    // Check intersection with each triangular face
+    std::vector<Triangle> faces = GetFaces(); // Define this method to get all triangular faces
+    for (const auto& face : faces) {
+        if (face.Intersects(rhs, intersectionOut)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool King::Pyramid::Intersects(const Plane& rhs, float3* intersectionOut) const {
+    // Check intersection with each triangular face
+    std::vector<Triangle> faces = GetFaces(); // Define this method to get all triangular faces
+    for (const auto& face : faces) {
+        if (face.Intersects(rhs, intersectionOut)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool King::Pyramid::Intersects(const Sphere& rhs, float3* intersectionOut) const {
+    // Check intersection with each triangular face
+    std::vector<Triangle> faces = GetFaces(); // Define this method to get all triangular faces
+    for (const auto& face : faces) {
+        if (face.Intersects(rhs, intersectionOut)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool King::Pyramid::Intersects(const Box& boxIn, const Quaternion& orientationIn, float3* intersectionOut) const 
+{
+    DirectX::XMMATRIX boxToWorld = DirectX::XMMatrixRotationQuaternion(orientationIn);
+    DirectX::XMMATRIX worldToBox = DirectX::XMMatrixInverse(nullptr, boxToWorld);
+
+    // Transform pyramid center and base
+    float3 pyramidCenter = GetCenter();
+    pyramidCenter = DirectX::XMVector3Transform(pyramidCenter, worldToBox);
+
+    std::vector<float3> pyramidBase = GetBaseVertices();
+    for (auto& vertex : pyramidBase) {
+        vertex = DirectX::XMVector3Transform(vertex, worldToBox);
+    }
+
+    // Transform apex of the pyramid
+    float3 pyramidApex = float3(0.f, height, 0.f) + GetCenter();
+    pyramidApex = DirectX::XMVector3Transform(pyramidApex, worldToBox);
+
+
+    std::vector<Triangle> pyramidFaces = GetFaces();
+    for (const auto& face : pyramidFaces) {
+        if (boxIn.Intersects(face, intersectionOut)) {
+            if (intersectionOut != nullptr) {
+                *intersectionOut = DirectX::XMVector3Transform(*intersectionOut, boxToWorld);
+            }
+            return true;
+        }
+    }
+
+    return false;
+}
+
+
+bool King::Pyramid::Intersects(const Pyramid& rhs, float3* intersectionOut) const 
+{
+    // Step 1: Get the base and face triangles of both pyramids
+    std::vector<Triangle> thisFaces = GetFaces();
+    std::vector<Triangle> rhsFaces = rhs.GetFaces();
+
+    // Step 2: Check intersection between all face pairs of both pyramids
+    for (const auto& thisFace : thisFaces) {
+        for (const auto& rhsFace : rhsFaces) {
+            if (thisFace.Intersects(rhsFace, intersectionOut)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+bool King::Pyramid::Intersects(const Capsule& capsuleIn, float3* intersectionOut) const {
+    // Get the line segment representing the capsule
+    Line capsuleLine = capsuleIn.GetSegment();
+    float radius = capsuleIn.GetRadius();
+
+    // Get the triangle faces of the pyramid
+    std::vector<Triangle> faces = GetFaces();
+
+    // Iterate through each triangle face
+    for (const Triangle& face : faces) {
+        float3 intersectionPoint;
+
+        // Check for intersection with the line segment of the capsule
+        if (face.Intersects(capsuleLine, &intersectionPoint)) {
+            // Check if the intersection point is within the radius of the capsule
+            float3 nearestPoint = capsuleLine.FindNearestPointOnLineSegment(intersectionPoint);
+            if (Distance(intersectionPoint, nearestPoint) <= radius) {
+                if (intersectionOut) {
+                    *intersectionOut = intersectionPoint; // Output the intersection point
+                }
+                return true; // An intersection was found
+            }
+        }
+    }
+
+    return false; // No intersection found with any face
+}
+
+King::Quad King::Pyramid::GetBaseQuad() const 
+{
+    // Retrieve the base vertices using the GetBase() method
+    std::vector<float3> baseVertices = GetBaseVertices();
+
+    // Assuming baseVertices are in the order: Bottom Left, Bottom Right, Top Right, Top Left
+    return Quad(baseVertices[0], baseVertices[1], baseVertices[2], baseVertices[3]);
+}
+
+std::vector<Triangle> King::Pyramid::GetFaces() const {
+    std::vector<Triangle> faces;
+
+    // Get base vertices
+    std::vector<float3> baseVertices = GetBaseVertices();
+
+    // Calculate the apex position
+    float3 apex = float3(0.f, height, 0.f) + GetCenter();
+
+    // Assuming the base vertices are ordered in a counter-clockwise manner
+    // Create triangles for each side face
+    faces.emplace_back(apex, baseVertices[0], baseVertices[1]); // Face 1: Apex, Bottom Left, Bottom Right
+    faces.emplace_back(apex, baseVertices[1], baseVertices[2]); // Face 2: Apex, Bottom Right, Top Right
+    faces.emplace_back(apex, baseVertices[2], baseVertices[3]); // Face 3: Apex, Top Right, Top Left
+    faces.emplace_back(apex, baseVertices[3], baseVertices[0]); // Face 4: Apex, Top Left, Bottom Left
+    // and the base
+    faces.emplace_back(baseVertices[0], baseVertices[1], baseVertices[2]);
+    faces.emplace_back(baseVertices[0], baseVertices[2], baseVertices[3]);
+
+    return faces;
+}
+
+std::vector<float3> King::Pyramid::GetBaseVertices() const
+{
+    std::vector<float3> baseVertices;
+    float halfBase = baseLength * 0.5f;
+
+    const float3 c(GetCenter());
+    const float x = c.GetX();
+    const float y = c.GetY();
+    const float z = c.GetZ();
+
+    // Calculate the base vertices assuming the base is aligned with the XZ plane
+    baseVertices.push_back(float3(x - halfBase, y, z - halfBase)); // Bottom-left
+    baseVertices.push_back(float3(x + halfBase, y, z - halfBase)); // Bottom-right
+    baseVertices.push_back(float3(x + halfBase, y, z + halfBase)); // Top-right
+    baseVertices.push_back(float3(x - halfBase, y, z + halfBase)); // Top-left
+
+    return baseVertices; // Return the vector of base vertices
+}
+
+float3 King::Pyramid::FindNearestPoint(const float3& point) const 
+{
+    float minDistanceSquared = FLT_MAX;
+    float3 closestPoint(FLT_MAX);
+
+    std::vector<Triangle> faces = GetFaces();
+
+    // Check each face for the nearest point
+    for (const auto& face : faces) 
+    {
+        float3 nearestPointOnFace = face.FindNearestPoint(point);
+
+        // Calculate distance to this point
+        float distanceSquared = DirectX::XMVectorGetX(DirectX::XMVector3LengthSq(point - nearestPointOnFace));
+
+        // Update closest point if this point is closer
+        if (distanceSquared < minDistanceSquared) {
+            minDistanceSquared = distanceSquared;
+            closestPoint = nearestPointOnFace;
+        }
+    }
+
+    return closestPoint;
+}
+
+
+// Method to calculate the distance from a point to the pyramid
+float King::Pyramid::DistanceFromPoint(const float3& point) const 
+{
+    // Calculate the nearest point on the pyramid's base
+    float3 nearestPointOnBase = FindNearestPoint(point);
+
+    // Calculate the distance from the nearest point on the base to the given point
+    return (point - nearestPointOnBase).GetMagnitudeEst();
+}
+
+// double dispatch
+
+//inline bool King::Pyramid::Collision(Point const& pointIn) const { return Contains(pointIn); }
+//
+//inline bool King::Pyramid::Collision(Ray const& rayIn) const { float3 out; return Intersects(rayIn, &out); }
+//
+//inline bool King::Pyramid::Collision(Line const& lineIn) const { float3 out; return Intersects(lineIn, &out); }
+//
+//inline bool King::Pyramid::Collision(Plane const& planeIn) const { float3 out; return Intersects(planeIn, &out); }
+//
+//inline bool King::Pyramid::Collision(Sphere const& sphereIn) const { float3 out; return Intersects(sphereIn, &out); }
+//
+//inline bool King::Pyramid::Collision(Pyramid const& pyramidIn) const { float3 out; return Intersects(pyramidIn, &out); }
+//
+//inline bool King::Pyramid::Collision(Capsule const& capsuleIn) const { float3 out; return Intersects(capsuleIn, &out); }
+//
+//inline bool King::Pyramid::Collision(Box const& boxIn) const { float3 out; return Intersects(boxIn, Quaternion(), &out); }
+
+inline bool __vectorcall King::Line::Intersects(const Triangle& triangle, float3* intersectionOut) const
+{
+    // Get the vertices of the triangle
+    const float3& v0 = triangle.GetVertex(0);
+
+    // Direction of the line (pt[1] - pt[0])
+    float3 dir = pt[1] - pt[0];
+
+    // Edge vectors of the triangle
+    float3 edge1 = triangle.GetEdge1();
+    float3 edge2 = triangle.GetEdge2();
+
+    // Calculate determinant (pVec = direction cross edge2)
+    float3 pVec = Cross(dir, edge2);
+    float det = Dot(edge1, pVec);
+
+    // If the determinant is close to 0, the line is parallel to the triangle plane
+    if (fabs(det) < 1e-8f) {
+        return false; // Line does not intersect the triangle
+    }
+
+    // Inverse determinant
+    float invDet = 1.0f / det;
+
+    // Calculate distance from v0 to the line's start point (tVec = pt[0] - v0)
+    float3 tVec = pt[0] - v0;
+
+    // Calculate u parameter and test bounds
+    float u = Dot(tVec, pVec) * invDet;
+    if (u < 0.0f || u > 1.0f) {
+        return false;
+    }
+
+    // Calculate qVec = tVec cross edge1
+    float3 qVec = Cross(tVec, edge1);
+
+    // Calculate v parameter and test bounds
+    float v = Dot(dir, qVec) * invDet;
+    if (v < 0.0f || u + v > 1.0f) {
+        return false;
+    }
+
+    // Calculate t (intersection point)
+    float t = Dot(edge2, qVec) * invDet;
+
+    // If t is within the line segment, we have an intersection
+    if (t >= 0.0f && t <= 1.0f) {
+        if (intersectionOut != nullptr) {
+            *intersectionOut = pt[0] + t * dir; // Calculate the intersection point
+        }
+        return true; // Intersection found
+    }
+
+    // No intersection
+    return false;
+}
+
+inline bool __vectorcall Line::Intersects(const Quad& quadIn, float3* intersectionOut) const
+{
+    // Extract the two triangles that form the quad
+    Triangle tri1 = quadIn.GetTriangle1();
+    Triangle tri2 = quadIn.GetTriangle2();
+
+    // Check intersection with the first triangle
+    if (this->Intersects(tri1, intersectionOut)) {
+        return true; // If an intersection occurs with the first triangle, return true
+    }
+
+    // Check intersection with the second triangle
+    if (this->Intersects(tri2, intersectionOut)) {
+        return true; // If an intersection occurs with the second triangle, return true
+    }
+
+    // No intersection with either triangle
+    return false;
+}
+
+
 /******************************************************************************
 *   Class Contact
 ******************************************************************************/
@@ -7508,6 +8342,8 @@ inline bool King::Capsule::Collision(Line const& lineIn) const { return Intersec
 inline bool King::Capsule::Collision(const Sphere& sphereIn) const { return Intersects(sphereIn); }
 
 inline bool King::Capsule::Collision(Box const& boxIn) const { return Intersects(boxIn); }
+
+bool King::Capsule::Collision(Pyramid const& pyramidIn) const { return false; }// { return pyramidIn.Collision(*this); }
 
 bool King::Material::Read_v1(ifstream& dataFileIn)
 {

@@ -108,7 +108,6 @@ SOFTWARE.
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
-
 #include <memory>
 #include <utility>
 #include <limits>
@@ -464,7 +463,7 @@ namespace King {
 
         inline IntPoint2                    FindNearestPoint(const IntPoint2& pt2In) const;
         // Accessors
-        inline IntPoint2                    GetSize() const { IntPoint2 a(rb - lt); a.MakeAbsolute(); return a; } // width & height
+        inline UIntPoint2                   GetSize() const { IntPoint2 a(rb - lt); a.MakeAbsolute(); return UIntPoint2(a); } // width & height
         inline IntPoint2                    GetCenter() const { return IntPoint2(lt + (rb - lt) / 2l); }
         inline long                         GetWidth() const { return std::abs(rb.GetX() - lt.GetX()); }
         inline long                         GetHeight() const { return std::abs(rb.GetY() - lt.GetY()); }
@@ -485,7 +484,7 @@ namespace King {
         inline void                         SetLT(const IntPoint2 &ltIn) { lt = ltIn; }
         inline void                         SetRB(const IntPoint2 &rbIn) { rb = rbIn; }
         inline void                         SetSize(const UIntPoint2 &sz) { rb = lt + sz; }
-        inline void                         SetWH(const UIntPoint2 &whIn) { UIntPoint2 offset = (whIn) / 2ul; UIntPoint2 c = GetCenter(); lt = c - offset; rb = c + offset; }
+        inline void                         SetWH(const UIntPoint2 &whIn) { rb = lt + whIn; }
         inline void                         SetWidth(const long &w) { rb.SetX(lt.GetX() + w); }
         inline void                         SetHeight(const long &h) { rb.SetY(lt.GetY() + h); }
         inline void                         SetLeft(const long &x) { lt.SetX(x); }

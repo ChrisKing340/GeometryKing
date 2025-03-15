@@ -40,7 +40,7 @@ References:     Code not original or substantially created by me will be cited h
 
 Contact:        https://chrisking340.github.io/GeometryKing/
 
-Copyright (c) 2020, 2021, 2022, 2023 Christopher H. King
+Copyright (c) 2020, 2021, 2022, 2023, 2024, 2025 Christopher H. King
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -112,6 +112,23 @@ SOFTWARE.
         ambiguous (more than one) available operators. Removed FloatPoint3 class naming and used the alias float3 for a future
         transition to permanently changing the math library from FloatPoint3 class to float3 class naming.
     11/27/2023 - Version 2.7.2 - Minor comment and code organization changes
+    09/28/2024 - Version 2.8.0 - Added several new methods to return intersection points:
+            Line::Intersects(const Triangle& triangleIn, float3* intersectionOut = nullptr)
+            Line::Intersects(const Quad& quadIn, float3* intersectionOut = nullptr)
+            Ray::Intersects(const Triangle& quadIn, float3* intersectionOut = nullptr)
+            Ray::Intersects(const Quad& quadIn, float3* intersectionOut = nullptr)
+            Triangle::Contains(const Point& ptIn)
+            Triangle::Intersects(const Line& lineIn, float3* intersectionOut)
+            Triangle::Intersects(const Triangle& triIn, float3* intersectionOut)
+            Triangle::Intersects(const Quad& qIn, float3* intersectionOut)
+            Triangle::Intersects(const Plane& pIn, float3* intersectionOut)
+            Triangle::Intersects(const Sphere& sIn, float3* intersectionOut)
+            Triangle::FindNearestPoint(const float3& pt3In) const
+            Plane::Intersects(const Triangle& triIn, float3* intersectionOut)
+            Box::Intersects(const Line &lineIn, float3* intersectionOut) const;
+            Box::Intersects(const Triangle& rhs, float3* intersectionOut) const;
+        Added class Pyramid with interpoperability with existing geometric objects and Model class to enable models of Pyramids
+        and collision testing.
 
     WIP
     Version 3.0 Planned release - Oriented box on oriented box and sphere collision tests. Previously extended our axis 
@@ -133,7 +150,7 @@ SOFTWARE.
             Function SAT_ContactDepthAndDirectionFromOBBonOBBIntersection(...)
         11/27/2023 Note: Work is done in the game engine and implemented outside of this code base for sphere on sphere.
         Need is for an object manager for response handling which is out of scope of this repository. You can find the 
-        Sphere on Sphere cose in Geometry3D::Collided class which is the goal of this repository to perform collission 
+        Sphere on Sphere code in Geometry3D::Collided class which is the goal of this repository to perform collission 
         detection with base and objects.
 */
 
@@ -189,6 +206,7 @@ namespace King {
     class Capsule; // SIMD two points & a float
     class Box;  // SIMD two points; AABB and as a OBB by passing in a Quaternion to methods
     class Frustum; // SIMD six planes and eight points
+    class Pyramid; // SIMD one point and two floats
     class Collided; // Vector to store multiple contacts between geometries and methods to determine contacts
 
     // 3D Modeling with meshes:
@@ -457,13 +475,14 @@ namespace King {
         virtual bool        Collision(Collidable const& in) const = 0; // for double dispatch
 
         virtual bool        Collision(Point const& pointIn) const = 0;
-        virtual bool        Collision(Ray const& pointIn) const = 0;
+        virtual bool        Collision(Ray const& rayIn) const = 0;
         virtual bool        Collision(Line const& lineIn) const = 0;
         virtual bool        Collision(Plane const& planeIn) const = 0;
         virtual bool        Collision(Sphere const& sphereIn) const = 0;
-        virtual bool        Collision(Capsule const& planeIn) const = 0;
+        virtual bool        Collision(Capsule const& capsuleIn) const = 0;
         virtual bool        Collision(Box const& boxIn) const = 0;
         virtual bool        Collision(Frustum const& frustumIn) const = 0;
+        virtual bool        Collision(Pyramid const& pyramidIn) const = 0;
  
         inline const bool   IsSleeping() const { return isSleeping; }
         inline void         Sleep() { isSleeping = true; }
@@ -558,6 +577,7 @@ namespace King {
         virtual bool                        Collision(Plane const& planeIn) const override;
         virtual bool                        Collision(Capsule const& capsuleIn) const override;
         virtual bool                        Collision(Frustum const& frustumIn) const override { return false; }
+        virtual bool                        Collision(Pyramid const& pyramidIn) const override;
 
         inline bool                         Intersects(const float3& pointIn) const;
         inline bool                         Intersects(const Point& pointIn) const;
@@ -620,6 +640,8 @@ namespace King {
 
         inline bool __vectorcall            Intersects(const Point &pointIn) const;
         inline bool __vectorcall            Intersects(const Line &lineIn, float3 *intersectionOut = nullptr) const;
+        inline bool __vectorcall            Intersects(const Triangle& triangleIn, float3* intersectionOut = nullptr) const;
+        inline bool __vectorcall            Intersects(const Quad& quadIn, float3* intersectionOut = nullptr) const;
         float3 __vectorcall                 FindNearestPointOnLineSegment(const float3 &pointIn) const;
         // Accessors
         const auto &                        GetVertex(const uint32_t vertexIndexIn) const { return pt[vertexIndexIn]; }
@@ -644,6 +666,7 @@ namespace King {
         virtual bool                        Collision(Plane const& planeIn) const override;
         virtual bool                        Collision(Capsule const& capsuleIn) const override;
         virtual bool                        Collision(Frustum const& frustumIn) const override { return false; }
+        virtual bool                        Collision(Pyramid const& pyramidIn) const override;
     };
     /******************************************************************************
     *    LineIndexed - Vertex indicies representing a connected line segment
@@ -786,10 +809,14 @@ namespace King {
         virtual bool                        Collision(Capsule const& capsuleIn) const override;
         virtual bool                        Collision(Box const& boxIn) const override;
         virtual bool                        Collision(Frustum const& frustumIn) const override { return false; }
+        virtual bool                        Collision(Pyramid const& pyramidIn) const override;
 
         bool                                Intersects(const Point& pointIn) const;
         bool                                Intersects(const Ray& rayIn, Position *ptOut) const;
         bool                                Intersects(const Line& lineIn, Position* ptOut) const;
+        bool __vectorcall                   Intersects(const Triangle& quadIn, float3* intersectionOut = nullptr) const;
+        bool __vectorcall                   Intersects(const Quad& quadIn, float3* intersectionOut = nullptr) const;
+
         float3                              FindNearestPoint(const Point& lineIn) const;
         // Accessors
         float3 const &                      GetDirection() const { return direction; }
@@ -857,6 +884,7 @@ namespace King {
         virtual bool                        Collision(Capsule const& capsuleIn) const override { return false; }
         virtual bool                        Collision(Box const& boxIn) const override;
         virtual bool                        Collision(Frustum const& frustumIn) const override { return false; }
+        virtual bool                        Collision(Pyramid const& pyramidIn) const override;
 
         inline bool __vectorcall            Intersects(const float3 pointIn) const;
         inline bool __vectorcall            Intersects(const Point &pointIn) const;
@@ -865,7 +893,7 @@ namespace King {
         inline bool __vectorcall            Intersects(const Ray& rayIn, Point* ptOut) const;
         bool __vectorcall                   Intersects(const Plane& planeIn, Line* lineOut) const;
         inline bool __vectorcall            Intersects(const Sphere &sphereIn) const;
-        inline bool __vectorcall            Intersects(const Triangle& triangleIn) const;
+        inline bool __vectorcall            Intersects(const Triangle& triIn, float3* intersectionOut) const;
         inline bool __vectorcall            Intersects(const Box& boxIn) const;
         float3 __vectorcall                 FindNearestPointOnPlane(const float3& pointIn) const { auto n = GetNormal(); return pointIn - Dot(pointIn, n) * n; }
         // Accessors
@@ -874,6 +902,9 @@ namespace King {
 
         float                               DistanceFromPoint(float3 point) const { return Dot(point, GetNormal()) + GetW(); } // projects the point onto the plane and adds the perpendicular distance of the origin
         float                               DistanceFromPoint(Point point) const { return Dot(static_cast<FloatPoint4>(point), v); } // homogeneous (ax,ay,az,a) if a=1
+    private:
+        // Helpers
+        bool                                FindIntersectionWithEdge(const float3& v0, const float3& v1, float3& intersectionOut) const;
     };
     /******************************************************************************
     *    TriangleIndexed
@@ -969,8 +1000,17 @@ namespace King {
         Triangle & operator= (const Triangle &in) = default; // copy assignment
         Triangle & operator= (Triangle &&in) = default; // move assignment
         // Functionality
-        bool __vectorcall                   Intersects(const Ray &rayIn, float3 *intersectPointOut) { Intersects(rayIn.origin, rayIn.direction, intersectPointOut); }
-        bool __vectorcall                   Intersects(const float3 &rayOriginIn, const float3 &rayDirectionIn, float3 *intersectPointOut);
+        bool __vectorcall                   Contains(const Point& ptIn) const;
+
+        bool __vectorcall                   Intersects(const Ray& rayIn, float3* intersectPointOut) const { const float3 o = rayIn.origin; const float3 d = rayIn.direction; return Intersects(o, d, intersectPointOut); }
+        bool __vectorcall                   Intersects(const float3 &rayOriginIn, const float3 &rayDirectionIn, float3 *intersectPointOut) const;
+        bool __vectorcall                   Intersects(const Line& lineIn, float3* intersectionOut) const { return lineIn.Intersects(*this, intersectionOut); }
+        bool __vectorcall                   Intersects(const Triangle& triIn, float3* intersectionOut) const;
+        bool __vectorcall                   Intersects(const Quad& qIn, float3* intersectionOut) const;
+        bool __vectorcall                   Intersects(const Plane& pIn, float3* intersectionOut) const;
+        bool __vectorcall                   Intersects(const Sphere& sIn, float3* intersectionOut) const;
+
+        float3 __vectorcall                 FindNearestPoint(const float3& pt3In) const;
         // Accessors
         [[deprecated("Use GetNormalCCW() or GetNormalCW()")]] float3 GetFaceNormal() { return float3::CrossProduct(GetEdge1(), GetEdge2()); }
         float3                              GetNormalCCW() const { float3 c(Cross(GetEdge1(), GetEdge2())); c.MakeNormalize(); return c; } // RHS
@@ -1026,8 +1066,11 @@ namespace King {
         // Functionality
         bool                                Intersects(const Ray& ray, float3* intersectPointOut = nullptr);
         bool                                Intersects(const float3 &rayOriginIn, const float3 &rayDirectionIn, float3 *intersectPointOut);
+        bool __vectorcall                   Intersects(const Triangle& triIn, float3* intersectionOut) const;
+
         void                                MoveBy(const float3 deltaIn) { for(int i=0;i<4;++i) pt[i]+=deltaIn; }
         std::vector<Quad>                   SubDivide();
+
         void                                Scale(const float scaleIn) { for (int i = 0; i<4; ++i) pt[i] *= scaleIn; }
         void                                Scale(const float3 scaleIn) { for (int i = 0; i<4; ++i) pt[i] *= scaleIn; }
         // Accessors
@@ -1082,6 +1125,7 @@ namespace King {
         bool                                Contains(const Point& ptIn) const;
         bool                                Intersects(const Ray& rhs, float3 *ptOut) const;
         bool                                Intersects(const Line& rhs) const;
+        bool                                Intersects(const Triangle& triIn, float3* intersectionOut) const;
         bool                                Intersects(const Plane& rhs) const;
         bool                                Intersects(const Sphere& rhs) const;
         bool                                Intersects(const Box& boxIn, const Quaternion& orientationIn) const;
@@ -1097,6 +1141,7 @@ namespace King {
         virtual bool                        Collision(Capsule const& capsuleIn) const override;
         virtual bool                        Collision(Box const& boxIn) const override;
         virtual bool                        Collision(Frustum const& frustumIn) const override;
+        virtual bool                        Collision(Pyramid const& pyramidIn) const override { return false; }
 
         void                                Merge(const Sphere& sIn); // grow the sphere to match the min and max extents of each sphere
         // Accessors
@@ -1168,6 +1213,7 @@ namespace King {
         virtual bool                        Collision(Capsule const& capsuleIn) const override { return false; }
         virtual bool                        Collision(Box const& boxIn) const override;
         virtual bool                        Collision(Frustum const& frustumIn) const override { return false; }
+        virtual bool                        Collision(Pyramid const& pyramidIn) const override;
 
         // Accessors
         Line                                GetSegment() const { return segment; }
@@ -1248,10 +1294,12 @@ namespace King {
         inline bool operator !() const { return (DirectX::XMVector3IsNaN(pt_min) || DirectX::XMVector3IsNaN(pt_max)); } // invalid
         // Functionality
         bool                                Intersects(const Ray &rayIn, float &distOut) const;
-        bool                                Intersects(const Line &lineIn) const;
+        bool                                Intersects(const Line &lineIn, float3* intersectionOut) const;
+        bool                                Intersects(const Triangle& rhs, float3* intersectionOut) const;
         bool                                Intersects(const Plane& planeIn) const;
         bool                                Intersects(const Box &boxIn) const;
         bool                                Intersects(const Sphere &sphereIn) const;
+        bool                                Intersects(const Pyramid& pyramidIn, float3* intersectionOut) const;
 
         bool                                Contains(const Box &boxIn) const; // boxIn is wholely inside of this box
         bool __vectorcall                   Contains(const float3 ptIn) const;
@@ -1270,6 +1318,7 @@ namespace King {
         virtual bool                        Collision(Capsule const& capsuleIn) const override;
         virtual bool                        Collision(Box const& boxIn) const override;
         virtual bool                        Collision(Frustum const& frustumIn) const override;
+        virtual bool                        Collision(Pyramid const& pyramidIn) const override { return false; }
 
         Box                                 CollisionVolume(const Box& boxIn); // over lapping volume with boxIn
 
@@ -1387,6 +1436,7 @@ namespace King {
         virtual bool                        Collision(Capsule const& capsuleIn) const override { return false; }
         virtual bool                        Collision(Box const& boxIn) const override { return Intersect(boxIn); }
         virtual bool                        Collision(Frustum const& frustumIn) const override { return false; }
+        virtual bool                        Collision(Pyramid const& pyramidIn) const override { return false; }
         // *** TO DO *** add a cone collision test, and implement a better frustum culling routine; reference https://www.flipcode.com/archives/Frustum_Culling.shtml *** TO DO ***
 
         inline bool                         Intersect(const Box& boxIn, const Quaternion* quaternionIn = nullptr) const;
@@ -1410,6 +1460,115 @@ namespace King {
     std::istream& operator>> (std::istream& is, King::Frustum& out);
     void to_json(json& j, const Frustum& from);
     void from_json(const json& j, Frustum& to);
+
+    /******************************************************************************
+    *    Pyramid
+    *       FloatPoint3 is the center of the base of the Pyramid
+    ******************************************************************************/
+    class alignas(16) Pyramid : public FloatPoint3 //, public Collidable
+    {
+    protected:
+        float baseLength;  // Length of the base of the pyramid
+        float height;      // Height of the pyramid
+
+    public:
+        // Construction/Destruction
+        inline Pyramid() : baseLength(1.0f), height(1.0f) { FloatPoint3::Set(float3()); } // Default: unit pyramid
+        inline Pyramid(const float baseLengthIn, const float heightIn) : baseLength(abs(baseLengthIn)), height(abs(heightIn)) { FloatPoint3::Set(float3()); }
+        inline Pyramid(const float3 center, const float baseLengthIn, const float heightIn = 1.0f) : baseLength(abs(baseLengthIn)), height(abs(heightIn)) { FloatPoint3::Set(center); }
+        Pyramid(const float x, const float y, const float z, const float baseLengthIn, const float heightIn) : baseLength(abs(baseLengthIn)), height(abs(heightIn)) { FloatPoint3::Set(x, y, z); }
+
+        inline Pyramid(const Pyramid& in) = default; // copy
+        inline Pyramid(Pyramid&& in) noexcept = default; // move
+        virtual ~Pyramid() = default;
+
+        // Operators
+        Pyramid& operator= (const Pyramid& in) = default; // copy assignment
+        Pyramid& operator= (Pyramid&& in) = default; // move assignment
+        inline Pyramid& operator= (const FXMVECTOR& in) { v = in; return *this; }
+
+        inline Pyramid& operator*= (const DirectX::XMMATRIX& m) {
+            v = DirectX::XMVector3Transform(v, m);
+            baseLength *= DirectX::XMVectorGetX(m.r[0]);  // Apply scaling to base length (assuming scaling along x-axis)
+            height *= DirectX::XMVectorGetY(m.r[1]);  // Apply scaling to height (assuming scaling along y-axis)
+            return *this;
+        }
+
+        friend Pyramid operator* (Pyramid lhs, const DirectX::XMMATRIX& m) { lhs *= m; return lhs; } // invokes std::move(lhs)
+
+        // Comparators
+        inline bool operator==  (const Pyramid& rhs) const { return DirectX::XMVector3Equal(v, rhs.v) && baseLength == rhs.baseLength && height == rhs.height; }
+        inline bool operator!=  (const Pyramid& rhs) const { return !(*this == rhs); }
+
+        // Functionality
+        DirectX::XMMATRIX                   MomentsOfInertia(const float& densityIn = 700.f); // Moments of inertia for a pyramid
+
+        bool                                Contains(const Point& ptIn) const;
+
+        bool                                Intersects(const Ray& rayIn, float3* ptOut) const;
+        bool                                Intersects(const Line& lineIn, float3* intersectionOut) const;
+        bool                                Intersects(const Triangle& rhs, float3* intersectionOut) const;
+        bool                                Intersects(const Quad& rhs, float3* intersectionOut) const;
+        bool                                Intersects(const Plane& rhs, float3* intersectionOut) const;
+        bool                                Intersects(const Sphere& rhs, float3* intersectionOut) const;
+        bool                                Intersects(const Box& boxIn, const Quaternion& orientationIn, float3* intersectionOut) const;
+        bool                                Intersects(const Capsule& capsuleIn, float3* intersectionOut) const;
+        bool                                Intersects(const Pyramid& rhs, float3* intersectionOut) const;
+
+        float3 __vectorcall                 FindNearestPoint(const float3& pt3In) const;
+        float  __vectorcall                 DistanceFromPoint(const float3& point) const;
+
+        //virtual bool                        Collision(Collidable const& in) const override { return in.Collision(*this); } // double dispatch
+        //virtual bool                        Collision(Point const& pointIn) const override;
+        //virtual bool                        Collision(Ray const& rayIn) const override;
+        //virtual bool                        Collision(Line const& lineIn) const override;
+        //virtual bool                        Collision(Plane const& planeIn) const override;
+        //virtual bool                        Collision(Sphere const& sphereIn) const override;
+        //virtual bool                        Collision(Pyramid const& pyramidIn) const override;
+        //virtual bool                        Collision(Capsule const& capsuleIn) const override;
+        //virtual bool                        Collision(Box const& boxIn) const override;
+        //virtual bool                        Collision(Frustum const& frustumIn) const override { return false; } /* TO DO */
+
+        // Accessors
+        virtual float3                      GetCenter() const { return float3(v); } // of base
+        float3                              GetCentroid() const { auto c = GetCenter(); c.SetY(c.GetY() + height / 4.0f); }
+        float3                              GetApex() const { auto c = GetCenter(); c.SetY(c.GetY() + height); return c; }
+        float                               GetBaseLength() const { return baseLength; }
+        float                               GetHeight() const { return height; }
+        std::vector<float3>                 GetBaseVertices() const;
+        Quad                                GetBaseQuad() const;
+        std::vector<Triangle>               GetFaces() const;
+
+        void                                SetBaseLength(const float baseLengthIn) { baseLength = abs(baseLengthIn); }
+        void                                SetHeight(const float heightIn) { height = abs(heightIn); }
+
+        inline float                        GetSurfaceArea() const { return CalculateSurfaceArea(); }
+        inline float                        GetVolume() const { return (1.0f / 3.0f) * baseLength * baseLength * height; }
+
+        // Assignments
+        void __vectorcall                   SetCenter(const float3 centerIn) { v = FloatPoint3(centerIn); }
+        void                                SetCenter(const float x, const float y, const float z) { v = DirectX::XMVectorSet(x, y, z, 1.0f); }
+
+        // I/O
+        //friend std::ostream& operator<< (std::ostream& os, const Pyramid& in);
+        //friend std::istream& operator>> (std::istream& is, Pyramid& out);
+        //friend void to_json(json& j, const Pyramid& from);
+        //friend void from_json(const json& j, Pyramid& to);
+
+    private:
+        inline float CalculateSurfaceArea() const {
+            float slantHeight = sqrtf((baseLength * 0.5f) * (baseLength * 0.5f) + height * height);
+            return baseLength * baseLength + 2 * baseLength * slantHeight; // Base area + lateral surface area
+        }
+    };
+    // Stream operators
+    //std::ostream& operator<< (std::ostream& os, const Pyramid& in);
+    //std::istream& operator>> (std::istream& is, Pyramid& out);
+    //std::wostream& operator<<(std::wostream& os, const Pyramid& in);
+    // JSON serialization
+    //void to_json(json& j, const Pyramid& from);
+    //void from_json(const json& j, Pyramid& to);
+
     /******************************************************************************
     *    Collided 
     *        Methods to find contacts and keep the information from them
@@ -2013,6 +2172,7 @@ namespace King {
         Model(const Path& closedPathIn) { *this = closedPathIn; } // forward to copy assignment
         Model(const Box& boxIn) { *this = boxIn; } // forward to copy assignment
         Model(const Sphere& sphereIn) { *this = sphereIn; } // forward to copy assignment
+        Model(const Pyramid& pyramidIn) { *this = pyramidIn; } // forward to copy assignment
         Model(const Model &in) { *this = in; } // forward to copy assignment
         Model(Model &&in) noexcept { *this = std::move(in); } // forward to move assignment
 
@@ -2027,6 +2187,7 @@ namespace King {
         Model& operator= (const Path& pathIn) { Destroy(); CreateMeshFrom(pathIn); return *this; }
         Model& operator= (const Box& boxIn) { Destroy(); CreateMeshFrom(boxIn); return *this; }
         Model& operator= (const Sphere& sphereIn) { Destroy(); CreateMeshFrom(sphereIn); return *this; }
+        Model& operator= (const Pyramid& pyramidIn) { Destroy(); CreateMeshFrom(pyramidIn); return *this; }
         Model& operator= (const Model &in); // copy assignment
         Model& operator= (Model &&in) = default; // move assignment
 
@@ -2087,6 +2248,7 @@ namespace King {
         int                                 CreateMeshFrom(const Quad& quad); 
         int                                 CreateMeshFrom(const Box& box); // presently, takes over all the data for the model, *** TO DO ** add mesh
         int                                 CreateMeshFrom(const Sphere& sphere, const uint32_t segmentsIn = 32); // quads
+        int                                 CreateMeshFrom(const Pyramid& pyramidIn);
         int                                 CreateMeshFrom(const Path& closedPath); // closed path in ccw ordering, RHS as a triangle fan of path(first, second, last) then path(last, second, last-1), etc
         int                                 CreateMeshFrom(const Line& line, Distance d); // extrude d away from l as a quad
         int                                 CreateMeshFrom(const Path& path, Distance d); // extrude d away from p as a series of perpendicular quads
