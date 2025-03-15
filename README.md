@@ -1,8 +1,8 @@
 ## New 2.8 Release of 3D Geometry King
 
 10/15/2024 - Version 2.8 - Added several new methods to return intersection points to basic geometries. This is used to return contact points for collision responses outside the library. Also added a new primitive class, Pyramid, and intersection code added to most of the other primitive geometries. Previous version added class Capsule and class Collided to store multiple contacts between geometries. The foundation is now within the library to implement physics into your games and simulations. The response handling to collisions is outside this library, as that is out of scope. The intent of this library is foundational, to build your own engine from it. An example, using the library as base geometries you might implement a culling function before you render, checking each object (or actor object in this example) for a fixed distance from the camera:
-//
-{
+
+    
     unsigned int CullObjectsOutofViewFrustumDynamic(const Frustum& wF, float3 cameraPosition)
     {
     unsigned int culled(0);
@@ -25,7 +25,6 @@
 
     return culled;
     }
-}
 
 # 2D & 3D GeometryKing
 
