@@ -1,19 +1,29 @@
-## New 2.6 Release of 3D Geometry King
+## New 2.7 Release of 3D Geometry King
 
-Math and Physics have been separated from GeometryKing for use and tutorial from the main code base. See dependencies below.
+09/9/2023 - Version 2.7 - Added Model copy constructors and assignment operators for Triangle and Quad classes, which in turn
+        call the CreateMeshFrom(...) methods to construct the mesh from the primitive.
+        Also continued work on Contact class adding impulse accumulation and Sphere on Sphere point detection
+        Added Sphere::FindNearestPointFromSphere(const float3& pt3In)
+        Collidable class received sleep tracking variable for physics simulations
+        Added _boneHierarchy into Model class which depreciates SkinnedModel. Model now loads and writes the optional SkinnedModel
+        data at the EOF. Identical to the original SkinnedModel v1 format. 
 
 # 2D & 3D GeometryKing
 
 Purpose: Generic, render independent, geometric game engine foundation. 
 Intended as the foundation for any type of game and software requiring 3D or 2D representation. No rendering is provided, instead, the basics needed to for representing 2D and 3D geometry, collision detection, math acceleration, and model generation of vertex and index buffers to translate class primitives into meshes ready for a rendering pipeline you provide. 2D is managed in memory blocks rather than vertex and index buffers as are the 3D models. Therefore, they can be saved and stored easily in a raw or image format for viewing. C\+\+ class example has ImageBlock that inherits from MemoryBlock that adds a Draw(...) method to draw our class primitives (such as line) into its memory buffer. 3DGeometryKing files have similar methodes within classes such as Model of CreateMesh(...) to convert 3D primitives to Models with vertex and index buffers ready for rendering. 
 
-2D Example export from class ImageTga after being drawn from 2D primities of Triangle2DF, Circle2DF, and Rectangle2DF:
+3D Example (Models created from 3D primities of Pyramid, Sphere, and Box)
+
+![image](https://github.com/user-attachments/assets/b2f6a2b9-4caa-415d-9154-c15210d4a212)
+
+2D Example (export from class ImageTga after being drawn from 2D primities of Triangle2DF, Circle2DF, and Rectangle2DF)
 
 ![image](https://user-images.githubusercontent.com/15188055/192162868-6b863a96-c34d-49b2-83d2-d2f9f18e1af1.png)
 
 ImageTga maintains our render independent status as well as visualization of usage cases (path finding, intersection tests, transforms, clipping, etc.) of geometry. Provides a way to test your code before connecting your rendering backend.
 
-Compiled with Visual Studio 2019, C\+\+17, 64 Bit Windows 10
+Compiled with Visual Studio 2022, C\+\+17, 64 Bit Windows 11
 
 Dependencies, visit:
    json:    [https://github.com/nlohmann/json](https://github.com/nlohmann/json)
